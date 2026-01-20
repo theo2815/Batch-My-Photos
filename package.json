@@ -1,0 +1,33 @@
+{
+  "name": "photobatcher",
+  "version": "1.0.0",
+  "description": "Desktop utility for photographers to batch-split image folders",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron": "electron .",
+    "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\""
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "photography",
+    "batch",
+    "utility"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "electron-store": "^6.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.0",
+    "vite": "^5.0.10",
+    "wait-on": "^7.2.0"
+  }
+}
