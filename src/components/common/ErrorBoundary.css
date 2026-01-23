@@ -1,0 +1,122 @@
+/**
+ * Error Boundary Styles
+ * Full-screen error display with reload functionality
+ */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary, #1a1a2e);
+  color: var(--text-primary, #e0e0e0);
+  padding: 2rem;
+}
+
+.error-boundary-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.error-boundary .error-icon {
+  color: var(--error, #ff6b6b);
+  margin-bottom: 1.5rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.error-boundary h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  color: var(--text-primary, #ffffff);
+}
+
+.error-boundary .error-message {
+  color: var(--error, #ff6b6b);
+  font-family: monospace;
+  font-size: 0.9rem;
+  background: rgba(255, 107, 107, 0.1);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  word-break: break-word;
+}
+
+.error-boundary .error-hint {
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.error-boundary .error-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary .error-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.error-boundary .error-actions .btn.primary {
+  background: var(--accent, #7c3aed);
+  color: white;
+}
+
+.error-boundary .error-actions .btn.primary:hover {
+  background: var(--accent-hover, #6d28d9);
+  transform: translateY(-2px);
+}
+
+.error-boundary .error-actions .btn.secondary {
+  background: transparent;
+  color: var(--text-secondary, #a0a0a0);
+  border: 1px solid var(--border, #333);
+}
+
+.error-boundary .error-actions .btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.error-boundary .error-details {
+  margin-top: 2rem;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.error-boundary .error-details summary {
+  cursor: pointer;
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-boundary .error-details pre {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #a0a0a0);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}

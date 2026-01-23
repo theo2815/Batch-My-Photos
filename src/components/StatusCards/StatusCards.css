@@ -1,0 +1,142 @@
+/**
+ * Status Cards Styles
+ * 
+ * Styles for ScanningCard, ExecutingCard, CompleteCard, ErrorCard
+ */
+
+/* Status Card Base */
+.status-card {
+  text-align: center;
+  padding: var(--space-2xl);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  max-width: 500px;
+  width: 100%;
+}
+
+.status-card h2 {
+  margin: var(--space-lg) 0 var(--space-sm);
+  font-size: 1.5rem;
+}
+
+.status-card p {
+  color: var(--text-secondary);
+}
+
+/* Spinner Container */
+.spinner {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  color: var(--accent-primary);
+}
+
+/* Success/Error Icons */
+.success-icon,
+.error-icon {
+  font-size: 4rem;
+}
+
+/* Progress Bar */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin: var(--space-lg) 0;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-fast);
+}
+
+/* Sub Progress Text */
+.sub-progress {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: var(--space-sm);
+}
+
+/* Results Summary */
+.results-summary {
+  margin: var(--space-lg) 0;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.result-row:last-child {
+  border-bottom: none;
+}
+
+.folder-name {
+  font-family: monospace;
+  color: var(--accent-primary);
+}
+
+.file-count {
+  color: var(--text-muted);
+}
+
+.more-results {
+  margin-top: var(--space-sm);
+  font-style: italic;
+}
+
+/* Error Message */
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-lg);
+  color: var(--error);
+}
+
+/* Cancel Button */
+.cancel-btn {
+  margin-top: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  background: transparent;
+  border: 2px solid var(--error);
+  border-radius: var(--radius-md);
+  color: var(--error);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.cancel-btn:hover {
+  background: var(--error);
+  color: #ffffff;
+}
+
+/* Cancelled State */
+.status-card.cancelled h2 {
+  color: var(--warning);
+}
+
+.cancel-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}

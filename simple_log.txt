@@ -1,0 +1,242 @@
+
+> photobatcher@1.0.0 pack
+> electron-builder --dir
+
+  • electron-builder  version=26.4.0 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • effective config  config=directories:
+  output: release
+  buildResources: build
+appId: com.photobatcher.app
+productName: PhotoBatcher
+files:
+  - filter:
+      - dist/**/*
+      - main.js
+      - preload.js
+      - src/images/**/*
+win:
+  target: nsis
+
+  • no event listeners found  event=beforePack
+  • spawning        command=npm prefix -w cwd=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos
+  • exited          command=npm code=1 pid=1732
+  • executing @electron/rebuild  electronVersion=28.3.3 arch=x64 buildFromSource=false workspaceRoot=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=28.3.3 appOutDir=release\win-unpacked
+  • no custom electronDist provided, unpacking default Electron distribution
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe unpack-electron --configuration [{"platform":"win32","arch":"x64","version":"28.3.3"}] --output C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\release\win-unpacked --distMacOsAppName Electron.app
+  • map async       taskCount=2
+  • map async       taskCount=1
+  • map async       taskCount=73
+  • exited          command=app-builder.exe code=0 pid=24704
+  • no event listeners found  event=afterExtract
+  • node modules collection complete  packageName=photobatcher depCount=31
+  • collected node modules  dir=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos nodeModules=[{"name":"ajv","version":"6.12.6","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\ajv"},{"name":"atomically","version":"1.7.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\atomically"},{"name":"conf","version":"7.1.2","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\conf","dependencies":[{"name":"semver","version":"7.7.3","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\conf\\node_modules\\semver"}]},{"name":"debounce-fn","version":"4.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\debounce-fn"},{"name":"dot-prop","version":"5.3.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\dot-prop"},{"name":"electron-store","version":"6.0.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\electron-store"},{"name":"env-paths","version":"2.2.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\env-paths"},{"name":"fast-deep-equal","version":"3.1.3","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\fast-deep-equal"},{"name":"fast-json-stable-stringify","version":"2.1.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\fast-json-stable-stringify"},{"name":"find-up","version":"3.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\find-up"},{"name":"is-obj","version":"2.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\is-obj"},{"name":"js-tokens","version":"4.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\js-tokens"},{"name":"json-schema-traverse","version":"0.4.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\json-schema-traverse"},{"name":"json-schema-typed","version":"7.0.3","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\json-schema-typed"},{"name":"locate-path","version":"3.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\locate-path"},{"name":"loose-envify","version":"1.4.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\loose-envify"},{"name":"make-dir","version":"3.1.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\make-dir"},{"name":"mimic-fn","version":"3.1.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\mimic-fn"},{"name":"onetime","version":"5.1.2","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\onetime","dependencies":[{"name":"mimic-fn","version":"2.1.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\onetime\\node_modules\\mimic-fn"}]},{"name":"p-limit","version":"2.3.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\p-limit"},{"name":"p-locate","version":"3.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\p-locate"},{"name":"p-try","version":"2.2.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\p-try"},{"name":"path-exists","version":"3.0.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\path-exists"},{"name":"pkg-up","version":"3.1.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\pkg-up"},{"name":"punycode","version":"2.3.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\punycode"},{"name":"react","version":"18.3.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\react"},{"name":"react-dom","version":"18.3.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\react-dom"},{"name":"scheduler","version":"0.23.2","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\scheduler"},{"name":"semver","version":"6.3.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\semver"},{"name":"type-fest","version":"0.16.0","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\electron-store\\node_modules\\type-fest"},{"name":"uri-js","version":"4.4.1","dir":"C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\node_modules\\uri-js"}]
+  • identified module  dep=ajv from=node_modules\ajv to=release\win-unpacked\resources\app\node_modules\ajv filesCount=90
+  • identified module  dep=atomically from=node_modules\atomically to=release\win-unpacked\resources\app\node_modules\atomically filesCount=28
+  • identified module  dep=conf from=node_modules\conf to=release\win-unpacked\resources\app\node_modules\conf filesCount=4
+  • identified module  dep=semver from=node_modules\conf\node_modules\semver to=release\win-unpacked\resources\app\node_modules\conf\node_modules\semver filesCount=51
+  • identified module  dep=debounce-fn from=node_modules\debounce-fn to=release\win-unpacked\resources\app\node_modules\debounce-fn filesCount=3
+  • identified module  dep=dot-prop from=node_modules\dot-prop to=release\win-unpacked\resources\app\node_modules\dot-prop filesCount=3
+  • identified module  dep=electron-store from=node_modules\electron-store to=release\win-unpacked\resources\app\node_modules\electron-store filesCount=3
+  • identified module  dep=env-paths from=node_modules\env-paths to=release\win-unpacked\resources\app\node_modules\env-paths filesCount=3
+  • identified module  dep=fast-deep-equal from=node_modules\fast-deep-equal to=release\win-unpacked\resources\app\node_modules\fast-deep-equal filesCount=6
+  • identified module  dep=fast-json-stable-stringify from=node_modules\fast-json-stable-stringify to=release\win-unpacked\resources\app\node_modules\fast-json-stable-stringify filesCount=6
+  • identified module  dep=find-up from=node_modules\find-up to=release\win-unpacked\resources\app\node_modules\find-up filesCount=3
+  • identified module  dep=is-obj from=node_modules\is-obj to=release\win-unpacked\resources\app\node_modules\is-obj filesCount=3
+  • identified module  dep=js-tokens from=node_modules\js-tokens to=release\win-unpacked\resources\app\node_modules\js-tokens filesCount=3
+  • identified module  dep=json-schema-traverse from=node_modules\json-schema-traverse to=release\win-unpacked\resources\app\node_modules\json-schema-traverse filesCount=7
+  • identified module  dep=json-schema-typed from=node_modules\json-schema-typed to=release\win-unpacked\resources\app\node_modules\json-schema-typed filesCount=7
+  • identified module  dep=locate-path from=node_modules\locate-path to=release\win-unpacked\resources\app\node_modules\locate-path filesCount=3
+  • identified module  dep=loose-envify from=node_modules\loose-envify to=release\win-unpacked\resources\app\node_modules\loose-envify filesCount=7
+  • identified module  dep=make-dir from=node_modules\make-dir to=release\win-unpacked\resources\app\node_modules\make-dir filesCount=3
+  • identified module  dep=mimic-fn from=node_modules\mimic-fn to=release\win-unpacked\resources\app\node_modules\mimic-fn filesCount=3
+  • identified module  dep=onetime from=node_modules\onetime to=release\win-unpacked\resources\app\node_modules\onetime filesCount=3
+  • identified module  dep=mimic-fn from=node_modules\onetime\node_modules\mimic-fn to=release\win-unpacked\resources\app\node_modules\onetime\node_modules\mimic-fn filesCount=3
+  • identified module  dep=p-limit from=node_modules\p-limit to=release\win-unpacked\resources\app\node_modules\p-limit filesCount=3
+  • identified module  dep=p-locate from=node_modules\p-locate to=release\win-unpacked\resources\app\node_modules\p-locate filesCount=3
+  • identified module  dep=p-try from=node_modules\p-try to=release\win-unpacked\resources\app\node_modules\p-try filesCount=3
+  • identified module  dep=path-exists from=node_modules\path-exists to=release\win-unpacked\resources\app\node_modules\path-exists filesCount=3
+  • identified module  dep=pkg-up from=node_modules\pkg-up to=release\win-unpacked\resources\app\node_modules\pkg-up filesCount=3
+  • identified module  dep=punycode from=node_modules\punycode to=release\win-unpacked\resources\app\node_modules\punycode filesCount=4
+  • identified module  dep=react from=node_modules\react to=release\win-unpacked\resources\app\node_modules\react filesCount=19
+  • identified module  dep=react-dom from=node_modules\react-dom to=release\win-unpacked\resources\app\node_modules\react-dom filesCount=31
+  • identified module  dep=scheduler from=node_modules\scheduler to=release\win-unpacked\resources\app\node_modules\scheduler filesCount=16
+  • identified module  dep=semver from=node_modules\semver to=release\win-unpacked\resources\app\node_modules\semver filesCount=5
+  • identified module  dep=type-fest from=node_modules\electron-store\node_modules\type-fest to=release\win-unpacked\resources\app\node_modules\type-fest filesCount=2
+  • identified module  dep=uri-js from=node_modules\uri-js to=release\win-unpacked\resources\app\node_modules\uri-js filesCount=30
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\PhotoBatcher.exe
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe icon --format ico --root C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\build --root C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos --out C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\release\.icon-ico
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\build\icon.ico
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\icon.ico
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\build\icons
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\icons
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\build\icon.png
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\icon.png
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\build\icon.icns
+  • path doesn't exist  path=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\icon.icns
+  • no icons found, using provided fallback sources  
+  • exited          command=app-builder.exe code=0 pid=22308 out={"icons":null,"isFallback":true}
+  • default Electron icon is used  reason=application icon is not set
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe rcedit --args ["C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\release\\win-unpacked\\PhotoBatcher.exe","--set-version-string","FileDescription","PhotoBatcher","--set-version-string","ProductName","PhotoBatcher","--set-version-string","LegalCopyright","Copyright © 2026 PhotoBatcher","--set-file-version","1.0.0","--set-p 9941c6b25d910628a4c45fa0b4bce8de7cb93efd0611732dfd8c21f4e0dbf7ae (sha256 hash) (sha256 hash)
+  • computing effective URL  initialUrl=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z
+                             currentUrl=https://release-assets.githubusercontent.com/github-production-release-asset/65527128/f73f2200-5d53-11ea-8264-ddd345f11ee4?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-01-20T16%3A13%3A35Z&rscd=attachment%3B+filename%3DwinCodeSign-2.6.0.7z&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-01-20T15%3A13%3A29Z&ske=2026-01-20T16%3A13%3A35Z&sks=b&skv=2018-11-09&sig=iin7VIbL3w60v%2FjgbkOoo8ZbeE3cvUce4VDdc8O7cEU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2ODkyMjQwMCwibmJmIjoxNzY4OTIyMTAwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.gcEvPwwYByPa8TSopbp8zoOvD7w81VoTL5y98lF2O4U&response-content-disposition=attachment%3B%20filename%3DwinCodeSign-2.6.0.7z&response-content-type=application%2Foctet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z length=5635384 contentType=application/octet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
+  • map async       taskCount=1
+  • download part   range=bytes=0-5635383 index=0
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=2.088s
+  • execute command  command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699'
+                     workingDirectory=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  ⨯ cannot execute  cause=exit status 2
+                    out=
+    7-Zip (a) 21.07 (x64) : Copyright (c) 1999-2021 Igor Pavlov : 2021-12-26
+    
+    Scanning the drive for archives:
+    1 file, 5635384 bytes (5504 KiB)
+    
+    Extracting archive: C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699.7z
+    --
+    Path = C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699.7z
+    Type = 7z
+    Physical Size = 5635384
+    Headers Size = 1492
+    Method = LZMA2:24m LZMA:20 BCJ2
+    Solid = +
+    Blocks = 2
+    
+    
+    Sub items Errors: 2
+    
+    Archives with Errors: 1
+    
+    Sub items Errors: 2
+    
+                    errorOut=ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699\darwin\10.12\lib\libcrypto.dylib
+    ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699\darwin\10.12\lib\libssl.dylib
+    
+                    command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\508253699'
+                    workingDir=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  • exited          command=app-builder.exe code=2 pid=20488
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe rcedit --args ["C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\release\\win-unpacked\\PhotoBatcher.exe","--set-version-string","FileDescription","PhotoBatcher","--set-version-string","ProductName","PhotoBatcher","--set-version-string","LegalCopyright","Copyright © 2026 PhotoBatcher","--set-file-version","1.0.0","--set-p 9941c6b25d910628a4c45fa0b4bce8de7cb93efd0611732dfd8c21f4e0dbf7ae (sha256 hash) (sha256 hash)
+  • computing effective URL  initialUrl=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z
+                             currentUrl=https://release-assets.githubusercontent.com/github-production-release-asset/65527128/f73f2200-5d53-11ea-8264-ddd345f11ee4?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-01-20T16%3A13%3A35Z&rscd=attachment%3B+filename%3DwinCodeSign-2.6.0.7z&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-01-20T15%3A13%3A29Z&ske=2026-01-20T16%3A13%3A35Z&sks=b&skv=2018-11-09&sig=iin7VIbL3w60v%2FjgbkOoo8ZbeE3cvUce4VDdc8O7cEU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2ODkyMjQwMCwibmJmIjoxNzY4OTIyMTAwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.gcEvPwwYByPa8TSopbp8zoOvD7w81VoTL5y98lF2O4U&response-content-disposition=attachment%3B%20filename%3DwinCodeSign-2.6.0.7z&response-content-type=application%2Foctet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z length=5635384 contentType=application/octet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
+  • map async       taskCount=1
+  • download part   range=bytes=0-5635383 index=0
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=1.104s
+  • execute command  command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815'
+                     workingDirectory=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  ⨯ cannot execute  cause=exit status 2
+                    out=
+    7-Zip (a) 21.07 (x64) : Copyright (c) 1999-2021 Igor Pavlov : 2021-12-26
+    
+    Scanning the drive for archives:
+    1 file, 5635384 bytes (5504 KiB)
+    
+    Extracting archive: C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815.7z
+    --
+    Path = C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815.7z
+    Type = 7z
+    Physical Size = 5635384
+    Headers Size = 1492
+    Method = LZMA2:24m LZMA:20 BCJ2
+    Solid = +
+    Blocks = 2
+    
+    
+    Sub items Errors: 2
+    
+    Archives with Errors: 1
+    
+    Sub items Errors: 2
+    
+                    errorOut=ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815\darwin\10.12\lib\libcrypto.dylib
+    ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815\darwin\10.12\lib\libssl.dylib
+    
+                    command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\108553815'
+                    workingDir=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  • exited          command=app-builder.exe code=2 pid=9212
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe rcedit --args ["C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\release\\win-unpacked\\PhotoBatcher.exe","--set-version-string","FileDescription","PhotoBatcher","--set-version-string","ProductName","PhotoBatcher","--set-version-string","LegalCopyright","Copyright © 2026 PhotoBatcher","--set-file-version","1.0.0","--set-p 9941c6b25d910628a4c45fa0b4bce8de7cb93efd0611732dfd8c21f4e0dbf7ae (sha256 hash) (sha256 hash)
+  • computing effective URL  initialUrl=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z
+                             currentUrl=https://release-assets.githubusercontent.com/github-production-release-asset/65527128/f73f2200-5d53-11ea-8264-ddd345f11ee4?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-01-20T16%3A13%3A35Z&rscd=attachment%3B+filename%3DwinCodeSign-2.6.0.7z&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-01-20T15%3A13%3A29Z&ske=2026-01-20T16%3A13%3A35Z&sks=b&skv=2018-11-09&sig=iin7VIbL3w60v%2FjgbkOoo8ZbeE3cvUce4VDdc8O7cEU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2ODkyMjQwMCwibmJmIjoxNzY4OTIyMTAwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.gcEvPwwYByPa8TSopbp8zoOvD7w81VoTL5y98lF2O4U&response-content-disposition=attachment%3B%20filename%3DwinCodeSign-2.6.0.7z&response-content-type=application%2Foctet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z length=5635384 contentType=application/octet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
+  • map async       taskCount=1
+  • download part   range=bytes=0-5635383 index=0
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=1.403s
+  • execute command  command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115'
+                     workingDirectory=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  ⨯ cannot execute  cause=exit status 2
+                    out=
+    7-Zip (a) 21.07 (x64) : Copyright (c) 1999-2021 Igor Pavlov : 2021-12-26
+    
+    Scanning the drive for archives:
+    1 file, 5635384 bytes (5504 KiB)
+    
+    Extracting archive: C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115.7z
+    --
+    Path = C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115.7z
+    Type = 7z
+    Physical Size = 5635384
+    Headers Size = 1492
+    Method = LZMA2:24m LZMA:20 BCJ2
+    Solid = +
+    Blocks = 2
+    
+    
+    Sub items Errors: 2
+    
+    Archives with Errors: 1
+    
+    Sub items Errors: 2
+    
+                    errorOut=ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115\darwin\10.12\lib\libcrypto.dylib
+    ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115\darwin\10.12\lib\libssl.dylib
+    
+                    command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\841433115'
+                    workingDir=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  • exited          command=app-builder.exe code=2 pid=11616
+  • spawning        command=C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\app-builder-bin\win\x64\app-builder.exe rcedit --args ["C:\\Users\\Theo Cedric Chan\\Documents\\Start Up project\\BatchMyPhotos\\release\\win-unpacked\\PhotoBatcher.exe","--set-version-string","FileDescription","PhotoBatcher","--set-version-string","ProductName","PhotoBatcher","--set-version-string","LegalCopyright","Copyright © 2026 PhotoBatcher","--set-file-version","1.0.0","--set-p 9941c6b25d910628a4c45fa0b4bce8de7cb93efd0611732dfd8c21f4e0dbf7ae (sha256 hash) (sha256 hash)
+  • computing effective URL  initialUrl=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z
+                             currentUrl=https://release-assets.githubusercontent.com/github-production-release-asset/65527128/f73f2200-5d53-11ea-8264-ddd345f11ee4?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-01-20T16%3A13%3A35Z&rscd=attachment%3B+filename%3DwinCodeSign-2.6.0.7z&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-01-20T15%3A13%3A29Z&ske=2026-01-20T16%3A13%3A35Z&sks=b&skv=2018-11-09&sig=iin7VIbL3w60v%2FjgbkOoo8ZbeE3cvUce4VDdc8O7cEU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2ODkyMjQwMCwibmJmIjoxNzY4OTIyMTAwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.gcEvPwwYByPa8TSopbp8zoOvD7w81VoTL5y98lF2O4U&response-content-disposition=attachment%3B%20filename%3DwinCodeSign-2.6.0.7z&response-content-type=application%2Foctet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z length=5635384 contentType=application/octet-stream
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
+  • map async       taskCount=1
+  • download part   range=bytes=0-5635383 index=0
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=1.142s
+  • execute command  command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931'
+                     workingDirectory=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  ⨯ cannot execute  cause=exit status 2
+                    out=
+    7-Zip (a) 21.07 (x64) : Copyright (c) 1999-2021 Igor Pavlov : 2021-12-26
+    
+    Scanning the drive for archives:
+    1 file, 5635384 bytes (5504 KiB)
+    
+    Extracting archive: C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931.7z
+    --
+    Path = C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931.7z
+    Type = 7z
+    Physical Size = 5635384
+    Headers Size = 1492
+    Method = LZMA2:24m LZMA:20 BCJ2
+    Solid = +
+    Blocks = 2
+    
+    
+    Sub items Errors: 2
+    
+    Archives with Errors: 1
+    
+    Sub items Errors: 2
+    
+                    errorOut=ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931\darwin\10.12\lib\libcrypto.dylib
+    ERROR: Cannot create symbolic link : A required privilege is not held by the client. : C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931\darwin\10.12\lib\libssl.dylib
+    
+                    command='C:\Users\Theo Cedric Chan\Documents\Start Up project\BatchMyPhotos\node_modules\7zip-bin\win\x64\7za.exe' x -snld -bd 'C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931.7z' '-oC:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign\972484931'
+                    workingDir=C:\Users\Theo Cedric Chan\AppData\Local\electron-builder\Cache\winCodeSign
+  • exited          command=app-builder.exe code=2 pid=2636

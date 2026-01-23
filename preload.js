@@ -1,5 +1,5 @@
 /**
- * PhotoBatcher - Preload Script (Context Bridge)
+ * BatchMyPhotos - Preload Script (Context Bridge)
  * 
  * This script creates a secure bridge between the Electron main process
  * and the React renderer process. It exposes specific functions to the
@@ -58,6 +58,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   selectOutputFolder: () => ipcRenderer.invoke('select-output-folder'),
 
+  /**
+   * Register a dropped folder path as allowed for file operations
+   * Call this before scanning a folder that was dropped via drag & drop
+   * 
+   * @param {string} folderPath - Path to the dropped folder
+   * @returns {Promise<Object>} Result with success status
+   */
+  registerDroppedFolder: (folderPath) => ipcRenderer.invoke('register-dropped-folder', folderPath),
   
   /**
    * Listen for batch progress updates during execution
@@ -74,6 +82,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('batch-progress', listener);
     };
   },
+  
+  /**
+   * Cancel the current batch operation
+   * Files already processed will remain, but no more will be moved/copied
+   * 
+   * @returns {Promise<Object>} Result with success status
+   */
+  cancelBatch: () => ipcRenderer.invoke('cancel-batch'),
   
   // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
@@ -109,6 +125,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} theme - 'dark' or 'light'
    */
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
+  
+  /**
+   * Clean up stale recent folders that no longer exist
+   * Call this on app startup to ensure the recent folders list is valid
+   * @returns {Promise<string[]>} Updated list of valid recent folders
+   */
+  cleanupRecentFolders: () => ipcRenderer.invoke('cleanup-recent-folders'),
+  
+  // ============================================================================
+  // PROGRESS PERSISTENCE APIs
+  // ============================================================================
+  
+  /**
+   * Check if there's an interrupted batch operation from a previous session
+   * @returns {Promise<Object|null>} Progress summary or null if none exists
+   */
+  checkInterruptedProgress: () => ipcRenderer.invoke('check-interrupted-progress'),
+  
+  /**
+   * Clear interrupted progress (user chose to discard)
+   * @returns {Promise<Object>} Result with success status
+   */
+  clearInterruptedProgress: () => ipcRenderer.invoke('clear-interrupted-progress'),
+  
+  /**
+   * Resume an interrupted batch operation
+   * @returns {Promise<Object>} Execution results
+   */
+  resumeBatch: () => ipcRenderer.invoke('resume-batch'),
 });
 
 // Log when preload script is loaded (helpful for debugging)

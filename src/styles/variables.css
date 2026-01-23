@@ -1,0 +1,67 @@
+/**
+ * CSS Variables - Design System
+ * 
+ * Contains all CSS custom properties for theming
+ */
+
+:root {
+  /* Color Palette - Studio Pro (Neutral & Professional) */
+  --bg-primary: #1e1e1e;   /* Deep Charcoal */
+  --bg-secondary: #2d2d2d; /* Panel Grey */
+  --bg-tertiary: #383838;  /* Light Grey */
+  --bg-glass: rgba(45, 45, 45, 0.95); /* High opacity for cleaner look */
+
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa; /* Silver */
+  --text-muted: #71717a;
+
+  --accent-primary: #3b82f6; /* Electric Blue */
+  --accent-secondary: #2563eb;
+  /* Subtle gradient instead of strong purple/pink */
+  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+
+  --success: #10b981; /* Emerald */
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Border Radius */
+  --radius-sm: 4px;   /* Sharper corners for professional feel */
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows - More subtle */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 10px rgba(59, 130, 246, 0.2); /* Blue glow */
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8ecf1;
+  --bg-glass: rgba(255, 255, 255, 0.9);
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8888a8;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+}

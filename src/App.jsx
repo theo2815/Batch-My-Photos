@@ -12,16 +12,17 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Camera, Sun, Moon, Mail } from 'lucide-react';
 
-// Application states
-const STATES = {
-  IDLE: 'idle',           // Waiting for folder selection
-  SCANNING: 'scanning',   // Scanning folder contents
-  READY: 'ready',         // Ready to execute (showing preview)
-  EXECUTING: 'executing', // Moving files
-  COMPLETE: 'complete',   // Operation finished
-  ERROR: 'error',         // Error occurred
-};
+// Import application states from constants
+import { STATES } from './constants/appStates';
+import { STRINGS, formatString } from './constants/strings';
+
+// Import components
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal } from './components/Modals';
+import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard } from './components/StatusCards';
+import { PreviewPanel } from './components/PreviewPanel';
+import { IdleScreen } from './components/DropZone';
 
 function App() {
   // ============================================================================
@@ -36,8 +37,8 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState(null);
   
-  // User settings
-  const [maxFilesPerBatch, setMaxFilesPerBatch] = useState(500);
+  // User settings - stored as strings to allow empty input
+  const [maxFilesPerBatch, setMaxFilesPerBatch] = useState('500');
   const [outputPrefix, setOutputPrefix] = useState('Batch');
   
   // UX Improvements
@@ -51,21 +52,52 @@ function App() {
   
   // Drag & drop visual state
   const [isDragOver, setIsDragOver] = useState(false);
+  
+  // Validation modal state
+  const [validationError, setValidationError] = useState(null);
+  
+  // Confirmation modal state
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
+  
+  // Preview refresh loading state
+  const [isRefreshingPreview, setIsRefreshingPreview] = useState(false);
+  
+  // Resume modal state (for interrupted batch operations)
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [interruptedProgress, setInterruptedProgress] = useState(null);
+  
+  // Ref to track if a preview refresh should be cancelled
+  const previewCancelledRef = React.useRef(false);
 
   // ============================================================================
   // EFFECTS
   // ============================================================================
   
-  // Load theme and recent folders on mount
+  // Load theme and recent folders on mount, check for interrupted progress
   useEffect(() => {
     const loadSettings = async () => {
       if (window.electronAPI?.getTheme) {
         const savedTheme = await window.electronAPI.getTheme();
         setTheme(savedTheme);
       }
-      if (window.electronAPI?.getRecentFolders) {
+      // Clean up stale folders first (removes non-existent paths), then use that result
+      if (window.electronAPI?.cleanupRecentFolders) {
+        const validFolders = await window.electronAPI.cleanupRecentFolders();
+        setRecentFolders(validFolders);
+      } else if (window.electronAPI?.getRecentFolders) {
+        // Fallback for backwards compatibility
         const folders = await window.electronAPI.getRecentFolders();
         setRecentFolders(folders);
+      }
+      
+      // Check for interrupted batch operation from a previous session
+      if (window.electronAPI?.checkInterruptedProgress) {
+        const progress = await window.electronAPI.checkInterruptedProgress();
+        if (progress) {
+          setInterruptedProgress(progress);
+          setShowResumeModal(true);
+        }
       }
     };
     loadSettings();
@@ -116,7 +148,7 @@ function App() {
   /**
    * Scan a folder and analyze its contents
    */
-  const scanFolder = async (path) => {
+  const scanFolder = useCallback(async (path) => {
     setAppState(STATES.SCANNING);
     setFolderPath(path);
     setError(null);
@@ -148,30 +180,87 @@ function App() {
       setError(err.message);
       setAppState(STATES.ERROR);
     }
-  };
+  }, [maxFilesPerBatch]);
+  
+  /**
+   * Handle selecting a recent folder
+   * Validates folder exists before scanning; removes from list if not found
+   */
+  const handleSelectRecentFolder = useCallback(async (path) => {
+    // Validate folder exists before scanning
+    const registerResult = await window.electronAPI.registerDroppedFolder(path);
+    
+    if (registerResult.success) {
+      await scanFolder(path);
+    } else {
+      // Folder no longer exists - show error and remove from recent list
+      setError(`The folder "${path.split(/[/\\]/).pop()}" no longer exists or is inaccessible.`);
+      setAppState(STATES.ERROR);
+      
+      // Remove invalid folder from recent folders list
+      if (window.electronAPI?.getRecentFolders) {
+        const currentFolders = await window.electronAPI.getRecentFolders();
+        const filteredFolders = currentFolders.filter(f => f !== path);
+        // Update local state (store will be updated on next valid add)
+        setRecentFolders(filteredFolders);
+      }
+    }
+  }, [scanFolder]);
   
   /**
    * Refresh preview when settings change
+   * Enforces a minimum of 10 to prevent extreme calculations
    */
   const refreshPreview = async () => {
     if (!folderPath) return;
     
+    // Parse and validate maxFilesPerBatch
+    const maxFiles = parseInt(maxFilesPerBatch, 10);
+    if (isNaN(maxFiles) || maxFiles < 1) return;
+    
+    // Enforce minimum of 10 for preview to prevent performance issues
+    // User can still set lower values for execution, but preview uses minimum 10
+    const previewMaxFiles = Math.max(10, maxFiles);
+    
+    // Mark this request as not cancelled
+    previewCancelledRef.current = false;
+    setIsRefreshingPreview(true);
+    
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, maxFilesPerBatch);
-      if (preview.success) {
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles);
+      
+      // Only update if this request wasn't cancelled
+      if (!previewCancelledRef.current && preview.success) {
         setPreviewResults(preview);
       }
     } catch (err) {
       console.error('Failed to refresh preview:', err);
+    } finally {
+      if (!previewCancelledRef.current) {
+        setIsRefreshingPreview(false);
+      }
     }
   };
   
-  // Refresh preview when maxFilesPerBatch changes
+  // Debounced refresh preview when maxFilesPerBatch changes
+  // Wait 400ms after the user stops typing before refreshing
   useEffect(() => {
-    if (appState === STATES.READY) {
+    if (appState !== STATES.READY) return;
+    
+    // Cancel any pending preview when dependencies change
+    previewCancelledRef.current = true;
+    
+    // Set up debounce timer
+    const debounceTimer = setTimeout(() => {
       refreshPreview();
-    }
-  }, [maxFilesPerBatch]);
+    }, 400);
+    
+    // Cleanup: cancel timer if value changes again before 400ms
+    return () => {
+      clearTimeout(debounceTimer);
+      previewCancelledRef.current = true;
+    };
+  }, [maxFilesPerBatch, folderPath, appState]);
 
   // ============================================================================
   // DRAG & DROP HANDLERS
@@ -191,6 +280,7 @@ function App() {
   
   /**
    * Handle dropped folder
+   * Registers the dropped path as allowed before scanning
    */
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
@@ -207,36 +297,104 @@ function App() {
       if (entry && entry.isDirectory) {
         const file = e.dataTransfer.files[0];
         if (file && file.path) {
-          await scanFolder(file.path);
+          // Register the dropped folder path as allowed before scanning
+          const registerResult = await window.electronAPI.registerDroppedFolder(file.path);
+          if (registerResult.success) {
+            await scanFolder(file.path);
+          } else {
+            setError(registerResult.error || 'Failed to access the dropped folder');
+            setAppState(STATES.ERROR);
+          }
         }
-      } else if (e.dataTransfer.files[0]?.path) {
-        const filePath = e.dataTransfer.files[0].path;
-        await scanFolder(filePath);
+      } else {
+        // User dropped a file, not a folder - show helpful error
+        setError('Please drop a folder, not a file. Select a folder containing your images.');
+        setAppState(STATES.ERROR);
       }
     }
-  }, []);
+  }, [scanFolder]);
 
   // ============================================================================
   // BATCH EXECUTION
   // ============================================================================
   
   /**
-   * Execute the batch splitting operation
+   * Validate inputs before executing batch
+   * @returns {boolean} True if valid
+   */
+  const validateInputs = () => {
+    // Check Max Files Per Batch
+    const maxFiles = parseInt(maxFilesPerBatch, 10);
+    if (!maxFilesPerBatch || maxFilesPerBatch.trim() === '' || isNaN(maxFiles)) {
+      setValidationError({
+        title: 'Max Files Per Batch Required',
+        message: 'Please enter the maximum number of files per batch folder.',
+        field: 'maxFilesPerBatch'
+      });
+      return false;
+    }
+    if (maxFiles < 1 || maxFiles > 10000) {
+      setValidationError({
+        title: 'Invalid Max Files',
+        message: 'Max files per batch must be between 1 and 10,000.',
+        field: 'maxFilesPerBatch'
+      });
+      return false;
+    }
+    
+    // Check Folder Name
+    if (!outputPrefix || outputPrefix.trim() === '') {
+      setValidationError({
+        title: 'Folder Name Required',
+        message: 'Please enter a folder name for the batch folders.',
+        field: 'outputPrefix'
+      });
+      return false;
+    }
+    
+    return true;
+  };
+
+  /**
+   * Show confirmation modal before executing
+   */
+  const handleProceedClick = () => {
+    // Validate inputs first
+    if (!validateInputs()) {
+      return;
+    }
+    // Show confirmation modal
+    setShowConfirmation(true);
+  };
+
+  /**
+   * Execute the batch splitting operation (called after confirmation)
    */
   const handleExecuteBatch = async () => {
+    setShowConfirmation(false);
+    
+    const maxFiles = parseInt(maxFilesPerBatch, 10);
+    
     setAppState(STATES.EXECUTING);
     setProgress({ current: 0, total: previewResults?.batchCount || 0 });
     
     try {
       const results = await window.electronAPI.executeBatch(
         folderPath,
-        maxFilesPerBatch,
-        outputPrefix,
+        maxFiles,
+        outputPrefix.trim(),
         batchMode,
         batchMode === 'copy' ? outputDir : null
       );
       
-      if (results.success) {
+      if (results.cancelled) {
+        // Operation was cancelled - show partial results
+        setExecutionResults({
+          ...results,
+          wasCancelled: true
+        });
+        setAppState(STATES.COMPLETE);
+      } else if (results.success) {
         setExecutionResults(results);
         setAppState(STATES.COMPLETE);
       } else {
@@ -245,6 +403,25 @@ function App() {
     } catch (err) {
       setError(err.message);
       setAppState(STATES.ERROR);
+    }
+  };
+  
+  /**
+   * Request to cancel the current batch operation
+   * Shows confirmation modal
+   */
+  const handleCancelBatch = () => {
+    setShowCancelConfirmation(true);
+  };
+
+  /**
+   * Confirm cancellation
+   * Actually triggers the cancellation
+   */
+  const confirmCancel = async () => {
+    setShowCancelConfirmation(false);
+    if (window.electronAPI?.cancelBatch) {
+      await window.electronAPI.cancelBatch();
     }
   };
   
@@ -270,6 +447,57 @@ function App() {
     setProgress({ current: 0, total: 0 });
     setError(null);
     setExpandedBatch(null);
+    // Reset user settings to defaults
+    setMaxFilesPerBatch('500');
+    setOutputPrefix('Batch');
+    setBatchMode('move');
+    setOutputDir(null);
+  };
+
+  // ============================================================================
+  // RESUME HANDLERS
+  // ============================================================================
+  
+  /**
+   * Resume an interrupted batch operation
+   */
+  const handleResume = async () => {
+    setShowResumeModal(false);
+    setAppState(STATES.EXECUTING);
+    setProgress({ current: 0, total: interruptedProgress?.totalFiles || 0 });
+    
+    try {
+      const results = await window.electronAPI.resumeBatch();
+      
+      if (results.cancelled) {
+        setExecutionResults({
+          ...results,
+          wasCancelled: true
+        });
+        setAppState(STATES.COMPLETE);
+      } else if (results.success) {
+        setExecutionResults(results);
+        setAppState(STATES.COMPLETE);
+      } else {
+        throw new Error(results.error);
+      }
+    } catch (err) {
+      setError(err.message);
+      setAppState(STATES.ERROR);
+    } finally {
+      setInterruptedProgress(null);
+    }
+  };
+  
+  /**
+   * Discard interrupted progress and start fresh
+   */
+  const handleDiscardProgress = async () => {
+    setShowResumeModal(false);
+    setInterruptedProgress(null);
+    if (window.electronAPI?.clearInterruptedProgress) {
+      await window.electronAPI.clearInterruptedProgress();
+    }
   };
 
   // ============================================================================
@@ -277,322 +505,32 @@ function App() {
   // ============================================================================
   
   /**
-   * Render recent folders section
+   * Handle settings change from PreviewPanel
    */
-  const renderRecentFolders = () => {
-    if (recentFolders.length === 0) return null;
-    
-    return (
-      <div className="recent-folders">
-        <h3>📂 Recent Folders</h3>
-        <div className="recent-list">
-          {recentFolders.map((folder, i) => (
-            <button
-              key={i}
-              className="recent-item"
-              onClick={() => scanFolder(folder)}
-              title={folder}
-            >
-              <span className="folder-icon">📁</span>
-              <span className="folder-name">{folder.split(/[/\\]/).pop()}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+  const handleSettingsChange = (key, value) => {
+    switch (key) {
+      case 'maxFilesPerBatch':
+        setMaxFilesPerBatch(value);
+        break;
+      case 'outputPrefix':
+        setOutputPrefix(value);
+        break;
+      case 'batchMode':
+        setBatchMode(value);
+        if (value === 'move') setOutputDir(null);
+        break;
+      default:
+        break;
+    }
   };
   
   /**
-   * Render the drop zone (shown in IDLE state)
+   * Handle output folder selection
    */
-  const renderDropZone = () => (
-    <div className="idle-container">
-      <div
-        className={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleSelectFolder}
-      >
-        <div className="drop-zone-content">
-          <div className="drop-icon">📁</div>
-          <h2>Drop a Folder Here</h2>
-          <p>or click to browse</p>
-        </div>
-      </div>
-      {renderRecentFolders()}
-    </div>
-  );
-  
-  /**
-   * Render scanning state
-   */
-  const renderScanning = () => (
-    <div className="status-card scanning">
-      <div className="spinner"></div>
-      <h2>Scanning Folder...</h2>
-      <p>Analyzing files and detecting pairs</p>
-    </div>
-  );
-  
-  /**
-   * Render batch preview accordion
-   */
-  const renderBatchPreview = () => {
-    if (!previewResults?.batchDetails) return null;
-    
-    return (
-      <div className="batch-preview">
-        <h3>📦 Batch Preview</h3>
-        <div className="batch-list">
-          {previewResults.batchDetails.slice(0, 10).map((batch) => (
-            <div key={batch.batchNumber} className="batch-item">
-              <button
-                className={`batch-header ${expandedBatch === batch.batchNumber ? 'expanded' : ''}`}
-                onClick={() => setExpandedBatch(
-                  expandedBatch === batch.batchNumber ? null : batch.batchNumber
-                )}
-              >
-                <span className="batch-name">
-                  {outputPrefix}_{String(batch.batchNumber).padStart(3, '0')}
-                </span>
-                <span className="batch-count">{batch.fileCount} files</span>
-                <span className="expand-icon">{expandedBatch === batch.batchNumber ? '▼' : '▶'}</span>
-              </button>
-              {expandedBatch === batch.batchNumber && (
-                <div className="batch-files">
-                  {batch.sampleFiles.map((file, i) => (
-                    <div key={i} className="file-item">{file}</div>
-                  ))}
-                  {batch.hasMore && (
-                    <div className="file-item more">... and {batch.fileCount - 5} more</div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          {previewResults.batchDetails.length > 10 && (
-            <p className="more-batches">
-              ... and {previewResults.batchDetails.length - 10} more batches
-            </p>
-          )}
-        </div>
-      </div>
-    );
+  const handleSelectOutputFolder = async () => {
+    const selected = await window.electronAPI.selectOutputFolder();
+    if (selected) setOutputDir(selected);
   };
-  
-  /**
-   * Render the preview/confirmation screen (READY state)
-   */
-  const renderPreview = () => (
-    <div className="preview-container">
-      <div className="folder-info">
-        <h2>📂 {folderPath?.split(/[/\\]/).pop()}</h2>
-        <p className="folder-path">{folderPath}</p>
-      </div>
-      
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{scanResults?.totalFiles || 0}</div>
-          <div className="stat-label">Total Files</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{scanResults?.totalGroups || 0}</div>
-          <div className="stat-label">File Groups</div>
-        </div>
-        <div className="stat-card highlight">
-          <div className="stat-value">{previewResults?.batchCount || 0}</div>
-          <div className="stat-label">Batches to Create</div>
-        </div>
-      </div>
-      
-      {/* Settings */}
-      <div className="settings-panel">
-        <h3>⚙️ Settings</h3>
-        <div className="setting-row">
-          <label>Max Files Per Batch:</label>
-          <input
-            type="number"
-            min="1"
-            max="10000"
-            value={maxFilesPerBatch}
-            onChange={(e) => setMaxFilesPerBatch(Math.max(1, parseInt(e.target.value) || 500))}
-          />
-        </div>
-        <div className="setting-row">
-          <label>Folder Prefix:</label>
-          <input
-            type="text"
-            value={outputPrefix}
-            onChange={(e) => setOutputPrefix(e.target.value || 'Batch')}
-            placeholder="Batch"
-          />
-        </div>
-        
-        {/* Move vs Copy Mode */}
-        <div className="setting-row mode-toggle">
-          <label>Batch Mode:</label>
-          <div className="mode-buttons">
-            <button
-              className={`mode-btn ${batchMode === 'move' ? 'active' : ''}`}
-              onClick={() => { setBatchMode('move'); setOutputDir(null); }}
-            >
-              ⚡ Move (Fast)
-            </button>
-            <button
-              className={`mode-btn ${batchMode === 'copy' ? 'active' : ''}`}
-              onClick={() => setBatchMode('copy')}
-            >
-              📋 Copy (Safe)
-            </button>
-          </div>
-        </div>
-        
-        {/* Output directory for copy mode */}
-        {batchMode === 'copy' && (
-          <div className="setting-row output-dir">
-            <label>Output Location:</label>
-            <div className="output-selector">
-              <span className="output-path">
-                {outputDir ? outputDir.split(/[/\\]/).pop() : 'Same as source'}
-              </span>
-              <button
-                className="btn-small"
-                onClick={async () => {
-                  const selected = await window.electronAPI.selectOutputFolder();
-                  if (selected) setOutputDir(selected);
-                }}
-              >
-                Browse...
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {batchMode === 'move' && (
-          <p className="mode-note">⚡ Files will be moved instantly. Originals will be inside batch folders.</p>
-        )}
-        {batchMode === 'copy' && (
-          <p className="mode-note">📋 Files will be copied. Originals will remain untouched.</p>
-        )}
-      </div>
-      
-      {/* Batch Preview */}
-      {renderBatchPreview()}
-      
-      {/* Warning for oversized groups */}
-      {previewResults?.oversizedGroups?.length > 0 && (
-        <div className="warning-box">
-          <h4>⚠️ Warning: Oversized File Groups</h4>
-          <p>
-            Some file groups exceed your limit of {maxFilesPerBatch} files. 
-            These groups will NOT be split to keep file pairs together:
-          </p>
-          <ul>
-            {previewResults.oversizedGroups.map((g, i) => (
-              <li key={i}>{g.name} ({g.count} files)</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      
-      {/* Confirmation */}
-      <div className="confirmation-box">
-        <p>
-          This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
-          named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
-        </p>
-        <p className="note">
-          💡 Files are moved (not copied) for instant speed. The original files will be inside the new batch folders.
-        </p>
-      </div>
-      
-      <div className="action-buttons">
-        <button className="btn secondary" onClick={handleReset}>
-          ← Select Different Folder
-        </button>
-        <button className="btn primary" onClick={handleExecuteBatch}>
-          ✅ Proceed with Batching
-        </button>
-      </div>
-    </div>
-  );
-  
-  /**
-   * Render executing state with progress
-   */
-  const renderExecuting = () => {
-    const percentage = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
-    
-    return (
-      <div className="status-card executing">
-        <div className="spinner"></div>
-        <h2>Creating Batches...</h2>
-        <div className="progress-bar">
-          <div 
-            className="progress-fill" 
-            style={{ width: `${percentage}%` }}
-          ></div>
-        </div>
-        <p>
-          {progress.current} of {progress.total} folders created
-        </p>
-        {progress.processedFiles !== undefined && (
-          <p className="sub-progress">
-            Processing file {progress.processedFiles.toLocaleString()} of {progress.totalFiles.toLocaleString()}
-          </p>
-        )}
-      </div>
-    );
-  };
-  
-  /**
-   * Render completion screen
-   */
-  const renderComplete = () => (
-    <div className="status-card complete">
-      <div className="success-icon">✅</div>
-      <h2>Batching Complete!</h2>
-      <p>
-        Successfully created <strong>{executionResults?.batchesCreated}</strong> batch folders.
-      </p>
-      <div className="results-summary">
-        {executionResults?.results?.slice(0, 5).map((r, i) => (
-          <div key={i} className="result-row">
-            <span className="folder-name">{r.folder}</span>
-            <span className="file-count">{r.fileCount} files</span>
-          </div>
-        ))}
-        {executionResults?.results?.length > 5 && (
-          <p className="more-results">
-            ... and {executionResults.results.length - 5} more folders
-          </p>
-        )}
-      </div>
-      <div className="action-buttons">
-        <button className="btn secondary" onClick={handleOpenFolder}>
-          📂 Open in Explorer
-        </button>
-        <button className="btn primary" onClick={handleReset}>
-          🔄 Process Another Folder
-        </button>
-      </div>
-    </div>
-  );
-  
-  /**
-   * Render error state
-   */
-  const renderError = () => (
-    <div className="status-card error">
-      <div className="error-icon">❌</div>
-      <h2>An Error Occurred</h2>
-      <p className="error-message">{error}</p>
-      <button className="btn secondary" onClick={handleReset}>
-        ← Try Again
-      </button>
-    </div>
-  );
 
   // ============================================================================
   // MAIN RENDER
@@ -603,35 +541,115 @@ function App() {
   return (
     <div className={`app ${isProcessing ? 'processing' : ''}`}>
       <header className="app-header">
-        <h1>📸 BatchMyPhotos</h1>
-        <p>Organize your photos into batch folders</p>
+        <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
+        <p>{STRINGS.APP_SUBTITLE}</p>
         <button 
           className={`theme-toggle ${appState === STATES.EXECUTING || appState === STATES.SCANNING ? 'disabled' : ''}`}
           onClick={toggleTheme} 
           title="Toggle theme"
           disabled={appState === STATES.EXECUTING || appState === STATES.SCANNING}
         >
-          {theme === 'dark' ? '☀️' : '🌙'}
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </header>
       
       <main className="app-main">
-        {appState === STATES.IDLE && renderDropZone()}
-        {appState === STATES.SCANNING && renderScanning()}
-        {appState === STATES.READY && renderPreview()}
-        {appState === STATES.EXECUTING && renderExecuting()}
-        {appState === STATES.COMPLETE && renderComplete()}
-        {appState === STATES.ERROR && renderError()}
+        {appState === STATES.IDLE && (
+          <IdleScreen
+            isDragOver={isDragOver}
+            recentFolders={recentFolders}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onBrowseClick={handleSelectFolder}
+            onSelectRecentFolder={handleSelectRecentFolder}
+          />
+        )}
+        {appState === STATES.SCANNING && <ScanningCard />}
+        {appState === STATES.READY && (
+          <PreviewPanel
+            folderPath={folderPath}
+            scanResults={scanResults}
+            previewResults={previewResults}
+            isRefreshingPreview={isRefreshingPreview}
+            settings={{ maxFilesPerBatch, outputPrefix, batchMode, outputDir }}
+            validationError={validationError}
+            expandedBatch={expandedBatch}
+            onSettingsChange={handleSettingsChange}
+            onToggleBatch={(batchNumber) => setExpandedBatch(
+              expandedBatch === batchNumber ? null : batchNumber
+            )}
+            onSelectOutputFolder={handleSelectOutputFolder}
+            onProceed={handleProceedClick}
+            onReset={handleReset}
+          />
+        )}
+        {appState === STATES.EXECUTING && (
+          <ExecutingCard 
+            progress={progress} 
+            onCancel={handleCancelBatch}
+          />
+        )}
+        {appState === STATES.COMPLETE && (
+          <CompleteCard 
+            executionResults={executionResults} 
+            onOpenFolder={handleOpenFolder} 
+            onReset={handleReset} 
+          />
+        )}
+        {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
       </main>
       
       <footer className="app-footer">
-        <p>Smart file pairing keeps your JPG + RAW files together</p>
+        <p>{STRINGS.FOOTER_PAIRING}</p>
+        <p className="contact-text">
+          <Mail size={14} className="email-icon" />
+          {STRINGS.FOOTER_CONTACT}{' '}
+          <a href={`mailto:${STRINGS.FOOTER_EMAIL}`} className="email-link" title="Click to send us an email">
+            {STRINGS.FOOTER_EMAIL}
+          </a>
+        </p>
       </footer>
       
-      {/* Click-blocking overlay during processing */}
-      {(appState === STATES.EXECUTING || appState === STATES.SCANNING) && (
+      {/* Click-blocking overlay during scanning only (not executing - to allow cancel) */}
+      {appState === STATES.SCANNING && (
         <div className="blocking-overlay" />
       )}
+      
+      {/* Validation Error Modal */}
+      <ValidationModal 
+        error={validationError} 
+        onClose={() => setValidationError(null)} 
+      />
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        settings={{
+          maxFilesPerBatch,
+          outputPrefix,
+          batchMode,
+          outputDir,
+          batchCount: previewResults?.batchCount || 0
+        }}
+        onConfirm={handleExecuteBatch}
+        onCancel={() => setShowConfirmation(false)}
+      />
+
+      {/* Cancel Confirmation Modal */}
+      <CancelConfirmationModal
+        isOpen={showCancelConfirmation}
+        onConfirm={confirmCancel}
+        onClose={() => setShowCancelConfirmation(false)}
+      />
+      
+      {/* Resume Modal - shown on startup if interrupted progress detected */}
+      <ResumeModal
+        isOpen={showResumeModal}
+        progress={interruptedProgress}
+        onResume={handleResume}
+        onDiscard={handleDiscardProgress}
+      />
     </div>
   );
 }

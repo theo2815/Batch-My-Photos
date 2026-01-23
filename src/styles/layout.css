@@ -1,0 +1,120 @@
+/**
+ * Layout Styles
+ * 
+ * App shell: header, main, footer, theme toggle
+ */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.app-header {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-xs);
+}
+
+.app-header p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-lg);
+  transform: translateY(-50%);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-secondary);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.theme-toggle.disabled,
+.theme-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: translateY(-50%);
+}
+
+.theme-toggle:disabled:hover {
+  background: var(--bg-tertiary);
+  transform: translateY(-50%);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+}
+
+.app-footer {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.app-footer .contact-text {
+  margin-top: var(--space-sm);
+  font-size: 0.8rem;
+}
+
+.app-footer .email-link {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.app-footer .email-link:hover {
+  color: var(--accent-secondary);
+  text-decoration: underline;
+}
+
+.app-footer .email-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
+
+/* Responsive adjustments for layout */
+@media (max-width: 600px) {
+  .theme-toggle {
+    position: static;
+    transform: none;
+    margin-top: var(--space-md);
+  }
+  
+  .app-header {
+    padding-bottom: var(--space-md);
+  }
+}

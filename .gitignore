@@ -6,3 +6,5 @@ build/
 .env
 auth.json
 node_modules
+release/
+release/

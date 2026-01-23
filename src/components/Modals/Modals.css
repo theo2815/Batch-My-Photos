@@ -1,0 +1,228 @@
+/**
+ * Modal Styles
+ * 
+ * Styles for ValidationModal and ConfirmationModal
+ */
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn var(--transition-fast);
+}
+
+/* Modal Content */
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: slideUp var(--transition-normal);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-md);
+}
+
+.modal-content h3 {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-sm);
+  color: var(--warning);
+}
+
+.modal-content p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+/* Single OK button in validation modal */
+.modal-content > .btn {
+  min-width: 100px;
+  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+}
+
+/* Confirmation Modal Specific Styles */
+.confirmation-modal {
+  max-width: 450px;
+}
+
+.confirmation-modal h3 {
+  color: var(--accent-primary);
+}
+
+.confirmation-details {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin: var(--space-lg) 0;
+  text-align: left;
+}
+
+.confirmation-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.confirmation-row:last-child {
+  border-bottom: none;
+}
+
+.confirmation-label {
+  color: var(--text-secondary);
+}
+
+.confirmation-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
+.modal-buttons .btn {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+}
+
+/* Cancel Confirmation Specifics */
+.warning-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.params-list {
+  text-align: left;
+  list-style-type: disc;
+  padding-left: var(--space-xl);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: var(--space-lg);
+}
+
+.params-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.params-list strong {
+  color: var(--text-primary);
+}
+
+.modal-icon.warning {
+  color: var(--warning);
+}
+
+/* Resume Modal Specific Styles */
+.resume-modal {
+  max-width: 480px;
+}
+
+.resume-modal h3 {
+  color: var(--warning);
+}
+
+.resume-description {
+  font-size: 0.95rem;
+  margin-bottom: var(--space-md);
+}
+
+.resume-details {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  text-align: left;
+}
+
+.resume-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  color: var(--text-secondary);
+}
+
+.resume-row svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.resume-label {
+  min-width: 60px;
+}
+
+.resume-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-progress-bar {
+  margin-top: var(--space-md);
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.resume-progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  transition: width 0.3s ease;
+}
+
+.resume-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-sm);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.resume-stats .remaining {
+  color: var(--warning);
+  font-weight: 500;
+}
+
+.text-warning {
+  color: var(--warning);
+}

@@ -1,0 +1,94 @@
+/**
+ * Base Styles
+ * 
+ * Reset, body styles, and helper classes
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Blocking overlay - prevents all clicks during scanning */
+.blocking-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  cursor: wait !important;
+  background: transparent;
+  pointer-events: all;
+}
+
+/* When app is processing, force wait cursor on header/footer and disable their clicks */
+.app.processing {
+  cursor: wait;
+}
+
+.app.processing .app-header,
+.app.processing .app-footer {
+  cursor: wait !important;
+  pointer-events: none !important;
+}
+
+/* Theme toggle should be disabled during processing */
+.app.processing .theme-toggle {
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  opacity: 0.5;
+}
+
+/* Cancel button must remain clickable during execution */
+.cancel-btn {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Helper Classes */
+.icon-inline {
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-right: 6px;
+}
+
+.text-primary { color: var(--accent-primary); }
+.text-warning { color: var(--warning); }
+.text-error { color: var(--error); }
+.text-success { color: var(--success); }
+
+.mask-icon {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
