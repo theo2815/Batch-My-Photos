@@ -19,7 +19,7 @@ import { STATES } from './constants/appStates';
 import { STRINGS, formatString } from './constants/strings';
 
 // Import components
-import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal } from './components/Modals';
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal } from './components/Modals';
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
@@ -29,6 +29,7 @@ function App() {
   // STATE MANAGEMENT
   // ============================================================================
   
+  /* State Management */
   const [appState, setAppState] = useState(STATES.IDLE);
   const [folderPath, setFolderPath] = useState(null);
   const [scanResults, setScanResults] = useState(null);
@@ -46,10 +47,14 @@ function App() {
   const [recentFolders, setRecentFolders] = useState([]);
   const [expandedBatch, setExpandedBatch] = useState(null);
   
+  // Preset State (lifted from SettingsPanel)
+  const [selectedPresetName, setSelectedPresetName] = useState('');
+
   // Move vs Copy mode
   const [batchMode, setBatchMode] = useState('move'); // 'move' or 'copy'
+  const [sortBy, setSortBy] = useState('name-asc'); // Sort order for files
   const [outputDir, setOutputDir] = useState(null);
-  
+
   // Drag & drop visual state
   const [isDragOver, setIsDragOver] = useState(false);
   
@@ -66,6 +71,12 @@ function App() {
   // Resume modal state (for interrupted batch operations)
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [interruptedProgress, setInterruptedProgress] = useState(null);
+  
+  // Undo/Rollback state
+  const [rollbackAvailable, setRollbackAvailable] = useState(false);
+  const [rollbackInfo, setRollbackInfo] = useState(null);
+  const [showUndoConfirmation, setShowUndoConfirmation] = useState(false);
+  const [isRollingBack, setIsRollingBack] = useState(false);
   
   // Ref to track if a preview refresh should be cancelled
   const previewCancelledRef = React.useRef(false);
@@ -153,6 +164,16 @@ function App() {
     setFolderPath(path);
     setError(null);
     
+    // Reset settings to defaults when scanning a new folder
+    setMaxFilesPerBatch('500');
+    setOutputPrefix('Batch');
+    setBatchMode('move');
+    setOutputDir(null);
+    // Keep internal UI state like expandedBatch cleared
+    setExpandedBatch(null);
+    // Clear selected preset to avoid confusion
+    setSelectedPresetName('');
+
     try {
       const results = await window.electronAPI.scanFolder(path);
       
@@ -166,7 +187,7 @@ function App() {
         }
         
         // Also get preview of batches
-        const preview = await window.electronAPI.previewBatches(path, maxFilesPerBatch);
+        const preview = await window.electronAPI.previewBatches(path, 500); // Default 500
         if (preview.success) {
           setPreviewResults(preview);
           setAppState(STATES.READY);
@@ -180,11 +201,10 @@ function App() {
       setError(err.message);
       setAppState(STATES.ERROR);
     }
-  }, [maxFilesPerBatch]);
+  }, []);
   
   /**
    * Handle selecting a recent folder
-   * Validates folder exists before scanning; removes from list if not found
    */
   const handleSelectRecentFolder = useCallback(async (path) => {
     // Validate folder exists before scanning
@@ -193,43 +213,32 @@ function App() {
     if (registerResult.success) {
       await scanFolder(path);
     } else {
-      // Folder no longer exists - show error and remove from recent list
       setError(`The folder "${path.split(/[/\\]/).pop()}" no longer exists or is inaccessible.`);
       setAppState(STATES.ERROR);
       
-      // Remove invalid folder from recent folders list
       if (window.electronAPI?.getRecentFolders) {
         const currentFolders = await window.electronAPI.getRecentFolders();
-        const filteredFolders = currentFolders.filter(f => f !== path);
-        // Update local state (store will be updated on next valid add)
-        setRecentFolders(filteredFolders);
+        setRecentFolders(currentFolders.filter(f => f !== path));
       }
     }
   }, [scanFolder]);
   
   /**
    * Refresh preview when settings change
-   * Enforces a minimum of 10 to prevent extreme calculations
    */
   const refreshPreview = async () => {
     if (!folderPath) return;
     
-    // Parse and validate maxFilesPerBatch
     const maxFiles = parseInt(maxFilesPerBatch, 10);
     if (isNaN(maxFiles) || maxFiles < 1) return;
     
-    // Enforce minimum of 10 for preview to prevent performance issues
-    // User can still set lower values for execution, but preview uses minimum 10
     const previewMaxFiles = Math.max(10, maxFiles);
     
-    // Mark this request as not cancelled
     previewCancelledRef.current = false;
     setIsRefreshingPreview(true);
     
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles);
-      
-      // Only update if this request wasn't cancelled
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy);
       if (!previewCancelledRef.current && preview.success) {
         setPreviewResults(preview);
       }
@@ -242,25 +251,21 @@ function App() {
     }
   };
   
-  // Debounced refresh preview when maxFilesPerBatch changes
-  // Wait 400ms after the user stops typing before refreshing
+  // Debounced refresh preview
   useEffect(() => {
     if (appState !== STATES.READY) return;
     
-    // Cancel any pending preview when dependencies change
     previewCancelledRef.current = true;
     
-    // Set up debounce timer
     const debounceTimer = setTimeout(() => {
       refreshPreview();
     }, 400);
     
-    // Cleanup: cancel timer if value changes again before 400ms
     return () => {
       clearTimeout(debounceTimer);
       previewCancelledRef.current = true;
     };
-  }, [maxFilesPerBatch, folderPath, appState]);
+  }, [maxFilesPerBatch, folderPath, sortBy, appState]);
 
   // ============================================================================
   // DRAG & DROP HANDLERS
@@ -278,10 +283,6 @@ function App() {
     setIsDragOver(false);
   }, []);
   
-  /**
-   * Handle dropped folder
-   * Registers the dropped path as allowed before scanning
-   */
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -290,14 +291,11 @@ function App() {
     const items = e.dataTransfer.items;
     if (items && items.length > 0) {
       const item = items[0];
-      
-      // Get the file/folder entry
       const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
       
       if (entry && entry.isDirectory) {
         const file = e.dataTransfer.files[0];
         if (file && file.path) {
-          // Register the dropped folder path as allowed before scanning
           const registerResult = await window.electronAPI.registerDroppedFolder(file.path);
           if (registerResult.success) {
             await scanFolder(file.path);
@@ -307,25 +305,19 @@ function App() {
           }
         }
       } else {
-        // User dropped a file, not a folder - show helpful error
-        setError('Please drop a folder, not a file. Select a folder containing your images.');
+        setError('Please drop a folder, not a file.');
         setAppState(STATES.ERROR);
       }
     }
   }, [scanFolder]);
 
   // ============================================================================
-  // BATCH EXECUTION
+  // BATCH EXECUTION PREP
   // ============================================================================
   
-  /**
-   * Validate inputs before executing batch
-   * @returns {boolean} True if valid
-   */
   const validateInputs = () => {
-    // Check Max Files Per Batch
     const maxFiles = parseInt(maxFilesPerBatch, 10);
-    if (!maxFilesPerBatch || maxFilesPerBatch.trim() === '' || isNaN(maxFiles)) {
+    if (!maxFilesPerBatch || isNaN(maxFiles)) {
       setValidationError({
         title: 'Max Files Per Batch Required',
         message: 'Please enter the maximum number of files per batch folder.',
@@ -333,16 +325,7 @@ function App() {
       });
       return false;
     }
-    if (maxFiles < 1 || maxFiles > 10000) {
-      setValidationError({
-        title: 'Invalid Max Files',
-        message: 'Max files per batch must be between 1 and 10,000.',
-        field: 'maxFilesPerBatch'
-      });
-      return false;
-    }
     
-    // Check Folder Name
     if (!outputPrefix || outputPrefix.trim() === '') {
       setValidationError({
         title: 'Folder Name Required',
@@ -355,23 +338,34 @@ function App() {
     return true;
   };
 
-  /**
-   * Show confirmation modal before executing
-   */
   const handleProceedClick = () => {
-    // Validate inputs first
     if (!validateInputs()) {
       return;
     }
-    // Show confirmation modal
     setShowConfirmation(true);
   };
+
 
   /**
    * Execute the batch splitting operation (called after confirmation)
    */
   const handleExecuteBatch = async () => {
     setShowConfirmation(false);
+    
+    // Auto-save current preset if one is selected (User Requirement)
+    if (selectedPresetName && window.electronAPI?.savePreset) {
+      try {
+        await window.electronAPI.savePreset(selectedPresetName, {
+          maxFilesPerBatch,
+          outputPrefix,
+          batchMode,
+          sortBy,
+          outputDir
+        });
+      } catch (err) {
+        console.error('Failed to auto-save preset:', err);
+      }
+    }
     
     const maxFiles = parseInt(maxFilesPerBatch, 10);
     
@@ -384,7 +378,8 @@ function App() {
         maxFiles,
         outputPrefix.trim(),
         batchMode,
-        batchMode === 'copy' ? outputDir : null
+        batchMode === 'copy' ? outputDir : null,
+        sortBy
       );
       
       if (results.cancelled) {
@@ -452,6 +447,8 @@ function App() {
     setOutputPrefix('Batch');
     setBatchMode('move');
     setOutputDir(null);
+    // Clear selected preset
+    setSelectedPresetName('');
   };
 
   // ============================================================================
@@ -501,6 +498,103 @@ function App() {
   };
 
   // ============================================================================
+  // UNDO/ROLLBACK HANDLERS
+  // ============================================================================
+  
+  /**
+   * Check if rollback is available after batch completes
+   * Called after execution results are set
+   */
+  const checkRollbackAvailability = async () => {
+    if (window.electronAPI?.checkRollbackAvailable) {
+      const info = await window.electronAPI.checkRollbackAvailable();
+      if (info) {
+        setRollbackAvailable(true);
+        setRollbackInfo(info);
+      } else {
+        setRollbackAvailable(false);
+        setRollbackInfo(null);
+      }
+    }
+  };
+  
+  // Check rollback availability when entering COMPLETE state
+  useEffect(() => {
+    if (appState === STATES.COMPLETE) {
+      checkRollbackAvailability();
+    }
+  }, [appState]);
+  
+  /**
+   * Show undo confirmation modal
+   */
+  const handleUndoClick = () => {
+    setShowUndoConfirmation(true);
+  };
+  
+  /**
+   * Execute the undo operation
+   */
+  const handleExecuteUndo = async () => {
+    setShowUndoConfirmation(false);
+    setIsRollingBack(true);
+    setAppState(STATES.EXECUTING);
+    setProgress({ current: 0, total: rollbackInfo?.totalFiles || 0 });
+    
+    // Set up rollback progress listener
+    let cleanupProgress = null;
+    if (window.electronAPI?.onRollbackProgress) {
+      cleanupProgress = window.electronAPI.onRollbackProgress((progressData) => {
+        setProgress({
+          current: progressData.restoredFiles || progressData.current || 0,
+          total: progressData.total || rollbackInfo?.totalFiles || 0
+        });
+      });
+    }
+    
+    try {
+      const results = await window.electronAPI.rollbackBatch();
+      
+      if (results.success) {
+        // Show success - reset to idle with a success message
+        setRollbackAvailable(false);
+        setRollbackInfo(null);
+        setExecutionResults(null);
+        setAppState(STATES.IDLE);
+        // Could show a toast/notification here in the future
+      } else if (results.cancelled) {
+        // User cancelled during rollback - stay on complete screen
+        setAppState(STATES.COMPLETE);
+      } else {
+        throw new Error(results.error || 'Rollback failed');
+      }
+    } catch (err) {
+      setError(err.message);
+      setAppState(STATES.ERROR);
+    } finally {
+      // Clean up progress listener
+      if (cleanupProgress) {
+        cleanupProgress();
+      }
+      setIsRollingBack(false);
+    }
+  };
+  
+  /**
+   * Reset with rollback manifest clear
+   * Used when user starts a new batch (clear undo option)
+   */
+  const handleResetWithRollbackClear = async () => {
+    // Clear rollback manifest when starting new operation
+    if (rollbackAvailable && window.electronAPI?.clearRollbackManifest) {
+      await window.electronAPI.clearRollbackManifest();
+    }
+    setRollbackAvailable(false);
+    setRollbackInfo(null);
+    handleReset();
+  };
+
+  // ============================================================================
   // RENDER HELPERS
   // ============================================================================
   
@@ -508,6 +602,29 @@ function App() {
    * Handle settings change from PreviewPanel
    */
   const handleSettingsChange = (key, value) => {
+    // Handle bulk updates (object passed as first argument)
+    if (typeof key === 'object' && key !== null) {
+      const settings = key;
+      if (settings.maxFilesPerBatch !== undefined) setMaxFilesPerBatch(settings.maxFilesPerBatch);
+      if (settings.outputPrefix !== undefined) setOutputPrefix(settings.outputPrefix);
+      if (settings.sortBy !== undefined) setSortBy(settings.sortBy);
+      
+      // Handle mode and output dir specifically
+      if (settings.batchMode !== undefined) {
+        setBatchMode(settings.batchMode);
+        // If switching to move mode, clear output dir unless explicitly set to something else (which shouldn't happen in move mode)
+        if (settings.batchMode === 'move') {
+           setOutputDir(null);
+        }
+      }
+      
+      // Explicit output dir sets (overrides the mode check above if provided)
+      if (settings.outputDir !== undefined) {
+         setOutputDir(settings.outputDir);
+      }
+      return;
+    }
+
     switch (key) {
       case 'maxFilesPerBatch':
         setMaxFilesPerBatch(value);
@@ -518,6 +635,12 @@ function App() {
       case 'batchMode':
         setBatchMode(value);
         if (value === 'move') setOutputDir(null);
+        break;
+      case 'sortBy':
+        setSortBy(value);
+        break;
+      case 'outputDir':
+        setOutputDir(value);
         break;
       default:
         break;
@@ -543,61 +666,71 @@ function App() {
       <header className="app-header">
         <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>
-        <button 
-          className={`theme-toggle ${appState === STATES.EXECUTING || appState === STATES.SCANNING ? 'disabled' : ''}`}
-          onClick={toggleTheme} 
-          title="Toggle theme"
-          disabled={appState === STATES.EXECUTING || appState === STATES.SCANNING}
-        >
-          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+        <div className="header-actions">
+          <button 
+            className={`header-btn ${appState === STATES.EXECUTING || appState === STATES.SCANNING ? 'disabled' : ''}`}
+            onClick={toggleTheme} 
+            title="Toggle theme"
+            disabled={appState === STATES.EXECUTING || appState === STATES.SCANNING}
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
       </header>
       
       <main className="app-main">
-        {appState === STATES.IDLE && (
-          <IdleScreen
-            isDragOver={isDragOver}
-            recentFolders={recentFolders}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onBrowseClick={handleSelectFolder}
-            onSelectRecentFolder={handleSelectRecentFolder}
-          />
-        )}
-        {appState === STATES.SCANNING && <ScanningCard />}
-        {appState === STATES.READY && (
-          <PreviewPanel
-            folderPath={folderPath}
-            scanResults={scanResults}
-            previewResults={previewResults}
-            isRefreshingPreview={isRefreshingPreview}
-            settings={{ maxFilesPerBatch, outputPrefix, batchMode, outputDir }}
-            validationError={validationError}
-            expandedBatch={expandedBatch}
-            onSettingsChange={handleSettingsChange}
-            onToggleBatch={(batchNumber) => setExpandedBatch(
-              expandedBatch === batchNumber ? null : batchNumber
-            )}
-            onSelectOutputFolder={handleSelectOutputFolder}
-            onProceed={handleProceedClick}
-            onReset={handleReset}
-          />
-        )}
-        {appState === STATES.EXECUTING && (
-          <ExecutingCard 
-            progress={progress} 
-            onCancel={handleCancelBatch}
-          />
-        )}
-        {appState === STATES.COMPLETE && (
-          <CompleteCard 
-            executionResults={executionResults} 
-            onOpenFolder={handleOpenFolder} 
-            onReset={handleReset} 
-          />
-        )}
-        {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
+          {appState === STATES.IDLE && (
+            <IdleScreen
+              isDragOver={isDragOver}
+              recentFolders={recentFolders}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onBrowseClick={handleSelectFolder}
+              onSelectRecentFolder={handleSelectRecentFolder}
+            />
+          )}
+          {appState === STATES.SCANNING && <ScanningCard />}
+          {appState === STATES.READY && (
+            <PreviewPanel
+              folderPath={folderPath}
+              scanResults={scanResults}
+              previewResults={previewResults}
+              isRefreshingPreview={isRefreshingPreview}
+              settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir }}
+              validationError={validationError}
+              expandedBatch={expandedBatch}
+              // Preset Props (Lifted State)
+              selectedPresetName={selectedPresetName}
+              onPresetSelect={setSelectedPresetName}
+              onSettingsChange={handleSettingsChange}
+              onToggleBatch={(batchNumber) => setExpandedBatch(
+                expandedBatch === batchNumber ? null : batchNumber
+              )}
+              onSelectOutputFolder={handleSelectOutputFolder}
+              onProceed={handleProceedClick}
+              onReset={handleReset}
+            />
+          )}
+          {appState === STATES.EXECUTING && (
+            <ExecutingCard 
+              progress={progress}
+              isRollback={isRollingBack}
+              onCancel={(isRollingBack || batchMode === 'move') ? undefined : handleCancelBatch}
+            />
+          )}
+          {appState === STATES.COMPLETE && (
+            <CompleteCard 
+              executionResults={executionResults} 
+              rollbackAvailable={rollbackAvailable}
+              onOpenFolder={handleOpenFolder} 
+              onReset={handleResetWithRollbackClear}
+              onUndo={handleUndoClick}
+            />
+          )}
+          {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
+        
+
       </main>
       
       <footer className="app-footer">
@@ -630,6 +763,7 @@ function App() {
           outputPrefix,
           batchMode,
           outputDir,
+          sortBy,
           batchCount: previewResults?.batchCount || 0
         }}
         onConfirm={handleExecuteBatch}
@@ -643,12 +777,22 @@ function App() {
         onClose={() => setShowCancelConfirmation(false)}
       />
       
+
+      
       {/* Resume Modal - shown on startup if interrupted progress detected */}
       <ResumeModal
         isOpen={showResumeModal}
         progress={interruptedProgress}
         onResume={handleResume}
         onDiscard={handleDiscardProgress}
+      />
+      
+      {/* Undo Confirmation Modal */}
+      <UndoConfirmationModal
+        isOpen={showUndoConfirmation}
+        rollbackInfo={rollbackInfo}
+        onConfirm={handleExecuteUndo}
+        onClose={() => setShowUndoConfirmation(false)}
       />
     </div>
   );

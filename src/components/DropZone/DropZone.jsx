@@ -16,7 +16,7 @@ import './DropZone.css';
  * @param {(e: React.DragEvent) => void} props.onDrop
  * @param {() => void} props.onClick - Handle click to browse
  */
-function DropZone({ isDragOver, onDragOver, onDragLeave, onDrop, onClick }) {
+function DropZone({ isDragOver, onDragOver, onDragLeave, onDrop, onClick, title, subtitle }) {
   return (
     <div
       className={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
@@ -27,8 +27,8 @@ function DropZone({ isDragOver, onDragOver, onDragLeave, onDrop, onClick }) {
     >
       <div className="drop-zone-content">
         <div className="drop-icon"><FolderOpen size={64} strokeWidth={1.5} /></div>
-        <h2>Drop a Folder Here</h2>
-        <p>or click to browse</p>
+        <h2>{title || "Drop a Folder Here"}</h2>
+        <p>{subtitle || "or click to browse"}</p>
       </div>
     </div>
   );

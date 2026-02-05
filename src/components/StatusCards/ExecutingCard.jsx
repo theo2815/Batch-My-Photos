@@ -16,9 +16,10 @@ import './StatusCards.css';
  * @param {number} props.progress.total - Total batch count
  * @param {number} [props.progress.processedFiles] - Number of files processed
  * @param {number} [props.progress.totalFiles] - Total number of files
+ * @param {boolean} [props.isRollback] - Whether this is a rollback/undo operation
  * @param {() => void} [props.onCancel] - Callback when cancel button is clicked
  */
-function ExecutingCard({ progress, onCancel }) {
+function ExecutingCard({ progress, isRollback = false, onCancel }) {
   const percentage = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
   
   const handleCancel = async () => {
@@ -27,20 +28,24 @@ function ExecutingCard({ progress, onCancel }) {
     }
   };
   
+  // Dynamic text based on operation type
+  const title = isRollback ? 'Undoing Batches...' : 'Creating Batches...';
+  const progressText = isRollback 
+    ? `${progress.current} of ${progress.total} files restored`
+    : `${progress.current} of ${progress.total} folders created`;
+  
   return (
     <div className="status-card executing">
       <div className="spinner"><BoxSpinner /></div>
-      <h2>Creating Batches...</h2>
+      <h2>{title}</h2>
       <div className="progress-bar">
         <div 
           className="progress-fill" 
           style={{ width: `${percentage}%` }}
         ></div>
       </div>
-      <p>
-        {progress.current} of {progress.total} folders created
-      </p>
-      {progress.processedFiles !== undefined && (
+      <p>{progressText}</p>
+      {progress.processedFiles !== undefined && !isRollback && (
         <p className="sub-progress">
           Processing file {progress.processedFiles.toLocaleString()} of {progress.totalFiles.toLocaleString()}
         </p>

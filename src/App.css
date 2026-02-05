@@ -111,10 +111,11 @@
     justify-content: center;
   }
   
-  .theme-toggle {
+  .header-actions {
     position: static;
     transform: none;
     margin-top: var(--space-md);
+    justify-content: center;
   }
   
   .app-header {

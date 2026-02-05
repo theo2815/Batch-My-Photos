@@ -35,12 +35,19 @@
   font-size: 0.95rem;
 }
 
-/* Theme Toggle Button */
-.theme-toggle {
+/* Header Actions Container */
+.header-actions {
   position: absolute;
   top: 50%;
   right: var(--space-lg);
   transform: translateY(-50%);
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+/* Toggle Buttons */
+.header-btn {
   background: var(--bg-tertiary);
   border: none;
   border-radius: var(--radius-md);
@@ -48,23 +55,26 @@
   font-size: 1.25rem;
   cursor: pointer;
   transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
 }
 
-.theme-toggle:hover {
+.header-btn:hover {
   background: var(--bg-secondary);
-  transform: translateY(-50%) scale(1.1);
+  transform: scale(1.1);
 }
 
-.theme-toggle.disabled,
-.theme-toggle:disabled {
+.header-btn.disabled,
+.header-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  transform: translateY(-50%);
 }
 
-.theme-toggle:disabled:hover {
+.header-btn:disabled:hover {
   background: var(--bg-tertiary);
-  transform: translateY(-50%);
+  transform: none;
 }
 
 .app-main {
@@ -108,12 +118,12 @@
 
 /* Responsive adjustments for layout */
 @media (max-width: 600px) {
-  .theme-toggle {
+  .header-btn {
     position: static;
     transform: none;
     margin-top: var(--space-md);
   }
-  
+
   .app-header {
     padding-bottom: var(--space-md);
   }

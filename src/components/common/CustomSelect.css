@@ -1,0 +1,110 @@
+/* Custom Dropdown Styles */
+.custom-select {
+  width: fit-content;
+  min-width: 200px;
+  cursor: pointer;
+  position: relative;
+  transition: 300ms;
+  color: var(--text-primary);
+  z-index: 100; /* Ensure it stays above other elements */
+}
+
+.custom-select.open {
+  z-index: 1001; /* Ensure open dropdowns stack on top of later siblings */
+}
+
+.custom-select:focus {
+  outline: none;
+}
+
+.custom-select:focus .select-selected {
+  border-color: var(--accent-primary);
+}
+
+.select-selected {
+  background-color: var(--bg-tertiary);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  position: relative;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: 300ms;
+  border: 1px solid transparent;
+  gap: 15px; /* Added spacing between text and arrow */
+}
+
+.custom-select:hover .select-selected {
+  background-color: var(--bg-primary);
+}
+
+.custom-select.open .select-selected {
+  border-color: var(--accent-primary);
+  background-color: var(--bg-primary);
+}
+
+.select-arrow {
+  position: relative;
+  height: 14px;
+  width: 14px;
+  color: var(--text-secondary);
+  transition: 300ms;
+  transform: rotate(-90deg);
+}
+
+.select-options {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  padding: 5px;
+  background-color: var(--bg-tertiary);
+  position: absolute;
+  top: 100%; /* Position below */
+  left: 0;
+  right: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: 300ms;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin-top: 8px;
+  pointer-events: none; /* Prevent ghost clicks when hidden */
+}
+
+.custom-select.open .select-options {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.custom-select.open .select-selected .select-arrow {
+  transform: rotate(0deg);
+  color: var(--text-primary);
+}
+
+.select-option {
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  transition: 300ms;
+  background-color: transparent;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-option:hover {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.select-option.active {
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  font-weight: 500;
+}

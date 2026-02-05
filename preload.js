@@ -33,10 +33,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * 
    * @param {string} folderPath - Absolute path to the source folder
    * @param {number} maxFilesPerBatch - Maximum files per batch folder
+   * @param {string} [sortBy='name-asc'] - Sort order for files
    * @returns {Promise<Object>} Preview results including batch count and sizes
    */
-  previewBatches: (folderPath, maxFilesPerBatch) => 
-    ipcRenderer.invoke('preview-batches', { folderPath, maxFilesPerBatch }),
+  previewBatches: (folderPath, maxFilesPerBatch, sortBy = 'name-asc') => 
+    ipcRenderer.invoke('preview-batches', { folderPath, maxFilesPerBatch, sortBy }),
   
   /**
    * Executes the batch splitting operation
@@ -47,10 +48,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} outputPrefix - Prefix for batch folder names (e.g., "Batch" -> "Batch_001")
    * @param {string} mode - 'move' (default, instant) or 'copy' (preserves originals)
    * @param {string} outputDir - Optional output directory (for copy mode)
+   * @param {string} [sortBy='name-asc'] - Sort order for files
    * @returns {Promise<Object>} Execution results
    */
-  executeBatch: (folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null) =>
-    ipcRenderer.invoke('execute-batch', { folderPath, maxFilesPerBatch, outputPrefix, mode, outputDir }),
+  executeBatch: (folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc') =>
+    ipcRenderer.invoke('execute-batch', { folderPath, maxFilesPerBatch, outputPrefix, mode, outputDir, sortBy }),
   
   /**
    * Opens a folder selection dialog for output folder (used in copy mode)
@@ -127,6 +129,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
   
   /**
+   * Get all saved presets
+   * @returns {Promise<Array>} List of presets
+   */
+  getPresets: () => ipcRenderer.invoke('get-presets'),
+
+  /**
+   * Save a new preset
+   * @param {string} name - Preset name
+   * @param {Object} settings - Settings object
+   * @returns {Promise<boolean>} Success status
+   */
+  savePreset: (name, settings) => ipcRenderer.invoke('save-preset', { name, settings }),
+
+  /**
+   * Delete a preset
+   * @param {string} name - Preset name to delete
+   * @returns {Promise<boolean>} Success status
+   */
+  deletePreset: (name) => ipcRenderer.invoke('delete-preset', name),
+  
+  /**
    * Clean up stale recent folders that no longer exist
    * Call this on app startup to ensure the recent folders list is valid
    * @returns {Promise<string[]>} Updated list of valid recent folders
@@ -154,6 +177,58 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Execution results
    */
   resumeBatch: () => ipcRenderer.invoke('resume-batch'),
+
+  // ============================================================================
+  // STORAGE & MAINTENANCE APIs
+  // ============================================================================
+
+  /**
+   * Get information about the application cache
+   * @returns {Promise<Object>} { sizeBytes, sizeStr, path }
+   */
+  getCacheInfo: () => ipcRenderer.invoke('get-cache-info'),
+
+  /**
+   * Clear the application cache
+   * @returns {Promise<Object>} Success status
+   */
+  clearCache: () => ipcRenderer.invoke('clear-cache'),
+
+  // ============================================================================
+  // UNDO/ROLLBACK APIs
+  // ============================================================================
+
+  /**
+   * Check if rollback (undo) is available for the last batch operation
+   * @returns {Promise<Object|null>} Rollback info if available, null otherwise
+   */
+  checkRollbackAvailable: () => ipcRenderer.invoke('check-rollback-available'),
+
+  /**
+   * Execute rollback - move files back to original locations
+   * @returns {Promise<Object>} Rollback result
+   */
+  rollbackBatch: () => ipcRenderer.invoke('rollback-batch'),
+
+  /**
+   * Clear the rollback manifest (user dismissed undo option)
+   * @returns {Promise<Object>} Success status
+   */
+  clearRollbackManifest: () => ipcRenderer.invoke('clear-rollback-manifest'),
+
+  /**
+   * Listen for rollback progress updates during execution
+   * @param {Function} callback - Called with progress updates
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onRollbackProgress: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('rollback-progress', listener);
+    
+    return () => {
+      ipcRenderer.removeListener('rollback-progress', listener);
+    };
+  },
 });
 
 // Log when preload script is loaded (helpful for debugging)

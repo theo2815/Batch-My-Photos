@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CheckCircle, AlertCircle, FolderOpen, RotateCcw } from 'lucide-react';
+import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2 } from 'lucide-react';
 import './StatusCards.css';
 
 /**
@@ -16,10 +16,13 @@ import './StatusCards.css';
  * @param {boolean} [props.executionResults.wasCancelled] - Whether operation was cancelled
  * @param {number} [props.executionResults.filesProcessed] - Files processed before cancel
  * @param {number} [props.executionResults.totalFiles] - Total files that were to be processed
+ * @param {string} [props.executionResults.mode] - 'move' or 'copy'
+ * @param {boolean} props.rollbackAvailable - Whether undo is available
  * @param {() => void} props.onOpenFolder - Callback to open output folder
  * @param {() => void} props.onReset - Callback to reset and start over
+ * @param {() => void} props.onUndo - Callback to undo the batch operation
  */
-function CompleteCard({ executionResults, onOpenFolder, onReset }) {
+function CompleteCard({ executionResults, rollbackAvailable, onOpenFolder, onReset, onUndo }) {
   const wasCancelled = executionResults?.wasCancelled || executionResults?.cancelled;
   
   return (
@@ -60,6 +63,11 @@ function CompleteCard({ executionResults, onOpenFolder, onReset }) {
         </p>
       )}
       <div className="action-buttons">
+        {rollbackAvailable && (
+          <button className="btn secondary" onClick={onUndo}>
+            <Undo2 size={16} /> Undo
+          </button>
+        )}
         <button className="btn secondary" onClick={onOpenFolder}>
           <FolderOpen size={16} /> Open in Explorer
         </button>

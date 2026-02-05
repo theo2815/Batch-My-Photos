@@ -34,13 +34,17 @@ function PreviewPanel({
   settings,
   validationError,
   expandedBatch,
+  // New props for preset lifting
+  selectedPresetName,
+  onPresetSelect,
+  // Existing props
   onSettingsChange,
   onToggleBatch,
   onSelectOutputFolder,
   onProceed,
   onReset
 }) {
-  const { maxFilesPerBatch, outputPrefix, batchMode, outputDir } = settings;
+  const { maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir } = settings;
   
   return (
     <div className="preview-container">
@@ -63,10 +67,14 @@ function PreviewPanel({
         maxFilesPerBatch={maxFilesPerBatch}
         outputPrefix={outputPrefix}
         batchMode={batchMode}
+        sortBy={sortBy}
         outputDir={outputDir}
         validationError={validationError}
         onChange={onSettingsChange}
         onSelectOutputFolder={onSelectOutputFolder}
+        // Pass preset props
+        selectedPresetName={selectedPresetName}
+        onPresetSelect={onPresetSelect}
       />
       
       {/* Batch Preview Accordion */}

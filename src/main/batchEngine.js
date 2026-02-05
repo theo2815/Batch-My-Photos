@@ -117,6 +117,70 @@ async function groupFilesByBaseName(files) {
 }
 
 /**
+ * Sort file groups based on user preference
+ * This determines the order files are assigned to batches
+ * 
+ * @param {Array<[string, string[]]>} groupsArray - Array of [baseName, files]
+ * @param {string} sortBy - Sorting preference
+ * @param {Object} [fileStats] - Map of fileName -> { mtimeMs, size } OR fileName -> timestamp (for EXIF)
+ * @returns {Array} Sorted groups array
+ */
+function sortFileGroups(groupsArray, sortBy = 'name-asc', fileStats = null) {
+  // Helper to get earliest mtime for a group
+  const getGroupMtime = (files) => {
+    if (!fileStats) return 0;
+    let earliest = Infinity;
+    let latest = 0;
+    
+    for (const file of files) {
+      const stat = fileStats[file];
+      // Handle both object style {mtimeMs} and direct timestamp (EXIF service)
+      const time = (typeof stat === 'number') ? stat : (stat?.mtimeMs || 0);
+      
+      if (time) {
+        if (time < earliest) earliest = time;
+        if (time > latest) latest = time;
+      }
+    }
+    // Return earliest by default, could be configurable
+    return earliest === Infinity ? 0 : earliest;
+  };
+
+  switch (sortBy) {
+    case 'name-asc':
+      // Alphabetical A-Z
+      return groupsArray.sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+    
+    case 'name-desc':
+      // Alphabetical Z-A
+      return groupsArray.sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true }));
+    
+    case 'date-asc':
+    case 'exif-asc':
+      // Oldest first
+      return groupsArray.sort((a, b) => {
+        const mtimeA = getGroupMtime(a[1]);
+        const mtimeB = getGroupMtime(b[1]);
+        return mtimeA - mtimeB;
+      });
+    
+    case 'date-desc':
+    case 'exif-desc':
+      // Newest first
+      return groupsArray.sort((a, b) => {
+        const mtimeA = getGroupMtime(a[1]);
+        const mtimeB = getGroupMtime(b[1]);
+        return mtimeB - mtimeA;
+      });
+    
+    case 'size-desc':
+    default:
+      // Default: sort by group size (largest first) for optimal bin-packing
+      return groupsArray.sort((a, b) => b[1].length - a[1].length);
+  }
+}
+
+/**
  * Optimized batch calculation with memory efficiency
  * 
  * PERFORMANCE FIX: 
@@ -126,9 +190,11 @@ async function groupFilesByBaseName(files) {
  * 
  * @param {Object} fileGroups - Map of baseName -> fileNames
  * @param {number} maxFilesPerBatch - Max files allowed per folder
+ * @param {string} [sortBy='name-asc'] - Sort order for file groups
+ * @param {Object} [fileStats=null] - Map of fileName -> stats
  * @returns {Promise<Array<Array<string>>>} Array of batches (array of filenames)
  */
-async function calculateBatches(fileGroups, maxFilesPerBatch) {
+async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc', fileStats = null) {
   const groupsArray = Object.entries(fileGroups);
   const groupCount = groupsArray.length;
   
@@ -138,8 +204,9 @@ async function calculateBatches(fileGroups, maxFilesPerBatch) {
     console.warn('⚠️ [MEMORY] This may take a moment to process...');
   }
   
-  // Sort by group size (descending) - large groups placed first for better bin packing
-  groupsArray.sort((a, b) => b[1].length - a[1].length);
+  // Sort groups based on user preference
+  sortFileGroups(groupsArray, sortBy, fileStats);
+  console.log(`📊 [SORT] File groups sorted by: ${sortBy}`);
   
   const batches = [];
   const batchCounts = [];
@@ -152,7 +219,11 @@ async function calculateBatches(fileGroups, maxFilesPerBatch) {
     let placed = false;
     // Iterate backwards - optimization heuristic: 
     // Newer batches are at the end, more likely to have space.
-    for (let j = batches.length - 1; j >= 0; j--) {
+    // BOUNDED SEARCH: Only check the last 50 batches to ensure O(N) complexity
+    const SEARCH_DEPTH = 50;
+    const searchStart = Math.max(0, batches.length - SEARCH_DEPTH);
+    
+    for (let j = batches.length - 1; j >= searchStart; j--) {
       if (batchCounts[j] + groupSize <= maxFilesPerBatch) {
         // MEMORY FIX: Use manual loop instead of spread operator
         // Spread operator can cause stack overflow on arrays >65k items
@@ -194,6 +265,7 @@ async function calculateBatches(fileGroups, maxFilesPerBatch) {
 module.exports = {
   groupFilesByBaseName,
   calculateBatches,
+  sortFileGroups,
   yieldToMain,
   isAllowedFile,
   ALLOWED_EXTENSIONS,

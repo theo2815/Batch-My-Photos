@@ -24,7 +24,16 @@ import './Modals.css';
 function ConfirmationModal({ isOpen, settings, onConfirm, onCancel }) {
   if (!isOpen) return null;
 
-  const { maxFilesPerBatch, outputPrefix, batchMode, outputDir, batchCount } = settings;
+  const { maxFilesPerBatch, outputPrefix, batchMode, outputDir, batchCount, sortBy } = settings;
+
+  const getSortLabel = (sort) => {
+    if (!sort) return 'Name (A-Z)';
+    if (sort === 'name-asc') return 'Name (A-Z)';
+    if (sort === 'name-desc') return 'Name (Z-A)';
+    if (sort.includes('asc') && (sort.includes('date') || sort.includes('exif'))) return 'Date (Oldest First)';
+    if (sort.includes('desc') && (sort.includes('date') || sort.includes('exif'))) return 'Date (Newest First)';
+    return 'Name (A-Z)';
+  };
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -41,6 +50,10 @@ function ConfirmationModal({ isOpen, settings, onConfirm, onCancel }) {
           <div className="confirmation-row">
             <span className="confirmation-label">Folder Name:</span>
             <span className="confirmation-value">{outputPrefix}</span>
+          </div>
+          <div className="confirmation-row">
+            <span className="confirmation-label">Sort Order:</span>
+            <span className="confirmation-value">{getSortLabel(sortBy)}</span>
           </div>
           <div className="confirmation-row">
             <span className="confirmation-label">Mode:</span>

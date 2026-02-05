@@ -4,35 +4,318 @@
  * Settings form for batch configuration
  */
 
-import React from 'react';
-import { Settings, Zap, Copy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, FilePlus, Info, Plus } from 'lucide-react';
+import CustomSelect from '../common/CustomSelect';
+import { ValidationModal, DeletePresetModal } from '../Modals';
 import './PreviewPanel.css';
 
-/**
- * @param {Object} props
- * @param {string} props.maxFilesPerBatch
- * @param {string} props.outputPrefix
- * @param {'move' | 'copy'} props.batchMode
- * @param {string|null} props.outputDir
- * @param {Object|null} props.validationError
- * @param {(key: string, value: string) => void} props.onChange
- * @param {() => void} props.onSelectOutputFolder
- */
+// ... (props definition)
+
 function SettingsPanel({ 
   maxFilesPerBatch, 
   outputPrefix, 
-  batchMode, 
+  batchMode,
+  sortBy,
   outputDir, 
+  // Props from parent
   validationError,
   onChange,
-  onSelectOutputFolder 
+  onSelectOutputFolder,
+  selectedPresetName, // Lifted state
+  onPresetSelect    // Lifted state setter
 }) {
+  // Presets State
+  const [presets, setPresets] = useState([]);
+  
+  // New States for inline naming
+  const [isNamingPreset, setIsNamingPreset] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false); // Menu toggle
+  const optionsRef = React.useRef(null);
+  
+  // Modal states
+  const [showValidationWarning, setShowValidationWarning] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Only close if menu is open AND click is truly outside
+      if (isOptionsOpen && optionsRef.current && !optionsRef.current.contains(event.target)) {
+        setIsOptionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOptionsOpen]);
+
+  // Sort Options
+  const sortOptions = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'exif-asc', label: 'Date (Oldest First)' },
+    { value: 'exif-desc', label: 'Date (Newest First)' }
+  ];
+
+  // Load presets on mount
+  useEffect(() => {
+    loadPresets();
+  }, []);
+
+  const loadPresets = async () => {
+    if (window.electronAPI?.getPresets) {
+      try {
+        const loadedPresets = await window.electronAPI.getPresets();
+        setPresets(loadedPresets || []);
+      } catch (err) {
+        console.error('Failed to load presets:', err);
+      }
+    }
+  };
+
+  const startSavePreset = () => {
+    // Basic validation
+    if (!maxFilesPerBatch || !outputPrefix) {
+      setShowValidationWarning(true);
+      return;
+    }
+    
+    if (selectedPresetName) {
+       setNewPresetName(selectedPresetName);
+    } else {
+       setNewPresetName('');
+    }
+    setIsNamingPreset(true);
+  };
+
+  const cancelSavePreset = () => {
+    setIsNamingPreset(false);
+    setNewPresetName('');
+  };
+
+  const confirmSavePreset = async () => {
+    if (!newPresetName || !newPresetName.trim()) return;
+
+    const settings = {
+      maxFilesPerBatch,
+      outputPrefix,
+      batchMode,
+      sortBy,
+      outputDir
+    };
+
+    if (window.electronAPI?.savePreset) {
+      const success = await window.electronAPI.savePreset(newPresetName.trim(), settings);
+      if (success) {
+        await loadPresets();
+        onPresetSelect(newPresetName.trim());
+        setIsNamingPreset(false);
+      }
+    }
+  };
+
+  const handleSaveExisting = async () => {
+    if (!selectedPresetName) return;
+
+    const settings = {
+      maxFilesPerBatch,
+      outputPrefix,
+      batchMode,
+      sortBy,
+      outputDir
+    };
+
+    if (window.electronAPI?.savePreset) {
+      // Immediate save without prompting for name
+      const success = await window.electronAPI.savePreset(selectedPresetName, settings);
+      if (success) {
+        // Optional: Show a small toast or visual feedback here
+        await loadPresets();
+      }
+    }
+  };
+
+  const handleDeletePreset = () => {
+    if (!selectedPresetName) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeletePreset = async () => {
+    setShowDeleteConfirm(false);
+    if (window.electronAPI?.deletePreset) {
+      const success = await window.electronAPI.deletePreset(selectedPresetName);
+      if (success) {
+        await loadPresets();
+        onPresetSelect('');
+      }
+    }
+  };
+
+  const handlePresetChange = (presetName) => {
+    const preset = presets.find(p => p.name === presetName);
+    if (!preset) return;
+
+    onPresetSelect(preset.name);
+    
+    // Apply settings
+    if (preset.settings) {
+      onChange({
+        maxFilesPerBatch: preset.settings.maxFilesPerBatch,
+        outputPrefix: preset.settings.outputPrefix,
+        batchMode: preset.settings.batchMode,
+        sortBy: preset.settings.sortBy,
+        outputDir: preset.settings.batchMode === 'move' ? null : (preset.settings.outputDir || null)
+      });
+    }
+  };
+
   return (
     <div className="settings-panel">
       <h3><Settings className="icon-inline" size={18} /> Settings</h3>
       
+      {/* Presets Section */}
+      <div className="setting-row presets-row" style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label>Presets:</label>
+          <div title="Configure your settings below, then click the Save icon to create a reusable preset.">
+            <Info size={14} color="var(--text-muted)" style={{ cursor: 'help' }} />
+          </div>
+        </div>
+        <div className="presets-controls" style={{ display: 'flex', gap: '8px', flex: 1, alignItems: 'center' }}>
+          
+          {isNamingPreset ? (
+             <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+               <input 
+                 type="text" 
+                 autoFocus
+                 placeholder="Preset Name"
+                 value={newPresetName}
+                 onChange={(e) => setNewPresetName(e.target.value)}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter') confirmSavePreset();
+                   if (e.key === 'Escape') cancelSavePreset();
+                 }}
+                 style={{ flex: 1, padding: '4px 8px' }}
+               />
+               <button 
+                 onClick={confirmSavePreset}
+                 className="btn-small primary"
+                 disabled={!newPresetName.trim()}
+               >
+                 Save
+               </button>
+               <button 
+                 onClick={cancelSavePreset}
+                 className="btn-small"
+               >
+                 Cancel
+               </button>
+             </div>
+          ) : (
+            <>
+              <CustomSelect 
+                value={selectedPresetName}
+                options={presets.map(p => ({ value: p.name, label: p.name }))}
+                onChange={handlePresetChange}
+                placeholder="Select or create preset..."
+                style={{ flex: 1 }}
+              />
+              
+              <div className="presets-menu-container" ref={optionsRef}>
+                <button 
+                  className={`btn-icon ${isOptionsOpen ? 'active' : ''}`}
+                  title="Preset Actions"
+                  onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+                  style={{ 
+                    padding: '8px', 
+                    background: isOptionsOpen ? 'var(--bg-primary)' : 'var(--bg-secondary)', 
+                    border: '1px solid var(--border-color)', 
+                    borderRadius: '4px', 
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)'
+                  }}
+                >
+                  <Settings size={16} />
+                </button>
+
+                {isOptionsOpen && (
+                  <div className="settings-menu">
+                    <button 
+                      className="settings-menu-item"
+                      onClick={() => {
+                        // Close menu FIRST to prevent race conditions
+                        setIsOptionsOpen(false);
+                        onPresetSelect('');
+                        setNewPresetName('');
+                        
+                        // Defer naming mode and settings clear to next tick for proper sequencing
+                        setTimeout(() => {
+                          setIsNamingPreset(true);
+                          onChange({
+                            maxFilesPerBatch: '',
+                            outputPrefix: '',
+                            batchMode: 'move',
+                            sortBy: 'name-asc',
+                            outputDir: null
+                          });
+                        }, 0);
+                      }}
+                    >
+                      <Plus size={16} />
+                      <span>New Preset</span>
+                    </button>
+                    
+                    {selectedPresetName ? (
+                      <button 
+                        className="settings-menu-item"
+                        onClick={() => {
+                          handleSaveExisting();
+                          setIsOptionsOpen(false);
+                        }}
+                      >
+                        <Save size={16} />
+                        <span>Save Changes</span>
+                      </button>
+                    ) : (
+                      <button 
+                        className="settings-menu-item"
+                        onClick={() => {
+                          startSavePreset();
+                          setIsOptionsOpen(false);
+                        }}
+                      >
+                        <Save size={16} />
+                        <span>Save as Preset</span>
+                      </button>
+                    )}
+                    
+                    {selectedPresetName && (
+                      <>
+                        <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
+                        
+                        <button 
+                          className="settings-menu-item danger"
+                          onClick={() => {
+                            handleDeletePreset();
+                            setIsOptionsOpen(false);
+                          }}
+                        >
+                          <Trash2 size={16} />
+                          <span>Delete Preset</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
       <div className="setting-row">
-        <label>Max Files Per Batch:</label>
+        <label>Max Photos Per Batch:</label>
         <input
           type="text"
           inputMode="numeric"
@@ -56,6 +339,18 @@ function SettingsPanel({
           className={validationError?.field === 'outputPrefix' ? 'input-error' : ''}
         />
       </div>
+      
+      {/* Sort Order */}
+      <div className="setting-row">
+        <label><ArrowDownAZ size={14} className="icon-inline" /> Sort Photos By:</label>
+        
+        <CustomSelect 
+          value={sortBy}
+          options={sortOptions}
+          onChange={(value) => onChange('sortBy', value)}
+        />
+      </div>
+
       
       {/* Move vs Copy Mode */}
       <div className="setting-row mode-toggle">
@@ -103,8 +398,26 @@ function SettingsPanel({
           Files will be copied. Originals will remain untouched.
         </p>
       )}
+      
+      {/* Validation Warning Modal */}
+      <ValidationModal 
+        error={showValidationWarning ? {
+          title: 'Settings Required',
+          message: 'Please fill in the settings before saving a preset.'
+        } : null}
+        onClose={() => setShowValidationWarning(false)}
+      />
+      
+      {/* Delete Confirmation Modal */}
+      <DeletePresetModal
+        isOpen={showDeleteConfirm}
+        presetName={selectedPresetName}
+        onConfirm={confirmDeletePreset}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }
 
 export default SettingsPanel;
+

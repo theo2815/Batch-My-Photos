@@ -34,5 +34,35 @@ function syncMove(sourcePath, destPath) {
 
 module.exports = {
   isSameDrive,
-  syncMove
+  syncMove,
+  calculateDirSize
 };
+
+/**
+ * Calculate the total size of a directory recursively
+ * @param {string} dirPath - Directory path
+ * @returns {Promise<number>} Total size in bytes
+ */
+async function calculateDirSize(dirPath) {
+  let size = 0;
+  
+  try {
+    const files = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    
+    await Promise.all(files.map(async file => {
+      const filePath = path.join(dirPath, file.name);
+      
+      if (file.isDirectory()) {
+        size += await calculateDirSize(filePath);
+      } else {
+        const stats = await fs.promises.stat(filePath);
+        size += stats.size;
+      }
+    }));
+  } catch (error) {
+    // If directory doesn't exist or access denied, return 0
+    // console.warn('Failed to calculate size for:', dirPath, error.message);
+  }
+  
+  return size;
+}

@@ -19,13 +19,23 @@
 process.env.UV_THREADPOOL_SIZE = 64;
 console.log('🚀 [STARTUP] UV_THREADPOOL_SIZE set to:', process.env.UV_THREADPOOL_SIZE);
 
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, protocol } = require('electron');
+const { pathToFileURL } = require('url');
+
+// Register custom protocol for local media access
+// Must be done before app.on('ready')
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, bypassCSP: true, standard: true } }
+]);
+
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { Readable } = require('stream');
 const Store = require('electron-store');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
+const { isPathAllowedAsync } = require('./src/main/securityManager');
 
 // ============================================================================
 // CACHE CONFIGURATION (Windows Permission Fix)
@@ -65,7 +75,75 @@ const appState = {
 // APP LIFECYCLE
 // ============================================================================
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Handle media:// protocol to serve local files securely
+  // SECURITY FIX: Robust detection for all scenarios:
+  // 1. Packaged app (app.isPackaged = true) → Always use dist build
+  // 2. Development mode (npm run start) → Use localhost:5173
+  const isPackaged = app.isPackaged;
+  // Only use dist build if packaged. In dev, we always want the dev server.
+  const shouldUseDistBuild = isPackaged;
+  protocol.handle('media', async (request) => {
+    // 1. Strip protocol (media:// or media:///)
+    let filePath = request.url.replace(/^media:\/\/+/, '');
+    
+    // 2. Decode to get raw path (handles %20 for spaces, etc.)
+    let decodedPath = decodeURIComponent(filePath);
+    
+    // 3. Windows-specific fix: remove leading slash before drive letter
+    if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(decodedPath)) {
+      decodedPath = decodedPath.slice(1);
+    }
+    
+    // 4. Normalize path to use correct OS separators (fixes mixed / and \)
+    decodedPath = path.normalize(decodedPath);
+    
+    console.log('🔍 [MEDIA_DEBUG] Request URL:', request.url);
+    console.log('🔍 [MEDIA_DEBUG] Raw Path:', filePath);
+    console.log('🔍 [MEDIA_DEBUG] Decoded Path:', decodedPath);
+
+    // 5. Convert to proper file URL matches standard URL encoding (spaces -> %20, etc.)
+    // This ensures net.fetch can find the file even if path has special characters
+    const fileUrl = pathToFileURL(decodedPath).href;
+
+    console.log('🔍 [MEDIA_DEBUG] Final File URL:', fileUrl);
+
+    // SECURITY FIX: Validate path is within allowed directories
+    if (!(await isPathAllowedAsync(decodedPath))) {
+      console.warn('🔒 [SECURITY] Media request blocked for unregistered path:', decodedPath);
+      return new Response('Access Denied', { status: 403 });
+    }
+
+    try {
+      // PROPOSE FIX: Use Node.js fs directly instead of net.fetch for reliability
+      // MEMORY FIX: Use createReadStream to avoid loading entire file into RAM using fs.promises.readFile
+      const stream = fs.createReadStream(decodedPath);
+      
+      // Convert Node stream to Web Stream for Response
+      const webStream = Readable.toWeb(stream);
+
+      // Simple mime type detection
+      const ext = path.extname(decodedPath).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+      else if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else if (ext === '.gif') mimeType = 'image/gif';
+      
+      return new Response(webStream, {
+        headers: { 
+          'Content-Type': mimeType,
+          'Access-Control-Allow-Origin': '*' 
+        }
+      });
+    } catch (e) {
+      console.error('❌ [MEDIA_DEBUG] Error serving file:', decodedPath, e);
+      return new Response('Not Found: ' + e.message, { status: 404 });
+    }
+  });
+  
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

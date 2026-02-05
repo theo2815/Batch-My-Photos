@@ -104,6 +104,7 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-md);
+  gap: var(--space-md);
 }
 
 .setting-row:last-child {
@@ -135,6 +136,8 @@
   width: 100px;
 }
 
+
+
 /* Mode Toggle Buttons */
 .mode-toggle {
   flex-wrap: wrap;
@@ -161,6 +164,19 @@
 .mode-btn:hover {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.settings-menu-item:hover {
+  background-color: var(--bg-hover);
+  transform: translateX(4px);
+}
+
+.settings-menu-item svg {
+  opacity: 0.8;
+}
+
+.settings-menu-item:hover svg {
+  opacity: 1;
 }
 
 .mode-btn.active {
@@ -258,6 +274,56 @@
   font-size: 0.9rem;
 }
 
+/* Presets Settings Menu */
+.presets-menu-container {
+  position: relative;
+}
+
+.settings-menu {
+  position: absolute;
+  top: 120%; /* Slight gap from button */
+  right: 0;
+  background-color: var(--bg-tertiary); /* Darker background */
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); /* Smooth corners */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  z-index: 1000;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  transform-origin: top right;
+  animation: slideInMenu 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInMenu {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.settings-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-weight: 500;
+}
+
 .batch-header:hover {
   background: var(--accent-primary);
 }
@@ -279,6 +345,16 @@
 .batch-header.expanded .batch-count,
 .batch-header:hover .batch-count {
   color: rgba(255, 255, 255, 0.8);
+}
+
+.settings-menu-item.danger:hover {
+  background-color: rgba(255, 69, 58, 0.15);
+}
+
+.settings-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .expand-icon {

@@ -26,7 +26,9 @@ function IdleScreen({
   onDragLeave,
   onDrop,
   onBrowseClick,
-  onSelectRecentFolder
+  onSelectRecentFolder,
+  title,
+  subtitle
 }) {
   return (
     <div className="idle-container">
@@ -36,6 +38,8 @@ function IdleScreen({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={onBrowseClick}
+        title={title}
+        subtitle={subtitle}
       />
       <RecentFolders
         folders={recentFolders}
