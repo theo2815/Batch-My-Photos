@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { FolderOpen, TriangleAlert, Zap, Copy, RotateCcw, CheckCircle } from 'lucide-react';
+import { FolderOpen, TriangleAlert, Zap, Copy, RotateCcw, CheckCircle, Loader2 } from 'lucide-react';
 import StatsGrid from './StatsGrid';
 import SettingsPanel from './SettingsPanel';
 import BatchPreview from './BatchPreview';
@@ -31,6 +31,7 @@ function PreviewPanel({
   scanResults,
   previewResults,
   isRefreshingPreview,
+  refreshingField,
   settings,
   validationError,
   expandedBatch,
@@ -70,6 +71,8 @@ function PreviewPanel({
         sortBy={sortBy}
         outputDir={outputDir}
         validationError={validationError}
+        isRefreshingPreview={isRefreshingPreview}
+        refreshingField={refreshingField}
         onChange={onSettingsChange}
         onSelectOutputFolder={onSelectOutputFolder}
         // Pass preset props
@@ -83,6 +86,7 @@ function PreviewPanel({
         outputPrefix={outputPrefix}
         expandedBatch={expandedBatch}
         onToggleBatch={onToggleBatch}
+        folderPath={folderPath}
       />
       
       {/* Warning for oversized groups */}
@@ -122,11 +126,19 @@ function PreviewPanel({
       
       {/* Action Buttons */}
       <div className="action-buttons">
-        <button className="btn secondary" onClick={onReset}>
+        <button className="btn secondary" onClick={onReset} disabled={isRefreshingPreview}>
           <RotateCcw size={16} /> Select Different Folder
         </button>
-        <button className="btn primary" onClick={onProceed}>
-          <CheckCircle size={16} className="icon-inline" /> Proceed with Batching
+        <button className="btn primary" onClick={onProceed} disabled={isRefreshingPreview}>
+          {isRefreshingPreview ? (
+            <>
+              <Loader2 size={16} className="icon-inline icon-spin" /> Calculating...
+            </>
+          ) : (
+            <>
+              <CheckCircle size={16} className="icon-inline" /> Proceed with Batching
+            </>
+          )}
         </button>
       </div>
     </div>

@@ -32,6 +32,7 @@ function createWindow() {
     height: 700,
     minWidth: 600,
     minHeight: 500,
+    autoHideMenuBar: true, // Hide the default File/Edit/View/Window/Help menu bar
     icon: path.join(PROJECT_ROOT, 'src', 'images', 'app_icon.png'),
     webPreferences: {
       preload: path.join(PROJECT_ROOT, 'preload.js'),

@@ -8,7 +8,7 @@ import React from 'react';
 import './Common.css';
 
 function BoxSpinner() {
-  return <div className="box-loader-custom"></div>;
+  return <div className="loader"></div>;
 }
 
 export default BoxSpinner;

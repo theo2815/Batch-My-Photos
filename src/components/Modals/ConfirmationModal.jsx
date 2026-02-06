@@ -24,7 +24,7 @@ import './Modals.css';
 function ConfirmationModal({ isOpen, settings, onConfirm, onCancel }) {
   if (!isOpen) return null;
 
-  const { maxFilesPerBatch, outputPrefix, batchMode, outputDir, batchCount, sortBy } = settings;
+  const { maxFilesPerBatch, outputPrefix, batchMode, outputDir, batchCount, sortBy, presetName } = settings;
 
   const getSortLabel = (sort) => {
     if (!sort) return 'Name (A-Z)';
@@ -43,6 +43,12 @@ function ConfirmationModal({ isOpen, settings, onConfirm, onCancel }) {
         </div>
         <h3>Confirm Batch Settings</h3>
         <div className="confirmation-details">
+          {presetName && (
+            <div className="confirmation-row">
+              <span className="confirmation-label">Preset:</span>
+              <span className="confirmation-value" style={{ color: 'var(--accent-primary)' }}>{presetName}</span>
+            </div>
+          )}
           <div className="confirmation-row">
             <span className="confirmation-label">Max Files Per Batch:</span>
             <span className="confirmation-value">{maxFilesPerBatch}</span>

@@ -274,6 +274,112 @@
   font-size: 0.9rem;
 }
 
+.batch-files {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.file-item.more {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.file-thumbnail {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.thumbnail-placeholder {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.load-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  margin-top: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.load-more-btn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.load-more-btn.load-more-batches {
+  margin-top: var(--space-md);
+  background: var(--bg-secondary);
+}
+
+.load-more-btn.show-less-btn {
+  margin-top: var(--space-sm);
+  background: transparent;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.load-more-btn.show-less-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+/* Settings Loading Spinner */
+.settings-loading-spinner {
+  display: inline-block;
+  margin-left: var(--space-sm);
+  animation: spin 1s linear infinite;
+  color: var(--accent-primary);
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.icon-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Presets Settings Menu */
 .presets-menu-container {
   position: relative;

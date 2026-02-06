@@ -150,6 +150,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deletePreset: (name) => ipcRenderer.invoke('delete-preset', name),
   
   /**
+   * Get image thumbnails for preview
+   * @param {string} folderPath - Path to folder containing images
+   * @param {string[]} fileNames - Array of file names to get thumbnails for
+   * @returns {Promise<Object>} Map of fileName -> base64DataUrl
+   */
+  getThumbnails: (folderPath, fileNames) => 
+    ipcRenderer.invoke('get-thumbnails', { folderPath, fileNames }),
+  
+  /**
    * Clean up stale recent folders that no longer exist
    * Call this on app startup to ensure the recent folders list is valid
    * @returns {Promise<string[]>} Updated list of valid recent folders

@@ -67,6 +67,7 @@ function App() {
   
   // Preview refresh loading state
   const [isRefreshingPreview, setIsRefreshingPreview] = useState(false);
+  const [refreshingField, setRefreshingField] = useState(null); // 'maxFilesPerBatch' or 'sortBy'
   
   // Resume modal state (for interrupted batch operations)
   const [showResumeModal, setShowResumeModal] = useState(false);
@@ -247,6 +248,7 @@ function App() {
     } finally {
       if (!previewCancelledRef.current) {
         setIsRefreshingPreview(false);
+        setRefreshingField(null);
       }
     }
   };
@@ -628,6 +630,7 @@ function App() {
     switch (key) {
       case 'maxFilesPerBatch':
         setMaxFilesPerBatch(value);
+        setRefreshingField('maxFilesPerBatch');
         break;
       case 'outputPrefix':
         setOutputPrefix(value);
@@ -638,6 +641,7 @@ function App() {
         break;
       case 'sortBy':
         setSortBy(value);
+        setRefreshingField('sortBy');
         break;
       case 'outputDir':
         setOutputDir(value);
@@ -697,6 +701,7 @@ function App() {
               scanResults={scanResults}
               previewResults={previewResults}
               isRefreshingPreview={isRefreshingPreview}
+              refreshingField={refreshingField}
               settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir }}
               validationError={validationError}
               expandedBatch={expandedBatch}
@@ -764,7 +769,8 @@ function App() {
           batchMode,
           outputDir,
           sortBy,
-          batchCount: previewResults?.batchCount || 0
+          batchCount: previewResults?.batchCount || 0,
+          presetName: selectedPresetName
         }}
         onConfirm={handleExecuteBatch}
         onCancel={() => setShowConfirmation(false)}

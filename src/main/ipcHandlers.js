@@ -10,7 +10,7 @@
  * 5. Batch Management & Recovery
  */
 
-const { ipcMain, dialog, shell } = require('electron');
+const { ipcMain, dialog, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
@@ -614,6 +614,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         batchNumber: index + 1,
         fileCount: batch.length,
         sampleFiles: batch.slice(0, 5),
+        allFiles: batch, // Include all files for "Load More" functionality
         hasMore: batch.length > 5
       }));
       
@@ -1114,6 +1115,54 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
   ipcMain.handle('clear-rollback-manifest', async () => {
     rollbackManager.clearRollbackManifest();
     return { success: true };
+  });
+  
+  /**
+   * Handler: Get image thumbnails
+   * Generates small thumbnails for preview using sharp (handles EXIF orientation)
+   */
+  ipcMain.handle('get-thumbnails', async (event, { folderPath, fileNames }) => {
+    const sharp = require('sharp');
+    const THUMBNAIL_SIZE = 40;
+    const CONCURRENCY = 10;
+    const thumbnails = {};
+    
+    // Supported image extensions
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'];
+    
+    // Filter to only image files
+    const imageFiles = fileNames.filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return imageExtensions.includes(ext);
+    });
+    
+    // Process in chunks for concurrency control
+    for (let i = 0; i < imageFiles.length; i += CONCURRENCY) {
+      const chunk = imageFiles.slice(i, i + CONCURRENCY);
+      
+      await Promise.all(chunk.map(async (fileName) => {
+        try {
+          const filePath = path.join(folderPath, fileName);
+          
+          // Sharp automatically rotates based on EXIF orientation
+          const buffer = await sharp(filePath)
+            .rotate() // Auto-rotate based on EXIF
+            .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+              fit: 'cover',
+              position: 'center'
+            })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          
+          thumbnails[fileName] = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+        } catch (err) {
+          // Skip files that can't be processed
+          console.warn(`[THUMBNAIL] Failed to process: ${fileName}`, err.message);
+        }
+      }));
+    }
+    
+    return thumbnails;
   });
 }
 

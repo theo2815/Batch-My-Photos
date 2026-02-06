@@ -5,8 +5,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, FilePlus, Info, Plus } from 'lucide-react';
+import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, FilePlus, Info, Plus, Loader2 } from 'lucide-react';
 import CustomSelect from '../common/CustomSelect';
+import Tooltip from '../common/Tooltip';
 import { ValidationModal, DeletePresetModal } from '../Modals';
 import './PreviewPanel.css';
 
@@ -20,6 +21,7 @@ function SettingsPanel({
   outputDir, 
   // Props from parent
   validationError,
+  isRefreshingPreview,
   onChange,
   onSelectOutputFolder,
   selectedPresetName, // Lifted state
@@ -178,9 +180,9 @@ function SettingsPanel({
       <div className="setting-row presets-row" style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <label>Presets:</label>
-          <div title="Configure your settings below, then click the Save icon to create a reusable preset.">
+          <Tooltip text="Select a preset or click ⚙ to create new" position="right">
             <Info size={14} color="var(--text-muted)" style={{ cursor: 'help' }} />
-          </div>
+          </Tooltip>
         </div>
         <div className="presets-controls" style={{ display: 'flex', gap: '8px', flex: 1, alignItems: 'center' }}>
           
@@ -315,7 +317,10 @@ function SettingsPanel({
       </div>
       
       <div className="setting-row">
-        <label>Max Photos Per Batch:</label>
+        <label>
+          Max Photos Per Batch:
+          {isRefreshingPreview && <Loader2 size={14} className="settings-loading-spinner" />}
+        </label>
         <input
           type="text"
           inputMode="numeric"
@@ -342,7 +347,10 @@ function SettingsPanel({
       
       {/* Sort Order */}
       <div className="setting-row">
-        <label><ArrowDownAZ size={14} className="icon-inline" /> Sort Photos By:</label>
+        <label>
+          <ArrowDownAZ size={14} className="icon-inline" /> Sort Photos By:
+          {isRefreshingPreview && <Loader2 size={14} className="settings-loading-spinner" />}
+        </label>
         
         <CustomSelect 
           value={sortBy}
