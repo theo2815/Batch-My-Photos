@@ -180,7 +180,7 @@ function SettingsPanel({
       <div className="setting-row presets-row" style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <label>Presets:</label>
-          <Tooltip text="Select a preset or click ⚙ to create new" position="right">
+          <Tooltip text="Quickly reuse saved settings with presets, or click ⚙ to add one." position="right">
             <Info size={14} color="var(--text-muted)" style={{ cursor: 'help' }} />
           </Tooltip>
         </div>
