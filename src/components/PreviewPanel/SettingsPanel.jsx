@@ -191,7 +191,7 @@ function SettingsPanel({
                <input 
                  type="text" 
                  autoFocus
-                 placeholder="Preset Name"
+                 placeholder="Preset name..."
                  value={newPresetName}
                  onChange={(e) => setNewPresetName(e.target.value)}
                  onKeyDown={(e) => {
@@ -329,20 +329,50 @@ function SettingsPanel({
             const value = e.target.value.replace(/[^0-9]/g, '');
             onChange('maxFilesPerBatch', value);
           }}
-          placeholder="500"
-          className={validationError?.field === 'maxFilesPerBatch' ? 'input-error' : ''}
+          placeholder="Max value per batch"
+          className={`setting-input-fixed ${validationError?.field === 'maxFilesPerBatch' ? 'input-error' : ''}`}
         />
       </div>
       
       <div className="setting-row">
-        <label>Folder Name:</label>
-        <input
-          type="text"
-          value={outputPrefix}
-          onChange={(e) => onChange('outputPrefix', e.target.value)}
-          placeholder="Batch"
-          className={validationError?.field === 'outputPrefix' ? 'input-error' : ''}
-        />
+        <label>
+          Folder Name:  
+
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          <input
+            type="text"
+            value={outputPrefix}
+            onChange={(e) => {
+              const val = e.target.value;
+              // Check for forbidden characters (Windows constraints + / \)
+              if (/[\\/:*?"<>|]/.test(val)) {
+                // Show temporary warning or shake effect could be added here
+                // For now, we rely on the helper text below becoming a warning
+                onChange('outputPrefix', val); // Pass it through, let generic validation/sanitization handle it or show inline warning
+              } else {
+                onChange('outputPrefix', val);
+              }
+            }}
+            placeholder="New folder name"
+            className={`setting-input-fixed ${validationError?.field === 'outputPrefix' ? 'input-error' : ''}`}
+          />
+          
+          {outputPrefix && /[\\/:*?"<>|]/.test(outputPrefix) ? (
+             <span className="setting-hint" style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '4px', textAlign: 'right', fontWeight: 'bold' }}>
+               <span style={{ marginRight: '4px' }}>⚠️</span>
+               {(() => {
+                 const match = outputPrefix.match(/[\\/:*?"<>|]/);
+                 const char = match ? match[0] : '/';
+                 return `Character '${char}' is not allowed. Please use '-' instead.`;
+               })()}
+             </span>
+          ) : (
+            <span className="setting-hint" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+              
+            </span>
+          )}
+        </div>
       </div>
       
       {/* Sort Order */}
@@ -356,6 +386,7 @@ function SettingsPanel({
           value={sortBy}
           options={sortOptions}
           onChange={(value) => onChange('sortBy', value)}
+          className="setting-input-fixed"
         />
       </div>
 

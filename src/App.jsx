@@ -336,6 +336,16 @@ function App() {
       });
       return false;
     }
+
+    // Check for illegal characters
+    if (/[\\/:*?"<>|]/.test(outputPrefix)) {
+      setValidationError({
+        title: 'Invalid Character Detected',
+        message: 'Folder names cannot contain slashes (/) or special characters like \\ : * ? " < > |',
+        field: 'outputPrefix'
+      });
+      return false;
+    }
     
     return true;
   };

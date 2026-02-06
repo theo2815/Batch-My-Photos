@@ -25,6 +25,40 @@ const { isSameDrive, syncMove, calculateDirSize } = require('./fileUtils');
 const { isPathAllowed, isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
 
 /**
+ * Generates a folder name based on the pattern and batch index.
+ * Supports variables: {count}, {date}, {year}, {month}
+ * 
+ * @param {string} pattern - The user-provided naming pattern
+ * @param {number} batchIndex - 0-based index of the batch
+ * @param {number} totalBatches - Total number of batches (for padding)
+ * @returns {string} The formatted folder name
+ */
+function generateBatchFolderName(pattern, batchIndex, totalBatches) {
+  let name = pattern || 'Batch';
+  
+  // Default behavior: if no {count} variable, append _{count} to match legacy behavior
+  if (!name.includes('{count}')) {
+    name = `${name}_{count}`;
+  }
+  
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  // Pad count based on total batches magnitude (min 3 digits)
+  // e.g. 10 batches -> 01, 100 batches -> 001
+  const padding = Math.max(3, String(totalBatches).length);
+  const count = String(batchIndex + 1).padStart(padding, '0');
+  
+  return name
+    .replace(/{year}/gi, year)
+    .replace(/{month}/gi, month)
+    .replace(/{date}/gi, date)
+    .replace(/{count}/gi, count);
+}
+
+/**
  * Main export: Register all IPC handlers
  * @param {Object} ipcInstance - Electron's ipcMain object
  * @param {Store} storeInstance - Electron store instance for persistence
@@ -235,7 +269,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         const chunkPromises = [];
         for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
           const batchIndex = i + j;
-          const batchFolderName = `${safePrefix}_${String(batchIndex + 1).padStart(3, '0')}`;
+          const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
           const batchFolderPath = path.join(baseOutputDir, batchFolderName);
           chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
         }
@@ -252,7 +286,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batchFiles = batches[batchIndex];
-        const batchFolderName = `${safePrefix}_${String(batchIndex + 1).padStart(3, '0')}`;
+        const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
         const batchFolderPath = path.join(baseOutputDir, batchFolderName);
         
         for (const fileName of batchFiles) {
@@ -272,7 +306,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Build batch info for display
       const batchInfo = batches.map((b, i) => ({ 
-        folder: `${safePrefix}_${String(i + 1).padStart(3, '0')}`,
+        folder: generateBatchFolderName(safePrefix, i, batches.length),
         fileCount: b.length 
       }));
       
@@ -531,7 +565,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalFiles: totalFiles,
         mode,  // Include mode for rollback availability check
         results: batches.map((b, i) => ({ 
-          folder: `${safePrefix}_${String(i + 1).padStart(3, '0')}`,
+          folder: generateBatchFolderName(safePrefix, i, batches.length),
           fileCount: b.length 
         })),
         outputDir: baseOutputDir,

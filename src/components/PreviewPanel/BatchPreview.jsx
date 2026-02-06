@@ -13,6 +13,33 @@ const FILES_PER_LOAD = 10; // Number of files to show per "Load More" click
 const BATCHES_PER_LOAD = 10; // Number of batches to show per "Load More" click
 
 /**
+ * Generates a folder name based on the pattern and batch index.
+ * Replicates logic from backend for consistent preview.
+ */
+function generateBatchFolderName(pattern, batchIndex, totalBatches) {
+  let name = pattern || 'Batch';
+  
+  // Default behavior: if no {count} variable, append _{count}
+  if (!name.toLowerCase().includes('{count}')) {
+    name = `${name}_{count}`;
+  }
+  
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  const padding = Math.max(3, String(totalBatches).length);
+  const count = String(batchIndex + 1).padStart(padding, '0');
+  
+  return name
+    .replace(/{year}/gi, year)
+    .replace(/{month}/gi, month)
+    .replace(/{date}/gi, date)
+    .replace(/{count}/gi, count);
+}
+
+/**
  * @param {Object} props
  * @param {Array} props.batchDetails - Array of batch detail objects
  * @param {string} props.outputPrefix - Folder name prefix
@@ -86,7 +113,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
 
   return (
     <div className="batch-preview">
-      <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>
+      <h3><Package className="icon-inline" size={18} /> Batch preview</h3>
       <div className="batch-list">
         {batchesToShow.map((batch) => {
           const visibleCount = visibleFilesCount[batch.batchNumber] || 5;
@@ -102,7 +129,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
                 onClick={() => onToggleBatch(batch.batchNumber)}
               >
                 <span className="batch-name">
-                  {outputPrefix}_{String(batch.batchNumber).padStart(3, '0')}
+                  {generateBatchFolderName(outputPrefix, batch.batchNumber - 1, batchDetails.length)}
                 </span>
                 <span className="batch-count">{batch.fileCount} files</span>
                 <span className="expand-icon">
