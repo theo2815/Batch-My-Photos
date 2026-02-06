@@ -113,7 +113,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
 
   return (
     <div className="batch-preview">
-      <h3><Package className="icon-inline" size={18} /> Batch preview</h3>
+      <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>
       <div className="batch-list">
         {batchesToShow.map((batch) => {
           const visibleCount = visibleFilesCount[batch.batchNumber] || 5;
