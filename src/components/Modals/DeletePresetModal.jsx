@@ -26,7 +26,7 @@ function DeletePresetModal({ isOpen, presetName, onConfirm, onCancel }) {
         </div>
         <h3>Delete Preset?</h3>
         <p>
-          Are you sure you want to delete "<strong>{presetName}</strong>"?
+          Are you sure you want to delete &quot;<strong>{presetName}</strong>&quot;?
           <br />
           <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
             This action cannot be undone.

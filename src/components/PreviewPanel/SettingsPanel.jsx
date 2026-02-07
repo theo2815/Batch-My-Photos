@@ -4,8 +4,8 @@
  * Settings form for batch configuration
  */
 
-import React, { useState, useEffect } from 'react';
-import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, FilePlus, Info, Plus, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2 } from 'lucide-react';
 import CustomSelect from '../common/CustomSelect';
 import Tooltip from '../common/Tooltip';
 import { ValidationModal, DeletePresetModal } from '../Modals';
@@ -60,12 +60,7 @@ function SettingsPanel({
     { value: 'exif-desc', label: 'Date (Newest First)' }
   ];
 
-  // Load presets on mount
-  useEffect(() => {
-    loadPresets();
-  }, []);
-
-  const loadPresets = async () => {
+  const loadPresets = useCallback(async () => {
     if (window.electronAPI?.getPresets) {
       try {
         const loadedPresets = await window.electronAPI.getPresets();
@@ -74,7 +69,11 @@ function SettingsPanel({
         console.error('Failed to load presets:', err);
       }
     }
-  };
+  }, []);
+
+  // Load presets on mount
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only data fetch is standard React pattern
+  useEffect(() => { loadPresets(); }, [loadPresets]);
 
   const startSavePreset = () => {
     // Basic validation
@@ -177,17 +176,17 @@ function SettingsPanel({
       <h3><Settings className="icon-inline" size={18} /> Settings</h3>
       
       {/* Presets Section */}
-      <div className="setting-row presets-row" style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div className="setting-row presets-row presets-section">
+        <div className="presets-label-row">
           <label>Presets:</label>
           <Tooltip text="Quickly reuse saved settings with presets, or click ⚙ to add one." position="right">
-            <Info size={14} color="var(--text-muted)" style={{ cursor: 'help' }} />
+            <Info size={14} color="var(--text-muted)" className="help-icon" />
           </Tooltip>
         </div>
-        <div className="presets-controls" style={{ display: 'flex', gap: '8px', flex: 1, alignItems: 'center' }}>
+        <div className="presets-controls">
           
           {isNamingPreset ? (
-             <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+             <div className="preset-naming-row">
                <input 
                  type="text" 
                  autoFocus
@@ -198,7 +197,7 @@ function SettingsPanel({
                    if (e.key === 'Enter') confirmSavePreset();
                    if (e.key === 'Escape') cancelSavePreset();
                  }}
-                 style={{ flex: 1, padding: '4px 8px' }}
+                 className="preset-name-input"
                />
                <button 
                  onClick={confirmSavePreset}
@@ -221,22 +220,14 @@ function SettingsPanel({
                 options={presets.map(p => ({ value: p.name, label: p.name }))}
                 onChange={handlePresetChange}
                 placeholder="Select or create preset..."
-                style={{ flex: 1 }}
+                className="presets-select"
               />
               
               <div className="presets-menu-container" ref={optionsRef}>
                 <button 
-                  className={`btn-icon ${isOptionsOpen ? 'active' : ''}`}
+                  className={`btn-icon presets-action-btn ${isOptionsOpen ? 'active' : ''}`}
                   title="Preset Actions"
                   onClick={() => setIsOptionsOpen(!isOptionsOpen)}
-                  style={{ 
-                    padding: '8px', 
-                    background: isOptionsOpen ? 'var(--bg-primary)' : 'var(--bg-secondary)', 
-                    border: '1px solid var(--border-color)', 
-                    borderRadius: '4px', 
-                    cursor: 'pointer',
-                    color: 'var(--text-primary)'
-                  }}
                 >
                   <Settings size={16} />
                 </button>
@@ -294,7 +285,7 @@ function SettingsPanel({
                     
                     {selectedPresetName && (
                       <>
-                        <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
+                        <div className="menu-divider"></div>
                         
                         <button 
                           className="settings-menu-item danger"
@@ -339,7 +330,7 @@ function SettingsPanel({
           Folder Name:  
 
         </label>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+        <div className="folder-name-input-wrapper">
           <input
             type="text"
             value={outputPrefix}
@@ -359,8 +350,8 @@ function SettingsPanel({
           />
           
           {outputPrefix && /[\\/:*?"<>|]/.test(outputPrefix) ? (
-             <span className="setting-hint" style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '4px', textAlign: 'right', fontWeight: 'bold' }}>
-               <span style={{ marginRight: '4px' }}>⚠️</span>
+             <span className="setting-hint setting-hint--warning">
+               <span className="warning-icon">⚠️</span>
                {(() => {
                  const match = outputPrefix.match(/[\\/:*?"<>|]/);
                  const char = match ? match[0] : '/';
@@ -368,7 +359,7 @@ function SettingsPanel({
                })()}
              </span>
           ) : (
-            <span className="setting-hint" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+            <span className="setting-hint setting-hint--muted">
               
             </span>
           )}

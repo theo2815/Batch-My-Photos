@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const exifr = require('exifr');
 const { EXIF_CONCURRENCY } = require('./constants');
+const logger = require('../utils/logger');
 
 /**
  * Service to handle EXIF data extraction efficiently
@@ -20,21 +21,23 @@ const { EXIF_CONCURRENCY } = require('./constants');
 let exifCache = { cacheKey: null, dateMap: null };
 
 /**
- * Generate a cache key from folderPath + sorted file list.
- * Uses a fast hash so comparing 50k filenames is cheap.
+ * Generate a cache key from folderPath + file list.
+ * Uses SHA-256 for security, and avoids sorting (readdir order is
+ * deterministic per call — sorting 50k+ names was a perf bottleneck).
+ * Instead we include the file count so any add/remove invalidates.
  * 
  * @param {string} folderPath
  * @param {string[]} files
  * @returns {string} Cache key
  */
 function buildCacheKey(folderPath, files) {
-  const hash = crypto.createHash('md5');
+  const hash = crypto.createHash('sha256');
   hash.update(folderPath);
-  // Sort to ensure order-independent cache hits
-  const sorted = [...files].sort();
-  for (const f of sorted) {
-    hash.update(f);
-  }
+  hash.update(String(files.length));
+  // Hash first, last, and a few samples for fast invalidation without sorting
+  if (files.length > 0) hash.update(files[0]);
+  if (files.length > 1) hash.update(files[files.length - 1]);
+  if (files.length > 10) hash.update(files[Math.floor(files.length / 2)]);
   return hash.digest('hex');
 }
 
@@ -64,14 +67,14 @@ async function extractExifDates(files, folderPath) {
   // Check cache first
   const cacheKey = buildCacheKey(folderPath, files);
   if (exifCache.cacheKey === cacheKey && exifCache.dateMap) {
-    console.log(`📸 [EXIF] Cache hit — returning ${files.length} cached dates`);
+    logger.log(`📸 [EXIF] Cache hit — returning ${files.length} cached dates`);
     return exifCache.dateMap;
   }
 
   const dateMap = {};
   const totalFiles = files.length;
   
-  console.log(`📸 [EXIF] Extracting dates for ${totalFiles} files...`);
+  logger.log(`📸 [EXIF] Extracting dates for ${totalFiles} files...`);
   
   // Process files in chunks to limit concurrency
   for (let i = 0; i < totalFiles; i += EXIF_CONCURRENCY) {
@@ -96,9 +99,8 @@ async function extractExifDates(files, folderPath) {
           dateMap[fileName] = output.DateTimeOriginal.getTime();
           return;
         }
-      } catch (err) {
-        // EXIF parsing failed or not supported (png, video, etc)
-        // Silently fall back to file stats
+      } catch (_err) {
+        // EXIF parsing failed or not supported (png, video, etc) — fall back to file stats
       }
 
       // 2. Fallback to file creation/modification time
@@ -113,7 +115,7 @@ async function extractExifDates(files, folderPath) {
         
         dateMap[fileName] = (earliestTime === Infinity) ? 0 : earliestTime;
       } catch (statErr) {
-        console.warn(`⚠️ [EXIF] Failed to stat file: ${fileName}`, statErr);
+        logger.warn(`⚠️ [EXIF] Failed to stat file: ${fileName}`, statErr);
         dateMap[fileName] = 0;
       }
     }));
@@ -122,7 +124,7 @@ async function extractExifDates(files, folderPath) {
   // Store in cache
   exifCache = { cacheKey, dateMap };
   
-  console.log(`📸 [EXIF] Date extraction complete. Results cached.`);
+  logger.log(`📸 [EXIF] Date extraction complete. Results cached.`);
   return dateMap;
 }
 

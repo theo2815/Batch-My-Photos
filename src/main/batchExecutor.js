@@ -52,7 +52,7 @@ async function executeFileOperations(operations, mode, options) {
   }
 
   if (mode === 'move') {
-    const isCrossDrive = !isSameDrive(operations[0].sourcePath, operations[0].destPath);
+    const isCrossDrive = !(await isSameDrive(operations[0].sourcePath, operations[0].destPath));
 
     if (isCrossDrive) {
       // ================================================================
@@ -216,15 +216,27 @@ async function _runWorkerPool(operations, processOp, callbacks) {
     workers.push(worker());
   }
 
-  // Centralized progress reporting + disk saves (every 2 seconds)
-  const progressInterval = setInterval(async () => {
-    onProgress();
-    await onSaveProgress();
-  }, 2000);
+  // Centralized progress reporting + disk saves (recursive setTimeout to avoid overlap)
+  let progressTimerActive = true;
+  let progressTimerId = null;
+  const scheduleProgressSave = () => {
+    if (!progressTimerActive) return;
+    progressTimerId = setTimeout(async () => {
+      if (!progressTimerActive) return;
+      onProgress();
+      await onSaveProgress();
+      scheduleProgressSave();
+    }, 2000);
+  };
+  scheduleProgressSave();
 
   await Promise.all(workers);
 
-  clearInterval(progressInterval);
+  progressTimerActive = false;
+  if (progressTimerId !== null) {
+    clearTimeout(progressTimerId);
+    progressTimerId = null;
+  }
 
   // Final save after all workers complete
   await onSaveProgress();

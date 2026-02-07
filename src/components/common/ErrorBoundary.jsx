@@ -64,7 +64,7 @@ class ErrorBoundary extends React.Component {
               {this.state.error?.message || 'An unexpected error occurred'}
             </p>
             <p className="error-hint">
-              Don't worry, your files are safe. Try reloading the app.
+              Your files are safe. Try reloading the app.
             </p>
             <div className="error-actions">
               <button className="btn primary" onClick={this.handleReload}>
@@ -75,7 +75,7 @@ class ErrorBoundary extends React.Component {
                 Try Again
               </button>
             </div>
-            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+            {import.meta.env.DEV && this.state.errorInfo && (
               <details className="error-details">
                 <summary>Technical Details (Dev Only)</summary>
                 <pre>{this.state.error?.stack}</pre>

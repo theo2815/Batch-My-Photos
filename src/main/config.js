@@ -106,6 +106,13 @@ const features = {
    * certain platforms.
    */
   EXIF_SORTING_ENABLED: envBool('BATCH_EXIF_SORTING_ENABLED', true),
+
+  /**
+   * Enable persistent operation history.
+   * When enabled, rollback manifests are saved to disk and survive
+   * app restarts. Users can undo past operations from the history panel.
+   */
+  HISTORY_ENABLED: envBool('BATCH_HISTORY_ENABLED', true),
 };
 
 // ============================================================================
@@ -132,6 +139,9 @@ const limits = {
 
   /** Allowed keys in preset settings (whitelist for injection prevention) */
   ALLOWED_SETTINGS_KEYS: ['maxFilesPerBatch', 'outputPrefix', 'batchMode', 'sortBy', 'outputDir'],
+
+  /** Maximum number of persisted rollback history entries */
+  MAX_HISTORY_ENTRIES: envInt('BATCH_MAX_HISTORY_ENTRIES', 20, 1, 100),
 };
 
 // ============================================================================

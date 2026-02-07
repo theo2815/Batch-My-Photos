@@ -10,3 +10,5 @@ export { default as CancelConfirmationModal } from './CancelConfirmationModal';
 export { default as ResumeModal } from './ResumeModal';
 export { default as UndoConfirmationModal } from './UndoConfirmationModal';
 export { default as DeletePresetModal } from './DeletePresetModal';
+export { default as HistoryModal } from './HistoryModal';
+export { default as SafetyCheckModal } from './SafetyCheckModal';

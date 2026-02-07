@@ -10,13 +10,13 @@
  * 5. Batch Management & Recovery
  */
 
-const { ipcMain, dialog, shell, nativeImage } = require('electron');
+const { dialog, shell } = require('electron');
 const path = require('path');
 const fsPromises = require('fs').promises;
 
 // Import logic modules
-const progressManager = require('../../progressManager');
-const rollbackManager = require('../../rollbackManager');
+const progressManager = require('./progressManager');
+const rollbackManager = require('./rollbackManager');
 const logger = require('../utils/logger');
 const config = require('./config');
 const { sanitizeError } = require('../utils/errorSanitizer');
@@ -24,7 +24,9 @@ const { groupFilesByBaseName, calculateBatches, yieldToMain } = require('./batch
 const exifService = require('./exifService');
 const { executeFileOperations } = require('./batchExecutor');
 const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
+const { collectFileStats, isSameDrive, getDiskSpace, testWritePermission, formatBytes, calculateTotalSize, SPACE_BUFFER_MULTIPLIER } = require('./fileUtils');
 const { generateBatchFolderName } = require('../utils/batchNaming');
+const sharp = require('sharp');
 const {
   STAT_CONCURRENCY,
   FOLDER_CONCURRENCY,
@@ -41,12 +43,16 @@ const {
  */
 function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState) {
   
+  // Initialize rollback manager with store reference for persistent history
+  rollbackManager.init(storeInstance);
+  
   registerFolderHandlers(ipcInstance, storeInstance, getMainWindow);
   registerCoreHandlers(ipcInstance, getMainWindow, appState);
   registerFileSystemHandlers(ipcInstance, getMainWindow);
   registerPreferenceHandlers(ipcInstance, storeInstance);
   registerBatchHandlers(ipcInstance, storeInstance, getMainWindow, appState);
   registerRollbackHandlers(ipcInstance, getMainWindow, appState);
+  registerHistoryHandlers(ipcInstance, getMainWindow, appState);
 
 }
 
@@ -132,7 +138,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
     try {
       // SECURITY: Validate path is allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
-        console.warn('🔒 [SECURITY] Blocked access to unregistered path:', folderPath);
+        logger.warn('🔒 [SECURITY] Blocked access to unregistered path:', folderPath);
         return {
           success: false,
           error: 'Access denied: folder not selected through dialog',
@@ -180,16 +186,15 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * OPTIMIZED: Uses concurrency pool instead of batch chunks
    */
   ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc' }) => {
-    console.time('TOTAL_BATCH_EXECUTION');
-    const START_TIME = Date.now();
+    logger.time('TOTAL_BATCH_EXECUTION');
     try {
       // SECURITY: Validate paths are allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
-        console.warn('🔒 [SECURITY] Blocked execute-batch on unregistered path:', folderPath);
+        logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered path:', folderPath);
         return { success: false, error: 'Access denied: source folder not selected through dialog' };
       }
       if (outputDir && !(await isPathAllowedAsync(outputDir))) {
-        console.warn('🔒 [SECURITY] Blocked execute-batch on unregistered output path:', outputDir);
+        logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered output path:', outputDir);
         return { success: false, error: 'Access denied: output folder not selected through dialog' };
       }
       
@@ -204,25 +209,12 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
       
-      // Collect stats if sorting by date or exif
+      // Collect stats based on sort mode
       let fileStats = null;
       if (sortBy.startsWith('date')) {
-        console.log('📊 [SORT] Collecting file stats for date sorting...');
-        fileStats = {};
-        // Process in parallel with concurrency limit
-        for (let i = 0; i < files.length; i += STAT_CONCURRENCY) {
-          const chunk = files.slice(i, i + STAT_CONCURRENCY);
-          await Promise.all(chunk.map(async (file) => {
-            try {
-              const stat = await fsPromises.stat(path.join(folderPath, file));
-              fileStats[file] = { mtimeMs: stat.mtimeMs, size: stat.size };
-            } catch (err) {
-              // Ignore stat errors, use default 0
-            }
-          }));
-        }
+        logger.log('📊 [SORT] Collecting file stats for date sorting...');
+        fileStats = await collectFileStats(files, folderPath, STAT_CONCURRENCY);
       } else if (sortBy.startsWith('exif')) {
-        // Use EXIF service for date taken
         fileStats = await exifService.extractExifDates(files, folderPath);
       }
       
@@ -234,7 +226,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Create all batch folders first (Parallel Optimized)
       // Process in chunks to prevent file handle exhaustion
-      console.time('FOLDER_CREATION');
+      logger.time('FOLDER_CREATION');
       for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
         const chunkPromises = [];
         for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
@@ -245,7 +237,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         }
         await Promise.all(chunkPromises);
       }
-      console.timeEnd('FOLDER_CREATION');
+      logger.timeEnd('FOLDER_CREATION');
 
       let processedFiles = 0;
       const totalFiles = files.length;
@@ -272,7 +264,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       }
 
       // HIGH-PERFORMANCE FILE PROCESSING
-      console.time('FILE_MOVING');
+      logger.time('FILE_MOVING');
       
       // Build batch info for display
       const batchInfo = batches.map((b, i) => ({ 
@@ -308,8 +300,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       );
       processedFiles = finalProcessed;
       
-      console.timeEnd('FILE_MOVING');
-      console.timeEnd('TOTAL_BATCH_EXECUTION');
+      logger.timeEnd('FILE_MOVING');
+      logger.timeEnd('TOTAL_BATCH_EXECUTION');
 
       // Build the result object
       const wasCancelled = appState.batchCancelled;
@@ -338,18 +330,23 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Save rollback manifest for successful move operations (if feature is enabled)
       if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
-        rollbackManager.saveRollbackManifest({
+        await rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
           operations,
           batchFolders: result.results.map(r => r.folder),
-          totalFiles: processedFiles
+          totalFiles: processedFiles,
+          outputPrefix: safePrefix,
+          // Extended metadata for history detail display
+          maxFilesPerBatch: safeMaxFiles,
+          sortBy,
+          batchResults: result.results, // [{ folder, fileCount }, ...]
         });
       }
       
       if (wasCancelled) {
-        console.log(`⚠️ [CANCEL] Batch operation cancelled. Processed ${processedFiles} of ${totalFiles} files.`);
+        logger.log(`⚠️ [CANCEL] Batch operation cancelled. Processed ${processedFiles} of ${totalFiles} files.`);
       }
       
       return result;
@@ -369,39 +366,29 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
     try {
       // SECURITY: Validate path is allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
-        console.warn('🔒 [SECURITY] Blocked preview-batches on unregistered path:', folderPath);
+        logger.warn('🔒 [SECURITY] Blocked preview-batches on unregistered path:', folderPath);
         return { success: false, error: 'Access denied: folder not selected through dialog' };
       }
+      
+      // SECURITY: Validate and sanitize maxFilesPerBatch
+      const safeMaxFiles = validateMaxFilesPerBatch(maxFilesPerBatch);
       
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
       
-      // Collect stats if sorting by date or exif
+      // Collect stats based on sort mode
       let fileStats = null;
       if (sortBy.startsWith('date')) {
-        fileStats = {};
-        // Process in parallel with concurrency limit
-        for (let i = 0; i < files.length; i += STAT_CONCURRENCY) {
-          const chunk = files.slice(i, i + STAT_CONCURRENCY);
-          await Promise.all(chunk.map(async (file) => {
-            try {
-              const stat = await fsPromises.stat(path.join(folderPath, file));
-              fileStats[file] = { mtimeMs: stat.mtimeMs, size: stat.size };
-            } catch (err) {
-              // Ignore stat errors
-            }
-          }));
-        }
+        fileStats = await collectFileStats(files, folderPath, STAT_CONCURRENCY);
       } else if (sortBy.startsWith('exif')) {
-        // Use EXIF service for date taken
         fileStats = await exifService.extractExifDates(files, folderPath);
       }
       
       const fileGroups = await groupFilesByBaseName(files);
-      const batches = await calculateBatches(fileGroups, maxFilesPerBatch, sortBy, fileStats);
+      const batches = await calculateBatches(fileGroups, safeMaxFiles, sortBy, fileStats);
       
       const oversizedGroups = Object.entries(fileGroups)
-        .filter(([name, files]) => files.length > maxFilesPerBatch)
+        .filter(([_name, files]) => files.length > safeMaxFiles)
         .map(([name, files]) => ({ name, count: files.length }));
       
       // Only send the first 50 batches detailed data to avoid IPC payload limit on huge datasets
@@ -428,19 +415,129 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       };
     }
   });
+
+  /**
+   * Handler: Validate execution environment before starting batch operation
+   * Checks disk space sufficiency and write permissions on the target directory.
+   * 
+   * For same-drive move: only checks write permission (rename is O(1), no extra space).
+   * For cross-drive move and copy: checks both disk space and write permission.
+   */
+  ipcMain.handle('validate-execution', async (event, { folderPath, mode = 'move', outputDir = null }) => {
+    try {
+      // SECURITY: Validate paths
+      if (!(await isPathAllowedAsync(folderPath))) {
+        return { success: false, error: 'Access denied: source folder not selected through dialog' };
+      }
+      if (outputDir && !(await isPathAllowedAsync(outputDir))) {
+        return { success: false, error: 'Access denied: output folder not selected through dialog' };
+      }
+
+      const baseOutputDir = (mode === 'copy' && outputDir) ? outputDir : folderPath;
+      const warnings = [];
+
+      // 1. Determine if this is a same-drive operation
+      let sameDrive = true;
+      if (mode === 'copy' && outputDir) {
+        sameDrive = await isSameDrive(folderPath, outputDir);
+      } else if (mode === 'move') {
+        // For move mode, source and output are the same folder (same drive by definition)
+        sameDrive = true;
+      }
+
+      // 2. Collect file stats to calculate total size
+      const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
+      const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+      const fileStats = await collectFileStats(files, folderPath, STAT_CONCURRENCY);
+      const totalSizeBytes = calculateTotalSize(fileStats);
+      const requiredBytes = Math.ceil(totalSizeBytes * SPACE_BUFFER_MULTIPLIER);
+
+      // 3. Check disk space (skip for same-drive move — rename needs no extra space)
+      let diskSpace = null;
+      const needsDiskSpaceCheck = !(mode === 'move' && sameDrive);
+
+      if (needsDiskSpaceCheck) {
+        const spaceResult = await getDiskSpace(baseOutputDir);
+
+        if (spaceResult.freeBytes !== null) {
+          diskSpace = {
+            freeBytes: spaceResult.freeBytes,
+            totalBytes: spaceResult.totalBytes,
+            requiredBytes,
+            sufficient: spaceResult.freeBytes >= requiredBytes,
+            freeFormatted: formatBytes(spaceResult.freeBytes),
+            requiredFormatted: formatBytes(requiredBytes),
+            totalFormatted: formatBytes(spaceResult.totalBytes)
+          };
+        } else {
+          // Could not determine disk space — soft warning
+          diskSpace = {
+            freeBytes: null,
+            totalBytes: null,
+            requiredBytes,
+            sufficient: null, // unknown
+            freeFormatted: 'Unknown',
+            requiredFormatted: formatBytes(requiredBytes),
+            totalFormatted: 'Unknown'
+          };
+          warnings.push('Could not verify available disk space. Proceed with caution.');
+        }
+      } else {
+        // Same-drive move: no disk space check needed
+        diskSpace = {
+          freeBytes: null,
+          totalBytes: null,
+          requiredBytes: 0,
+          sufficient: true, // rename doesn't need extra space
+          skipped: true,
+          reason: 'Same-drive move uses rename (no extra space needed)'
+        };
+      }
+
+      // 4. Check write permissions on the output directory
+      const permissions = await testWritePermission(baseOutputDir);
+
+      // 5. Detect network/UNC paths for advisory warning
+      const isNetworkPath = baseOutputDir.startsWith('\\\\') || baseOutputDir.startsWith('//');
+      if (isNetworkPath) {
+        warnings.push('Network drive detected. Space estimate may be approximate.');
+      }
+
+      logger.log('🔍 [VALIDATE] Pre-execution checks complete');
+      logger.log('   - Mode:', mode, sameDrive ? '(same drive)' : '(cross drive)');
+      logger.log('   - Total size:', formatBytes(totalSizeBytes), '(+10% buffer:', formatBytes(requiredBytes), ')');
+      logger.log('   - Disk sufficient:', diskSpace.sufficient);
+      logger.log('   - Writable:', permissions.writable);
+
+      return {
+        success: true,
+        diskSpace,
+        permissions,
+        warnings,
+        totalFiles: files.length,
+        totalSizeFormatted: formatBytes(totalSizeBytes)
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: sanitizeError(error, 'validate-execution')
+      };
+    }
+  });
 }
 
 // ============================================================================
 // GROUP 3: FILE SYSTEM OPERATIONS (1 handler)
 // ============================================================================
 
-function registerFileSystemHandlers(ipcMain, getMainWindow) {
+function registerFileSystemHandlers(ipcMain, _getMainWindow) {
   
   ipcMain.handle('open-folder', async (event, folderPath) => {
     try {
       // SECURITY: Validate path is allowed before opening in shell (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
-        console.warn('🔒 [SECURITY] Blocked shell open on unregistered path:', folderPath);
+        logger.warn('🔒 [SECURITY] Blocked shell open on unregistered path:', folderPath);
         return { success: false, error: 'Access denied: folder not selected through dialog' };
       }
       
@@ -463,7 +560,7 @@ function registerPreferenceHandlers(ipcMain, store) {
   ipcMain.handle('add-recent-folder', async (event, folderPath) => {
     // Validate input
     if (!folderPath || typeof folderPath !== 'string') {
-      console.warn('🔒 [SECURITY] Invalid folder path for recent folders');
+      logger.warn('🔒 [SECURITY] Invalid folder path for recent folders');
       return store.get('recentFolders', []);
     }
     
@@ -473,7 +570,7 @@ function registerPreferenceHandlers(ipcMain, store) {
       const stats = await fsPromises.stat(normalizedPath);
       
       if (!stats.isDirectory()) {
-        console.warn('🔒 [SECURITY] Path is not a directory:', folderPath);
+        logger.warn('🔒 [SECURITY] Path is not a directory:', folderPath);
         return store.get('recentFolders', []);
       }
       
@@ -484,10 +581,10 @@ function registerPreferenceHandlers(ipcMain, store) {
       recentFolders = recentFolders.slice(0, 5);
       store.set('recentFolders', recentFolders);
       
-      console.log('📁 [RECENT] Added folder to recent list:', normalizedPath);
+      logger.log('📁 [RECENT] Added folder to recent list:', normalizedPath);
       return recentFolders;
     } catch (error) {
-      console.warn('🔒 [SECURITY] Failed to validate folder path:', error.message);
+      logger.warn('🔒 [SECURITY] Failed to validate folder path:', error.message);
       return store.get('recentFolders', []);
     }
   });
@@ -499,7 +596,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     const validThemes = ['dark', 'light'];
     const safeTheme = validThemes.includes(theme) ? theme : 'dark';
     store.set('theme', safeTheme);
-    console.log('🎨 [THEME] Theme set to:', safeTheme);
+    logger.log('🎨 [THEME] Theme set to:', safeTheme);
     return safeTheme;
   });
 
@@ -535,7 +632,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     
     // SECURITY: Cap total number of presets to prevent unbounded storage growth
     if (presets.length >= config.limits.MAX_PRESETS) {
-      console.warn('🔒 [SECURITY] Max presets reached, removing oldest');
+      logger.warn('🔒 [SECURITY] Max presets reached, removing oldest');
       // Sort by updatedAt ascending and remove the oldest
       presets.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
       presets = presets.slice(presets.length - config.limits.MAX_PRESETS + 1);
@@ -546,7 +643,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     
     // Save back to store
     store.set('presets', presets);
-    console.log('💾 [PRESETS] Saved preset:', safeName);
+    logger.log('💾 [PRESETS] Saved preset:', safeName);
     return true;
   });
 
@@ -560,7 +657,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     
     if (presets.length !== initialLength) {
       store.set('presets', presets);
-      console.log('🗑️ [PRESETS] Deleted preset:', name);
+      logger.log('🗑️ [PRESETS] Deleted preset:', name);
       return true;
     }
     return false;
@@ -578,7 +675,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Sets the cancellation flag which is checked during file processing
    */
   ipcMain.handle('cancel-batch', async () => {
-    console.log('⚠️ [CANCEL] Batch cancellation requested');
+    logger.log('⚠️ [CANCEL] Batch cancellation requested');
     appState.batchCancelled = true;
     return { success: true };
   });
@@ -599,13 +696,13 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           validFolders.push(folder);
         }
       } catch {
-        console.log('🧹 [CLEANUP] Removing stale folder from recent list:', folder);
+        logger.log('🧹 [CLEANUP] Removing stale folder from recent list:', folder);
       }
     }
     
     if (validFolders.length !== recentFolders.length) {
       store.set('recentFolders', validFolders);
-      console.log('🧹 [CLEANUP] Cleaned up recent folders. Valid:', validFolders.length, 'of', recentFolders.length);
+      logger.log('🧹 [CLEANUP] Cleaned up recent folders. Valid:', validFolders.length, 'of', recentFolders.length);
     }
     
     return validFolders;
@@ -628,7 +725,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           }
         } catch {
           // Folder doesn't exist anymore, clear progress
-          console.log('💾 [PROGRESS] Source folder no longer exists, clearing progress');
+          logger.log('💾 [PROGRESS] Source folder no longer exists, clearing progress');
           await progressManager.clearProgress();
           return null;
         }
@@ -645,7 +742,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       }
       return null;
     } catch (error) {
-      console.error('Failed to check interrupted progress:', error);
+      logger.error('Failed to check interrupted progress:', error);
       return null;
     }
   });
@@ -664,7 +761,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Uses stored operations to ensure files go to their original intended destinations
    */
   ipcMain.handle('resume-batch', async (event) => {
-    console.time('RESUME_BATCH_EXECUTION');
+    logger.time('RESUME_BATCH_EXECUTION');
     try {
       const progress = await progressManager.loadProgress();
       if (!progress) {
@@ -706,13 +803,13 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       
       // Ensure all required batch folders exist (they should already exist)
       const uniqueFolders = new Set(remainingOperations.map(op => path.dirname(op.destPath)));
-      console.time('FOLDER_CREATION');
-      for (const folderPath of uniqueFolders) {
-        await fsPromises.mkdir(folderPath, { recursive: true });
+      logger.time('FOLDER_CREATION');
+      for (const dir of uniqueFolders) {
+        await fsPromises.mkdir(dir, { recursive: true });
       }
-      console.timeEnd('FOLDER_CREATION');
+      logger.timeEnd('FOLDER_CREATION');
       
-      console.time('FILE_MOVING');
+      logger.time('FILE_MOVING');
       
       // Delegate file processing to the shared batch executor
       const resumeBatchCount = batchInfo?.length || 1;
@@ -728,8 +825,8 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         }
       );
       
-      console.timeEnd('FILE_MOVING');
-      console.timeEnd('RESUME_BATCH_EXECUTION');
+      logger.timeEnd('FILE_MOVING');
+      logger.timeEnd('RESUME_BATCH_EXECUTION');
       
       const wasCancelled = appState.batchCancelled;
       if (!wasCancelled) {
@@ -768,7 +865,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    */
   ipcMain.handle('check-rollback-available', async () => {
     if (!config.features.ROLLBACK_ENABLED) {
-      return { available: false };
+      return null;
     }
     return rollbackManager.checkRollbackAvailable();
   });
@@ -778,7 +875,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    * Moves files back to original locations and deletes empty batch folders
    */
   ipcMain.handle('rollback-batch', async (event) => {
-    console.time('ROLLBACK_EXECUTION');
+    logger.time('ROLLBACK_EXECUTION');
     
     try {
       // Reset cancellation flag
@@ -789,11 +886,11 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         event.sender.send('rollback-progress', progress);
       });
       
-      console.timeEnd('ROLLBACK_EXECUTION');
+      logger.timeEnd('ROLLBACK_EXECUTION');
       return result;
       
     } catch (error) {
-      console.timeEnd('ROLLBACK_EXECUTION');
+      logger.timeEnd('ROLLBACK_EXECUTION');
       return { success: false, error: sanitizeError(error, 'rollback-batch') };
     }
   });
@@ -817,17 +914,16 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
   ipcMain.handle('get-thumbnails', async (event, { folderPath, fileNames }) => {
     // SECURITY: Validate folder path is in allowed list
     if (!(await isPathAllowedAsync(folderPath))) {
-      console.warn('🔒 [SECURITY] Blocked get-thumbnails on unregistered path:', folderPath);
+      logger.warn('🔒 [SECURITY] Blocked get-thumbnails on unregistered path:', folderPath);
       return {};
     }
     
     // SECURITY: Validate fileNames is an array
     if (!Array.isArray(fileNames)) {
-      console.warn('🔒 [SECURITY] get-thumbnails received non-array fileNames');
+      logger.warn('🔒 [SECURITY] get-thumbnails received non-array fileNames');
       return {};
     }
     
-    const sharp = require('sharp');
     const thumbnails = {};
     
     // Supported image extensions
@@ -865,12 +961,108 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
           thumbnails[fileName] = `data:image/jpeg;base64,${buffer.toString('base64')}`;
         } catch (err) {
           // Skip files that can't be processed
-          console.warn(`[THUMBNAIL] Failed to process: ${fileName}`, err.message);
+          logger.warn(`[THUMBNAIL] Failed to process: ${fileName}`, err.message);
         }
       }));
     }
     
     return thumbnails;
+  });
+}
+
+// ============================================================================
+// GROUP 7: OPERATION HISTORY HANDLERS (4 handlers)
+// ============================================================================
+
+function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
+  
+  /**
+   * Handler: Get operation history
+   * Returns an array of past operation summaries for the history panel
+   */
+  ipcMain.handle('get-operation-history', async () => {
+    try {
+      return rollbackManager.getOperationHistory();
+    } catch (error) {
+      logger.error('Failed to get operation history:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Handler: Validate a history entry
+   * Checks if files are still at their expected locations before rollback
+   */
+  ipcMain.handle('validate-history-entry', async (event, operationId) => {
+    try {
+      if (!operationId || typeof operationId !== 'string') {
+        return { valid: false, error: 'Invalid operation ID' };
+      }
+      return await rollbackManager.validateHistoryEntry(operationId);
+    } catch (error) {
+      return { valid: false, error: sanitizeError(error, 'validate-history-entry') };
+    }
+  });
+
+  /**
+   * Handler: Rollback a specific history entry
+   * Loads manifest from disk, validates, and executes rollback
+   */
+  ipcMain.handle('rollback-history-entry', async (event, operationId) => {
+    logger.time('HISTORY_ROLLBACK_EXECUTION');
+    
+    try {
+      if (!operationId || typeof operationId !== 'string') {
+        return { success: false, error: 'Invalid operation ID' };
+      }
+
+      // Reset cancellation flag
+      appState.resetBatchCancellation();
+
+      const result = await rollbackManager.executeHistoryRollback(
+        operationId,
+        appState,
+        (progress) => {
+          event.sender.send('rollback-progress', progress);
+        }
+      );
+
+      logger.timeEnd('HISTORY_ROLLBACK_EXECUTION');
+      return result;
+
+    } catch (error) {
+      logger.timeEnd('HISTORY_ROLLBACK_EXECUTION');
+      return { success: false, error: sanitizeError(error, 'rollback-history-entry') };
+    }
+  });
+
+  /**
+   * Handler: Delete a specific history entry
+   * Removes from index and deletes manifest file
+   */
+  ipcMain.handle('delete-history-entry', async (event, operationId) => {
+    try {
+      if (!operationId || typeof operationId !== 'string') {
+        return { success: false, error: 'Invalid operation ID' };
+      }
+
+      const removed = await rollbackManager.removeHistoryEntry(operationId);
+      return { success: removed };
+    } catch (error) {
+      return { success: false, error: sanitizeError(error, 'delete-history-entry') };
+    }
+  });
+
+  /**
+   * Handler: Clear all operation history
+   */
+  ipcMain.handle('clear-operation-history', async () => {
+    try {
+      const count = await rollbackManager.clearHistory();
+      return { success: true, entriesCleared: count };
+    } catch (error) {
+      return { success: false, error: sanitizeError(error, 'clear-operation-history') };
+    }
   });
 }
 

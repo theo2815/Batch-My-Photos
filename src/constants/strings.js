@@ -92,6 +92,52 @@ export const STRINGS = {
   VALIDATION_MAX_FILES_REQUIRED: 'Please enter the maximum number of files per batch folder.',
   VALIDATION_MAX_FILES_RANGE: 'Max files per batch must be between 1 and 10,000.',
   VALIDATION_FOLDER_REQUIRED: 'Please enter a folder name for the batch folders.',
+  
+  // Safety Check
+  SAFETY_TITLE: 'Pre-Execution Safety Check',
+  SAFETY_CHECKING: 'Checking environment...',
+  SAFETY_DISK_OK: 'available',
+  SAFETY_DISK_FAIL: 'Not enough disk space',
+  SAFETY_DISK_SKIPPED: 'Same-drive move — no extra space needed',
+  SAFETY_PERM_OK: 'Write access confirmed',
+  SAFETY_PERM_FAIL: 'Cannot write to output folder',
+  SAFETY_NETWORK_WARN: 'Network drive — space estimate may be approximate',
+  SAFETY_PROCEED_ANYWAY: 'Proceed Anyway',
+  SAFETY_GO_BACK: 'Go Back',
+  SAFETY_ALL_PASSED: 'All checks passed',
+
+  // Undo Complete Screen
+  UNDO_COMPLETE_TITLE: 'Undoing Batches Complete!',
+  UNDO_COMPLETE_DESC: 'All files have been restored to their original location.',
+  UNDO_COMPLETE_FILES: 'Files Restored',
+  UNDO_COMPLETE_FOLDERS_REMOVED: 'Batch Folders Removed',
+  UNDO_COMPLETE_LOCATION: 'Restored To',
+  UNDO_COMPLETE_OPEN: 'Open in Explorer',
+  UNDO_COMPLETE_ANOTHER: 'Process Another Folder',
+
+  // History Undo Confirmation
+  HISTORY_UNDO_CONFIRM_TITLE: 'Undo This Operation?',
+  HISTORY_UNDO_CONFIRM_DESC: 'This will move all files back to their original location.',
+  HISTORY_UNDO_CONFIRM_NOTE: 'The batch folders will be removed if they are empty after restoration.',
+  HISTORY_UNDO_CONFIRM_BTN: 'Yes, Undo',
+
+  // Operation History
+  HISTORY_TITLE: 'Operation History',
+  HISTORY_SUBTITLE: 'Move Mode Only',
+  HISTORY_DESCRIPTION: 'Past Move mode batch operations that can be undone. Copy mode operations are not tracked here because original files are preserved.',
+  HISTORY_EMPTY: 'No operation history yet.',
+  HISTORY_EMPTY_DETAIL: 'Only Move mode operations are recorded here. Copy mode preserves originals, so no undo is needed.',
+  HISTORY_VALIDATE: 'Verify files are still in batch locations',
+  HISTORY_UNDO: 'Undo this operation and restore files',
+  HISTORY_DELETE: 'Remove this entry from history',
+  HISTORY_CLEAR_ALL: 'Clear All History',
+  HISTORY_CLEAR_CONFIRM: 'Delete all history entries? This cannot be undone.',
+  HISTORY_BTN: 'History',
+  HISTORY_SETTINGS_LABEL: 'Settings',
+  HISTORY_MAX_FILES: 'Max per batch',
+  HISTORY_SORT_ORDER: 'Sort',
+  HISTORY_RESULT_LABEL: 'Result',
+  HISTORY_MODE_MOVE: 'Move',
 };
 
 /**
@@ -104,7 +150,7 @@ export const STRINGS = {
  */
 export function formatString(template, values) {
   return template.replace(/{(\w+)}/g, (match, key) => 
-    values.hasOwnProperty(key) ? values[key] : match
+    Object.hasOwn(values, key) ? values[key] : match
   );
 }
 

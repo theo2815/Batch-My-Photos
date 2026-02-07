@@ -2,10 +2,22 @@ node_modules/
 dist/
 out/
 build/
+release/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Environment and secrets
 .env
 auth.json
-node_modules
-release/
-release/
+
+# Logs and debug output
+*.log
+build_log*.txt
+debug_log.txt
+simple_log.txt
+
+# Python virtual environments
 backend/venv/
+.venv/

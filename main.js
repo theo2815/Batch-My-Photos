@@ -20,12 +20,11 @@ process.env.UV_THREADPOOL_SIZE = UV_THREADPOOL_SIZE;
 console.log('🚀 [STARTUP] UV_THREADPOOL_SIZE set to:', process.env.UV_THREADPOOL_SIZE);
 
 const { app, ipcMain, protocol } = require('electron');
-const { pathToFileURL } = require('url');
 
 // Register custom protocol for local media access
 // Must be done before app.on('ready')
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, bypassCSP: true, standard: true } }
+  { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, standard: true } }
 ]);
 
 const path = require('path');
@@ -43,8 +42,10 @@ const logger = require('./src/utils/logger');
 // ============================================================================
 // Set cache to temp directory to avoid Windows permission errors
 const cachePath = path.join(os.tmpdir(), 'BatchMyPhotos-cache');
-if (!fs.existsSync(cachePath)) {
+try {
   fs.mkdirSync(cachePath, { recursive: true });
+} catch (_err) {
+  // Directory already exists or permission issue — non-fatal
 }
 app.setPath('cache', cachePath);
 logger.log('💾 [CACHE] Set cache path to:', cachePath);
@@ -55,6 +56,7 @@ logger.log('💾 [CACHE] Set cache path to:', cachePath);
 // Initialize electron-store for persistent user preferences and session data
 const store = new Store({
   projectName: 'BatchMyPhotos',
+  encryptionKey: 'BatchMyPhotos-v1-preferences',
   defaults: {
     theme: 'dark',
     recentFolders: [],
@@ -80,7 +82,7 @@ app.whenReady().then(() => {
   // Handle media:// protocol to serve local files securely
   protocol.handle('media', async (request) => {
     // 1. Strip protocol (media:// or media:///)
-    let filePath = request.url.replace(/^media:\/\/+/, '');
+    const filePath = request.url.replace(/^media:\/\/+/, '');
     
     // 2. Decode to get raw path (handles %20 for spaces, etc.)
     let decodedPath = decodeURIComponent(filePath);
@@ -94,10 +96,6 @@ app.whenReady().then(() => {
     decodedPath = path.normalize(decodedPath);
     
     logger.debug('🔍 [MEDIA] Serving:', decodedPath);
-
-    // 5. Convert to proper file URL matches standard URL encoding (spaces -> %20, etc.)
-    // This ensures net.fetch can find the file even if path has special characters
-    const fileUrl = pathToFileURL(decodedPath).href;
 
     // SECURITY FIX: Validate path is within allowed directories
     if (!(await isPathAllowedAsync(decodedPath))) {
@@ -128,7 +126,7 @@ app.whenReady().then(() => {
       });
     } catch (e) {
       logger.error('❌ [MEDIA] Error serving file:', decodedPath, e.message);
-      return new Response('Not Found: ' + e.message, { status: 404 });
+      return new Response('Not Found', { status: 404 });
     }
   });
   

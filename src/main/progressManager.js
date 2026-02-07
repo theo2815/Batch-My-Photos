@@ -21,7 +21,8 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
-const config = require('./src/main/config');
+const config = require('./config');
+const logger = require('../utils/logger');
 
 // Progress file location
 const PROGRESS_FILE_NAME = 'batch_progress.json';
@@ -52,12 +53,12 @@ function getIntegrityKey() {
   
   try {
     // Try to read existing key
-    if (fs.existsSync(keyFilePath)) {
-      cachedIntegrityKey = fs.readFileSync(keyFilePath, 'utf8').trim();
-      return cachedIntegrityKey;
-    }
+    cachedIntegrityKey = fs.readFileSync(keyFilePath, 'utf8').trim();
+    return cachedIntegrityKey;
   } catch (error) {
-    console.warn('💾 [PROGRESS] Could not read integrity key, generating new one');
+    if (error.code !== 'ENOENT') {
+      logger.warn('💾 [PROGRESS] Could not read integrity key, generating new one');
+    }
   }
   
   // Generate new random key (32 bytes = 64 hex chars)
@@ -65,10 +66,10 @@ function getIntegrityKey() {
   
   try {
     // Store the key (sync to ensure it's saved before use)
-    fs.writeFileSync(keyFilePath, cachedIntegrityKey, 'utf8');
-    console.log('🔐 [SECURITY] Generated new integrity key for this installation');
+    fs.writeFileSync(keyFilePath, cachedIntegrityKey, { encoding: 'utf8', mode: 0o600 });
+    logger.log('🔐 [SECURITY] Generated new integrity key for this installation');
   } catch (error) {
-    console.error('💾 [PROGRESS] Could not persist integrity key:', error.message);
+    logger.error('💾 [PROGRESS] Could not persist integrity key:', error.message);
     // Key is still usable in memory for this session
   }
   
@@ -194,7 +195,7 @@ function deserializeFromDisk(raw) {
       throw new Error('INTEGRITY_CHECK_FAILED');
     }
   } else {
-    console.warn('⚠️ [SECURITY] Progress file missing integrity hash. Proceeding but marking for update.');
+    logger.warn('⚠️ [SECURITY] Progress file missing integrity hash. Proceeding but marking for update.');
   }
   
   return parsed;
@@ -230,7 +231,7 @@ let pendingSave = false;
  * @returns {Promise<string>} Operation ID
  */
 async function startProgress(params) {
-  const operationId = Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  const operationId = Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
   
   // Initialize in-memory state
   currentProgress = {
@@ -256,7 +257,7 @@ async function startProgress(params) {
   
   await fsPromises.writeFile(progressPath, serialized, 'utf8');
   
-  console.log('💾 [PROGRESS] Started tracking progress:', operationId);
+  logger.log('💾 [PROGRESS] Started tracking progress:', operationId);
   return operationId;
 }
 
@@ -312,7 +313,9 @@ function calculateHash(data) {
 function addProcessedFiles(fileNames) {
   if (!currentProgress) return;
   
-  currentProgress.processedFileNames.push(...fileNames);
+  for (let i = 0; i < fileNames.length; i++) {
+    currentProgress.processedFileNames.push(fileNames[i]);
+  }
   currentProgress.processedFiles = currentProgress.processedFileNames.length;
   currentProgress.lastUpdated = new Date().toISOString();
 }
@@ -346,7 +349,7 @@ async function saveProgressToDisk() {
     // Check if progress was cleared while writing (race condition)
     if (!currentProgress) {
       // Clean up temp file if it exists
-      try { await fsPromises.unlink(tempPath); } catch {}
+      try { await fsPromises.unlink(tempPath); } catch { /* Temp file may not exist -- ignore */ }
       return;
     }
     
@@ -358,7 +361,7 @@ async function saveProgressToDisk() {
     if (error.code === 'ENOENT' && !currentProgress) {
       return;
     }
-    console.error('💾 [PROGRESS] Failed to save progress:', error.message);
+    logger.error('💾 [PROGRESS] Failed to save progress:', error.message);
   } finally {
     saveInProgress = false;
     
@@ -371,17 +374,6 @@ async function saveProgressToDisk() {
 }
 
 /**
- * Legacy update function for backwards compatibility
- * 
- * @param {Array<string>} newlyProcessedFileNames - File names just processed
- * @returns {Promise<void>}
- */
-async function updateProgress(newlyProcessedFileNames) {
-  addProcessedFiles(newlyProcessedFileNames);
-  await saveProgressToDisk();
-}
-
-/**
  * Load existing progress (if any)
  * 
  * @returns {Promise<Object|null>} Progress data or null if none exists
@@ -390,10 +382,6 @@ async function loadProgress() {
   const progressPath = getProgressFilePath();
   
   try {
-    if (!fs.existsSync(progressPath)) {
-      return null;
-    }
-    
     const raw = await fsPromises.readFile(progressPath, 'utf8');
     
     let progress;
@@ -401,9 +389,9 @@ async function loadProgress() {
       progress = deserializeFromDisk(raw);
     } catch (deserializeError) {
       if (deserializeError.message === 'INTEGRITY_CHECK_FAILED') {
-        console.error('🚨 [SECURITY] Progress file integrity check failed! File may have been tampered with.');
+        logger.error('🚨 [SECURITY] Progress file integrity check failed! File may have been tampered with.');
       } else {
-        console.error('🔐 [SECURITY] Progress file decryption failed:', deserializeError.message);
+        logger.error('🔐 [SECURITY] Progress file decryption failed:', deserializeError.message);
       }
       // Delete corrupted/tampered file as safety measure
       await fsPromises.unlink(progressPath);
@@ -413,18 +401,24 @@ async function loadProgress() {
     // Store in memory for potential resume
     currentProgress = progress;
     
-    console.log('💾 [PROGRESS] Found interrupted progress:', progress.operationId);
-    console.log('   - Folder:', progress.folderPath);
-    console.log('   - Processed:', progress.processedFiles, 'of', progress.totalFiles);
+    logger.log('💾 [PROGRESS] Found interrupted progress:', progress.operationId);
+    logger.log('   - Folder:', progress.folderPath);
+    logger.log('   - Processed:', progress.processedFiles, 'of', progress.totalFiles);
     
     return progress;
   } catch (error) {
-    console.error('💾 [PROGRESS] Failed to load progress:', error.message);
+    if (error.code === 'ENOENT') {
+      // No progress file exists — normal case
+      return null;
+    }
+    logger.error('💾 [PROGRESS] Failed to load progress:', error.message);
     // If progress file is corrupted, delete it
     try {
       await fsPromises.unlink(progressPath);
-      console.log('💾 [PROGRESS] Deleted corrupted progress file');
-    } catch {}
+      logger.log('💾 [PROGRESS] Deleted corrupted progress file');
+    } catch (_unlinkErr) {
+      // Ignore unlink failures
+    }
     return null;
   }
 }
@@ -439,17 +433,19 @@ async function clearProgress() {
   currentProgress = null;
   
   try {
-    if (fs.existsSync(progressPath)) {
-      await fsPromises.unlink(progressPath);
-      console.log('💾 [PROGRESS] Cleared progress file');
-    }
-    // Also clean up any temp file
-    const tempPath = progressPath + '.tmp';
-    if (fs.existsSync(tempPath)) {
-      await fsPromises.unlink(tempPath);
-    }
+    await fsPromises.unlink(progressPath);
+    logger.log('💾 [PROGRESS] Cleared progress file');
   } catch (error) {
-    console.error('💾 [PROGRESS] Failed to clear progress:', error.message);
+    if (error.code !== 'ENOENT') {
+      logger.error('💾 [PROGRESS] Failed to clear progress:', error.message);
+    }
+  }
+  
+  // Also clean up any temp file
+  try {
+    await fsPromises.unlink(progressPath + '.tmp');
+  } catch (_err) {
+    // Temp file may not exist — ignore
   }
 }
 
@@ -477,7 +473,6 @@ module.exports = {
   startProgress,
   addProcessedFiles,
   saveProgressToDisk,
-  updateProgress,
   loadProgress,
   clearProgress,
   hasInterruptedProgress,

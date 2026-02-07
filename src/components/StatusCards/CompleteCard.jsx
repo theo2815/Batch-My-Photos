@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2, History } from 'lucide-react';
 import './StatusCards.css';
 
 /**
@@ -18,11 +18,13 @@ import './StatusCards.css';
  * @param {number} [props.executionResults.totalFiles] - Total files that were to be processed
  * @param {string} [props.executionResults.mode] - 'move' or 'copy'
  * @param {boolean} props.rollbackAvailable - Whether undo is available
+ * @param {boolean} props.hasHistory - Whether there are past operations in history
  * @param {() => void} props.onOpenFolder - Callback to open output folder
  * @param {() => void} props.onReset - Callback to reset and start over
  * @param {() => void} props.onUndo - Callback to undo the batch operation
+ * @param {() => void} props.onShowHistory - Callback to open operation history modal
  */
-function CompleteCard({ executionResults, rollbackAvailable, onOpenFolder, onReset, onUndo }) {
+function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenFolder, onReset, onUndo, onShowHistory }) {
   const wasCancelled = executionResults?.wasCancelled || executionResults?.cancelled;
   
   return (
@@ -45,8 +47,8 @@ function CompleteCard({ executionResults, rollbackAvailable, onOpenFolder, onRes
         </p>
       )}
       <div className="results-summary">
-        {executionResults?.results?.slice(0, 5).map((r, i) => (
-          <div key={i} className="result-row">
+        {executionResults?.results?.slice(0, 5).map((r) => (
+          <div key={r.folder} className="result-row">
             <span className="folder-name">{r.folder}</span>
             <span className="file-count">{r.fileCount} files</span>
           </div>
@@ -66,6 +68,11 @@ function CompleteCard({ executionResults, rollbackAvailable, onOpenFolder, onRes
         {rollbackAvailable && (
           <button className="btn secondary" onClick={onUndo}>
             <Undo2 size={16} /> Undo
+          </button>
+        )}
+        {hasHistory && (
+          <button className="btn secondary" onClick={onShowHistory}>
+            <History size={16} /> History
           </button>
         )}
         <button className="btn secondary" onClick={onOpenFolder}>

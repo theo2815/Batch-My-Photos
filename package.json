@@ -9,7 +9,12 @@
     "electron": "electron .",
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build && electron-builder",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"*.js\" \"*.json\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "build": {
     "appId": "com.batchmyphotos.app",
@@ -21,8 +26,6 @@
       "dist/**/*",
       "main.js",
       "preload.js",
-      "progressManager.js",
-      "rollbackManager.js",
       "src/main/**/*",
       "src/utils/**/*",
       "src/constants/**/*",
@@ -30,6 +33,14 @@
     ],
     "win": {
       "target": "nsis",
+      "icon": "src/images/app_icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/images/app_icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
       "icon": "src/images/app_icon.png"
     }
   },
@@ -51,11 +62,18 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.3.3",
     "electron-builder": "^26.4.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
     "vite": "^5.0.10",
+    "vitest": "^4.0.18",
     "wait-on": "^7.2.0"
   }
 }

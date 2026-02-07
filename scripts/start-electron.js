@@ -1,6 +1,5 @@
 const { spawn } = require('child_process');
 const electron = require('electron');
-const path = require('path');
 
 // Clean environment
 const env = { ...process.env };

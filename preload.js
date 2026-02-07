@@ -238,6 +238,61 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('rollback-progress', listener);
     };
   },
+
+  // ============================================================================
+  // PRE-EXECUTION SAFETY CHECK APIs
+  // ============================================================================
+
+  /**
+   * Validate execution environment before starting a batch operation.
+   * Checks disk space sufficiency and write permissions on the target directory.
+   * 
+   * @param {string} folderPath - Source folder path
+   * @param {string} mode - 'move' or 'copy'
+   * @param {string|null} outputDir - Output directory (for copy mode)
+   * @returns {Promise<Object>} Validation result { success, diskSpace, permissions, warnings }
+   */
+  validateExecution: (folderPath, mode, outputDir) =>
+    ipcRenderer.invoke('validate-execution', { folderPath, mode, outputDir }),
+
+  // ============================================================================
+  // OPERATION HISTORY APIs
+  // ============================================================================
+
+  /**
+   * Get the list of past batch operations
+   * @returns {Promise<Array>} Array of operation history summaries
+   */
+  getOperationHistory: () => ipcRenderer.invoke('get-operation-history'),
+
+  /**
+   * Validate a history entry before rollback
+   * Checks if files are still at their expected batch locations
+   * @param {string} operationId - Operation ID to validate
+   * @returns {Promise<Object>} Validation result { valid, checked, found, missing }
+   */
+  validateHistoryEntry: (operationId) => ipcRenderer.invoke('validate-history-entry', operationId),
+
+  /**
+   * Rollback a specific history entry
+   * Loads the manifest from disk and moves files back to original locations
+   * @param {string} operationId - Operation ID to rollback
+   * @returns {Promise<Object>} Rollback result
+   */
+  rollbackHistoryEntry: (operationId) => ipcRenderer.invoke('rollback-history-entry', operationId),
+
+  /**
+   * Delete a specific history entry
+   * @param {string} operationId - Operation ID to delete
+   * @returns {Promise<Object>} Result with success status
+   */
+  deleteHistoryEntry: (operationId) => ipcRenderer.invoke('delete-history-entry', operationId),
+
+  /**
+   * Clear all operation history
+   * @returns {Promise<Object>} Result with success status and entries cleared count
+   */
+  clearOperationHistory: () => ipcRenderer.invoke('clear-operation-history'),
 });
 
 // Log when preload script is loaded (helpful for debugging)

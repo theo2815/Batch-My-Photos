@@ -44,6 +44,6 @@ function generateBatchFolderName(pattern, batchIndex, totalBatches) {
     .replace(/{count}/gi, count);
 }
 
-// CommonJS export — works with both Node.js require() in the main process
-// and Vite's import in the renderer (Vite handles CJS imports transparently)
+// CommonJS export — Vite handles CJS-to-ESM conversion transparently
+// for the renderer, and Node.js require() works in the main process.
 module.exports = { generateBatchFolderName };

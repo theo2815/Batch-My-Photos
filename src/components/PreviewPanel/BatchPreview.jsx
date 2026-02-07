@@ -23,7 +23,7 @@ const BATCHES_PER_LOAD = 10; // Number of batches to show per "Load More" click
  */
 function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch, folderPath }) {
   const [thumbnails, setThumbnails] = useState({});
-  const [loadingThumbnails, setLoadingThumbnails] = useState(false);
+  const [_loadingThumbnails, setLoadingThumbnails] = useState(false);
   const [visibleFilesCount, setVisibleFilesCount] = useState({}); // { batchNumber: count }
   const [visibleBatchesCount, setVisibleBatchesCount] = useState(10); // Number of batches to show
 
@@ -127,8 +127,8 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
               </button>
               {expandedBatch === batch.batchNumber && (
                 <div className="batch-files">
-                  {filesToShow.map((file, i) => (
-                    <div key={i} className="file-item">
+                  {filesToShow.map((file) => (
+                    <div key={file} className="file-item">
                       {thumbnails[file] ? (
                         <img 
                           src={thumbnails[file]} 

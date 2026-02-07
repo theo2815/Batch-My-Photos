@@ -6,7 +6,6 @@
 const { BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const logger = require('../utils/logger');
 const config = require('./config');
 
@@ -15,9 +14,6 @@ let mainWindow = null;
 
 // The root of the project (assuming we are in src/main)
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
-
-// Set cache path to temp directory to avoid permission issues on Windows
-const cachePath = path.join(os.tmpdir(), 'BatchMyPhotos-cache');
 
 /**
  * Create the main application window
@@ -92,7 +88,7 @@ function createWindow() {
   });
   
   if (isPackaged) {
-    console.log('🔒 [SECURITY] CSP headers enabled (strict mode)');
+    logger.log('🔒 [SECURITY] CSP headers enabled (strict mode)');
   }
 
   mainWindow.once('ready-to-show', () => {

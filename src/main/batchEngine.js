@@ -11,6 +11,7 @@ const {
   BATCH_YIELD_THRESHOLD,
   BATCH_SEARCH_DEPTH
 } = require('./constants');
+const logger = require('../utils/logger');
 
 /**
  * System files to always ignore (case-insensitive)
@@ -115,7 +116,7 @@ async function groupFilesByBaseName(files) {
   }
   
   if (skippedCount > 0) {
-    console.log(`📂 [BATCH] Skipped ${skippedCount} non-image/system files`);
+    logger.log(`📂 [BATCH] Skipped ${skippedCount} non-image/system files`);
   }
   
   return groups;
@@ -205,19 +206,19 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
   
   // Memory warning for very large datasets
   if (groupCount > 50000) {
-    console.warn(`⚠️ [MEMORY] Large dataset detected: ${groupCount.toLocaleString()} file groups`);
-    console.warn('⚠️ [MEMORY] This may take a moment to process...');
+    logger.warn(`⚠️ [MEMORY] Large dataset detected: ${groupCount.toLocaleString()} file groups`);
+    logger.warn('⚠️ [MEMORY] This may take a moment to process...');
   }
   
   // Sort groups based on user preference
   sortFileGroups(groupsArray, sortBy, fileStats);
-  console.log(`📊 [SORT] File groups sorted by: ${sortBy}`);
+  logger.log(`📊 [SORT] File groups sorted by: ${sortBy}`);
   
   const batches = [];
   const batchCounts = [];
   
   for (let i = 0; i < groupsArray.length; i++) {
-    const [baseName, files] = groupsArray[i];
+    const [_baseName, files] = groupsArray[i];
     const groupSize = files.length;
     
     let placed = false;
@@ -259,7 +260,7 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
   // Log stats for large operations
   if (groupCount > 10000) {
     const totalFiles = batchCounts.reduce((sum, count) => sum + count, 0);
-    console.log(`📊 [BATCH] Processed ${groupCount.toLocaleString()} groups into ${batches.length} batches (${totalFiles.toLocaleString()} files)`);
+    logger.log(`📊 [BATCH] Processed ${groupCount.toLocaleString()} groups into ${batches.length} batches (${totalFiles.toLocaleString()} files)`);
   }
   
   return batches;

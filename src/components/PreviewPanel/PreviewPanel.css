@@ -555,3 +555,87 @@
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
+/* ===== Settings Panel Extracted Styles ===== */
+
+.presets-section {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.presets-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-icon {
+  cursor: help;
+}
+
+.presets-controls {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  align-items: center;
+}
+
+.preset-naming-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.preset-name-input {
+  flex: 1;
+  padding: 4px 8px;
+}
+
+.presets-select {
+  flex: 1;
+}
+
+.presets-action-btn {
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.presets-action-btn.active {
+  background: var(--bg-primary);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+.folder-name-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.setting-hint {
+  font-size: 0.75rem;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.setting-hint--warning {
+  color: var(--warning);
+  font-weight: bold;
+}
+
+.setting-hint--muted {
+  color: var(--text-muted);
+}
+
+.warning-icon {
+  margin-right: 4px;
+}

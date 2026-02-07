@@ -6,6 +6,11 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: "dist",
+    commonjsOptions: {
+      // Include local CJS modules that are imported with ESM syntax
+      include: [/src\/utils\/batchNaming\.js/, /node_modules/],
+      transformMixedEsModules: true,
+    },
   },
   server: {
     port: 5173,

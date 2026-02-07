@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const config = require('./config');
+const logger = require('../utils/logger');
 
 /**
  * Registry of user-selected folders that are allowed to be accessed.
@@ -29,6 +30,33 @@ const allowedPaths = new Set();
  * Cleared when new paths are registered.
  */
 const realPathCache = new Map();
+
+/**
+ * Blocklist of sensitive system directories that should never be registered
+ * as allowed paths, even if a user (or compromised renderer) tries to.
+ */
+const BLOCKED_PATHS = [
+  process.env.SYSTEMROOT,     // C:\Windows
+  process.env.PROGRAMFILES,   // C:\Program Files
+  process.env['PROGRAMFILES(X86)'], // C:\Program Files (x86)
+  '/etc', '/usr', '/bin', '/sbin', '/var', '/boot', '/sys', '/proc',
+].filter(Boolean).map(p => path.normalize(p));
+
+/**
+ * Check if a path is within a sensitive system directory.
+ * 
+ * @param {string} normalizedPath - Already normalized path
+ * @returns {boolean} True if the path is sensitive and should be blocked
+ */
+function isSensitivePath(normalizedPath) {
+  const isCaseInsensitive = process.platform === 'win32';
+  const target = isCaseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
+  
+  return BLOCKED_PATHS.some(blocked => {
+    const normalizedBlocked = isCaseInsensitive ? blocked.toLowerCase() : blocked;
+    return target === normalizedBlocked || target.startsWith(normalizedBlocked + path.sep);
+  });
+}
 
 /**
  * Validates that a path is within a user-selected allowed directory.
@@ -62,7 +90,7 @@ async function isPathAllowedAsync(targetPath) {
     return checkPathAgainstAllowed(realPath);
   } catch (error) {
     // Path doesn't exist or permission denied - deny access
-    console.warn('🔒 [SECURITY] Path validation failed:', targetPath, error.code);
+    logger.warn('🔒 [SECURITY] Path validation failed:', targetPath, error.code);
     return false;
   }
 }
@@ -74,14 +102,18 @@ async function isPathAllowedAsync(targetPath) {
  * @returns {boolean} True if the path is within an allowed directory
  */
 function checkPathAgainstAllowed(realPath) {
-  const normalizedTarget = path.normalize(realPath).toLowerCase();
+  // Windows filesystems are case-insensitive; Unix filesystems are case-sensitive
+  const isCaseInsensitive = process.platform === 'win32';
+  const normalizedTarget = path.normalize(realPath);
   
   for (const allowedPath of allowedPaths) {
-    const normalizedAllowed = path.normalize(allowedPath).toLowerCase();
+    const normalizedAllowed = path.normalize(allowedPath);
+    
+    const target = isCaseInsensitive ? normalizedTarget.toLowerCase() : normalizedTarget;
+    const allowed = isCaseInsensitive ? normalizedAllowed.toLowerCase() : normalizedAllowed;
     
     // Check if target is the allowed path itself or a subdirectory
-    if (normalizedTarget === normalizedAllowed || 
-        normalizedTarget.startsWith(normalizedAllowed + path.sep.toLowerCase())) {
+    if (target === allowed || target.startsWith(allowed + path.sep)) {
       return true;
     }
   }
@@ -101,15 +133,21 @@ function registerAllowedPath(selectedPath) {
     realPathCache.clear();
     
     // Try to resolve symlinks synchronously for immediate registration
+    let resolvedPath;
     try {
-      const realPath = fs.realpathSync(selectedPath);
-      allowedPaths.add(realPath);
-      console.log('🔒 [SECURITY] Registered allowed path (resolved):', realPath);
-    } catch (error) {
-      // Fall back to resolved path if realpath fails
-      allowedPaths.add(path.resolve(selectedPath));
-      console.log('🔒 [SECURITY] Registered allowed path:', selectedPath);
+      resolvedPath = fs.realpathSync(selectedPath);
+    } catch (_error) {
+      resolvedPath = path.resolve(selectedPath);
     }
+    
+    // Block sensitive system directories
+    if (isSensitivePath(resolvedPath)) {
+      logger.warn('🔒 [SECURITY] Blocked registration of sensitive path:', resolvedPath);
+      return;
+    }
+    
+    allowedPaths.add(resolvedPath);
+    logger.log('🔒 [SECURITY] Registered allowed path:', resolvedPath);
   }
 }
 
@@ -147,12 +185,12 @@ function validateMaxFilesPerBatch(value) {
   const num = parseInt(value, 10);
   
   if (isNaN(num) || num < 1) {
-    console.warn('🔒 [SECURITY] Invalid maxFilesPerBatch, using default:', value);
+    logger.warn('🔒 [SECURITY] Invalid maxFilesPerBatch, using default:', value);
     return config.limits.DEFAULT_FILES_PER_BATCH;
   }
   
   if (num > config.limits.MAX_FILES_PER_BATCH_CEILING) {
-    console.warn('🔒 [SECURITY] maxFilesPerBatch too high, clamping to', config.limits.MAX_FILES_PER_BATCH_CEILING, ':', value);
+    logger.warn('🔒 [SECURITY] maxFilesPerBatch too high, clamping to', config.limits.MAX_FILES_PER_BATCH_CEILING, ':', value);
     return config.limits.MAX_FILES_PER_BATCH_CEILING;
   }
   
@@ -163,5 +201,6 @@ module.exports = {
   isPathAllowedAsync,
   registerAllowedPath,
   sanitizeOutputPrefix,
-  validateMaxFilesPerBatch
+  validateMaxFilesPerBatch,
+  isSensitivePath
 };
