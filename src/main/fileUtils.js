@@ -5,6 +5,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 
 /**
  * Checks if source and destination paths are on the same drive.
@@ -32,12 +33,6 @@ function syncMove(sourcePath, destPath) {
   fs.renameSync(sourcePath, destPath);
 }
 
-module.exports = {
-  isSameDrive,
-  syncMove,
-  calculateDirSize
-};
-
 /**
  * Calculate the total size of a directory recursively
  * @param {string} dirPath - Directory path
@@ -47,7 +42,7 @@ async function calculateDirSize(dirPath) {
   let size = 0;
   
   try {
-    const files = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    const files = await fsPromises.readdir(dirPath, { withFileTypes: true });
     
     await Promise.all(files.map(async file => {
       const filePath = path.join(dirPath, file.name);
@@ -55,14 +50,19 @@ async function calculateDirSize(dirPath) {
       if (file.isDirectory()) {
         size += await calculateDirSize(filePath);
       } else {
-        const stats = await fs.promises.stat(filePath);
+        const stats = await fsPromises.stat(filePath);
         size += stats.size;
       }
     }));
   } catch (error) {
     // If directory doesn't exist or access denied, return 0
-    // console.warn('Failed to calculate size for:', dirPath, error.message);
   }
   
   return size;
 }
+
+module.exports = {
+  isSameDrive,
+  syncMove,
+  calculateDirSize
+};

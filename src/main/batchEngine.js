@@ -6,6 +6,12 @@
  * system files and only process known image formats.
  */
 
+const {
+  GROUP_YIELD_THRESHOLD,
+  BATCH_YIELD_THRESHOLD,
+  BATCH_SEARCH_DEPTH
+} = require('./constants');
+
 /**
  * System files to always ignore (case-insensitive)
  * These files are created by operating systems and should never be batched
@@ -81,7 +87,6 @@ const yieldToMain = () => new Promise(resolve => setImmediate(resolve));
  */
 async function groupFilesByBaseName(files) {
   const groups = {};
-  const YIELD_THRESHOLD = 5000; // Yield every 5000 files
   let skippedCount = 0;
   
   for (let i = 0; i < files.length; i++) {
@@ -104,7 +109,7 @@ async function groupFilesByBaseName(files) {
     groups[baseName].push(fileName);
     
     // Safety yield for huge folders
-    if (i % YIELD_THRESHOLD === 0 && i > 0) {
+    if (i % GROUP_YIELD_THRESHOLD === 0 && i > 0) {
       await yieldToMain();
     }
   }
@@ -210,7 +215,6 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
   
   const batches = [];
   const batchCounts = [];
-  const YIELD_THRESHOLD = 2000;
   
   for (let i = 0; i < groupsArray.length; i++) {
     const [baseName, files] = groupsArray[i];
@@ -219,9 +223,8 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
     let placed = false;
     // Iterate backwards - optimization heuristic: 
     // Newer batches are at the end, more likely to have space.
-    // BOUNDED SEARCH: Only check the last 50 batches to ensure O(N) complexity
-    const SEARCH_DEPTH = 50;
-    const searchStart = Math.max(0, batches.length - SEARCH_DEPTH);
+    // BOUNDED SEARCH: Only check the last N batches to ensure O(N) complexity
+    const searchStart = Math.max(0, batches.length - BATCH_SEARCH_DEPTH);
     
     for (let j = batches.length - 1; j >= searchStart; j--) {
       if (batchCounts[j] + groupSize <= maxFilesPerBatch) {
@@ -248,7 +251,7 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
     }
     
     // Yield periodically to keep UI responsive
-    if (i % YIELD_THRESHOLD === 0 && i > 0) {
+    if (i % BATCH_YIELD_THRESHOLD === 0 && i > 0) {
       await yieldToMain();
     }
   }

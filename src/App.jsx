@@ -1,7 +1,7 @@
 /**
  * BatchMyPhotos - Main React Application Component
  * 
- * This component provides the user interface for the PhotoBatcher application:
+ * This component provides the user interface for the BatchMyPhotos application:
  * - Drag & Drop zone for folder selection
  * - Settings panel for batch configuration
  * - Preview and confirmation before execution
@@ -11,12 +11,12 @@
  * - Batch preview with file details
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Camera, Sun, Moon, Mail } from 'lucide-react';
 
 // Import application states from constants
 import { STATES } from './constants/appStates';
-import { STRINGS, formatString } from './constants/strings';
+import { STRINGS } from './constants/strings';
 
 // Import components
 import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal } from './components/Modals';
@@ -80,7 +80,12 @@ function App() {
   const [isRollingBack, setIsRollingBack] = useState(false);
   
   // Ref to track if a preview refresh should be cancelled
-  const previewCancelledRef = React.useRef(false);
+  const previewCancelledRef = useRef(false);
+  
+  // Ref to read appState inside effects without triggering re-runs.
+  // Keeps the debounced preview effect from firing on every state transition.
+  const appStateRef = useRef(appState);
+  appStateRef.current = appState;
 
   // ============================================================================
   // EFFECTS
@@ -225,9 +230,11 @@ function App() {
   }, [scanFolder]);
   
   /**
-   * Refresh preview when settings change
+   * Refresh preview when settings change.
+   * Wrapped in useCallback so it can be safely listed in effect dependency arrays
+   * and satisfies the react-hooks/exhaustive-deps rule.
    */
-  const refreshPreview = async () => {
+  const refreshPreview = useCallback(async () => {
     if (!folderPath) return;
     
     const maxFiles = parseInt(maxFilesPerBatch, 10);
@@ -251,23 +258,28 @@ function App() {
         setRefreshingField(null);
       }
     }
-  };
+  }, [folderPath, maxFilesPerBatch, sortBy]);
   
-  // Debounced refresh preview
+  // Debounced refresh preview — only fires when settings actually change.
+  // Uses appStateRef (not appState) so state transitions don't cancel/re-trigger the timer.
   useEffect(() => {
-    if (appState !== STATES.READY) return;
+    // Guard: only refresh when on the preview screen
+    if (appStateRef.current !== STATES.READY) return;
     
     previewCancelledRef.current = true;
     
     const debounceTimer = setTimeout(() => {
-      refreshPreview();
+      // Double-check we're still on READY when the timer fires
+      if (appStateRef.current === STATES.READY) {
+        refreshPreview();
+      }
     }, 400);
     
     return () => {
       clearTimeout(debounceTimer);
       previewCancelledRef.current = true;
     };
-  }, [maxFilesPerBatch, folderPath, sortBy, appState]);
+  }, [refreshPreview]);
 
   // ============================================================================
   // DRAG & DROP HANDLERS
@@ -514,10 +526,10 @@ function App() {
   // ============================================================================
   
   /**
-   * Check if rollback is available after batch completes
-   * Called after execution results are set
+   * Check if rollback is available after batch completes.
+   * Wrapped in useCallback for stable reference in effect dependency array.
    */
-  const checkRollbackAvailability = async () => {
+  const checkRollbackAvailability = useCallback(async () => {
     if (window.electronAPI?.checkRollbackAvailable) {
       const info = await window.electronAPI.checkRollbackAvailable();
       if (info) {
@@ -528,14 +540,14 @@ function App() {
         setRollbackInfo(null);
       }
     }
-  };
+  }, []);
   
   // Check rollback availability when entering COMPLETE state
   useEffect(() => {
     if (appState === STATES.COMPLETE) {
       checkRollbackAvailability();
     }
-  }, [appState]);
+  }, [appState, checkRollbackAvailability]);
   
   /**
    * Show undo confirmation modal

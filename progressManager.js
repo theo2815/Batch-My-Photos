@@ -6,8 +6,14 @@
  * 
  * IMPORTANT: Uses atomic write pattern to prevent file corruption from race conditions.
  * 
- * SECURITY FIX: Integrity key is now generated randomly per installation,
+ * SECURITY: Integrity key is generated randomly per installation,
  * stored securely in userData, and not exposed in source code.
+ * 
+ * ENCRYPTION: When config.features.ENCRYPTION_ENABLED is true, the progress file is
+ * encrypted at rest using AES-256-GCM with a key derived from the installation
+ * key. This protects file paths and file lists from casual access by another
+ * user on the same machine. GCM's auth tag provides both confidentiality and
+ * integrity, replacing the plaintext HMAC.
  */
 
 const { app } = require('electron');
@@ -15,20 +21,27 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
+const config = require('./src/main/config');
 
 // Progress file location
 const PROGRESS_FILE_NAME = 'batch_progress.json';
 const INTEGRITY_KEY_FILE = '.integrity_key';
 
-// Cached integrity key (loaded once on first use)
+// Encryption constants
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;         // 96-bit IV recommended for GCM
+const AUTH_TAG_LENGTH = 16;   // 128-bit auth tag
+
+// Cached keys (loaded once on first use)
 let cachedIntegrityKey = null;
+let cachedEncryptionKey = null;
 
 /**
- * Get or create the integrity key for HMAC verification.
+ * Get or create the integrity key for HMAC verification and encryption.
  * Key is generated randomly on first run and persisted in userData.
  * This prevents the key from being visible in source code.
  * 
- * @returns {string} The integrity key
+ * @returns {string} The integrity key (hex string)
  */
 function getIntegrityKey() {
   if (cachedIntegrityKey) {
@@ -60,6 +73,131 @@ function getIntegrityKey() {
   }
   
   return cachedIntegrityKey;
+}
+
+/**
+ * Derive a 256-bit encryption key from the integrity key using HKDF.
+ * This ensures the encryption key is cryptographically independent from
+ * the HMAC key even though both originate from the same master secret.
+ * 
+ * @returns {Buffer} 32-byte encryption key
+ */
+function getEncryptionKey() {
+  if (cachedEncryptionKey) {
+    return cachedEncryptionKey;
+  }
+  
+  const masterKey = Buffer.from(getIntegrityKey(), 'hex');
+  // HKDF-SHA256: derive a 32-byte key with a context label
+  cachedEncryptionKey = crypto.hkdfSync(
+    'sha256',
+    masterKey,
+    Buffer.alloc(0),                            // no salt (master key is already random)
+    Buffer.from('batch-progress-encryption'),    // info/context label
+    32                                           // 256 bits
+  );
+  
+  return cachedEncryptionKey;
+}
+
+/**
+ * Encrypt a JSON string using AES-256-GCM.
+ * 
+ * @param {string} plaintext - JSON string to encrypt
+ * @returns {string} JSON string of { encrypted: true, iv, authTag, ciphertext }
+ */
+function encryptData(plaintext) {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(IV_LENGTH);
+  
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH
+  });
+  
+  let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
+  ciphertext += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  
+  return JSON.stringify({
+    encrypted: true,
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+    ciphertext
+  });
+}
+
+/**
+ * Decrypt an AES-256-GCM encrypted payload.
+ * The GCM auth tag provides built-in integrity verification.
+ * 
+ * @param {Object} envelope - { encrypted, iv, authTag, ciphertext }
+ * @returns {string} Decrypted JSON string
+ * @throws {Error} If decryption or authentication fails
+ */
+function decryptData(envelope) {
+  const key = getEncryptionKey();
+  const iv = Buffer.from(envelope.iv, 'hex');
+  const authTag = Buffer.from(envelope.authTag, 'hex');
+  
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH
+  });
+  decipher.setAuthTag(authTag);
+  
+  let plaintext = decipher.update(envelope.ciphertext, 'hex', 'utf8');
+  plaintext += decipher.final('utf8');
+  
+  return plaintext;
+}
+
+/**
+ * Serialize progress data for writing to disk.
+ * When encryption is enabled: encrypts the JSON.
+ * When encryption is disabled: adds HMAC integrity hash.
+ * 
+ * @param {Object} data - Progress data to serialize
+ * @returns {string} Serialized string ready for disk write
+ */
+function serializeForDisk(data) {
+  if (config.features.ENCRYPTION_ENABLED) {
+    const plaintext = JSON.stringify(data);
+    return encryptData(plaintext);
+  }
+  
+  // Plaintext mode: add HMAC integrity hash
+  const dataToSave = { ...data };
+  dataToSave.integrity = calculateHash(dataToSave);
+  return JSON.stringify(dataToSave, null, 2);
+}
+
+/**
+ * Deserialize progress data from disk.
+ * Auto-detects encrypted vs plaintext format for backwards compatibility.
+ * 
+ * @param {string} raw - Raw file contents
+ * @returns {Object} Parsed progress data
+ * @throws {Error} If decryption/integrity check fails
+ */
+function deserializeFromDisk(raw) {
+  const parsed = JSON.parse(raw);
+  
+  // Detect encrypted format
+  if (parsed.encrypted === true && parsed.iv && parsed.authTag && parsed.ciphertext) {
+    const plaintext = decryptData(parsed);
+    return JSON.parse(plaintext);
+  }
+  
+  // Plaintext format: verify HMAC integrity
+  if (parsed.integrity) {
+    const calculatedHash = calculateHash(parsed);
+    if (calculatedHash !== parsed.integrity) {
+      throw new Error('INTEGRITY_CHECK_FAILED');
+    }
+  } else {
+    console.warn('⚠️ [SECURITY] Progress file missing integrity hash. Proceeding but marking for update.');
+  }
+  
+  return parsed;
 }
 
 /**
@@ -112,27 +250,55 @@ async function startProgress(params) {
     lastUpdated: new Date().toISOString()
   };
   
-  // Write initial state to disk with integrity check
+  // Write initial state to disk (encrypted or with HMAC integrity)
   const progressPath = getProgressFilePath();
-  const dataToSave = { ...currentProgress };
-  dataToSave.integrity = calculateHash(dataToSave);
+  const serialized = serializeForDisk(currentProgress);
   
-  await fsPromises.writeFile(progressPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+  await fsPromises.writeFile(progressPath, serialized, 'utf8');
   
   console.log('💾 [PROGRESS] Started tracking progress:', operationId);
   return operationId;
 }
 
 /**
- * Calculate HMAC SHA-256 hash for data integrity
+ * Recursively sort all object keys to produce a deterministic JSON string.
+ * Arrays preserve order (elements are sorted internally if they are objects).
+ * Primitives are returned as-is.
+ * 
+ * @param {*} value - Any JSON-serializable value
+ * @returns {*} A deeply key-sorted clone suitable for JSON.stringify
+ */
+function deepSortKeys(value) {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  
+  if (Array.isArray(value)) {
+    return value.map(deepSortKeys);
+  }
+  
+  // Sort object keys alphabetically and recurse into each value
+  const sorted = {};
+  const keys = Object.keys(value).sort();
+  for (const key of keys) {
+    sorted[key] = deepSortKeys(value[key]);
+  }
+  return sorted;
+}
+
+/**
+ * Calculate HMAC SHA-256 hash for data integrity.
+ * Uses deep key sorting to ensure deterministic serialization regardless
+ * of the order keys were inserted into objects (including nested ones).
+ * 
  * @param {Object} data - The progress data object (without integrity field)
  * @returns {string} Hex digest of the hash
  */
 function calculateHash(data) {
   // Create a copy and remove integrity field to ensure consistent hashing
   const { integrity, ...cleanData } = data;
-  // Sort keys to ensure deterministic JSON string
-  const jsonString = JSON.stringify(cleanData, Object.keys(cleanData).sort());
+  // Deep-sort all keys for a fully deterministic JSON string
+  const jsonString = JSON.stringify(deepSortKeys(cleanData));
   // Use the per-installation key instead of hardcoded constant
   return crypto.createHmac('sha256', getIntegrityKey()).update(jsonString).digest('hex');
 }
@@ -173,11 +339,9 @@ async function saveProgressToDisk() {
     const tempPath = progressPath + '.tmp';
     
     // Write to temp file first (atomic write pattern)
-    // Add integrity hash
-    const dataToSave = { ...currentProgress };
-    dataToSave.integrity = calculateHash(dataToSave);
+    const serialized = serializeForDisk(currentProgress);
     
-    await fsPromises.writeFile(tempPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    await fsPromises.writeFile(tempPath, serialized, 'utf8');
     
     // Check if progress was cleared while writing (race condition)
     if (!currentProgress) {
@@ -230,21 +394,20 @@ async function loadProgress() {
       return null;
     }
     
-    const data = await fsPromises.readFile(progressPath, 'utf8');
-    const progress = JSON.parse(data);
+    const raw = await fsPromises.readFile(progressPath, 'utf8');
     
-    // Verify integrity
-    if (progress.integrity) {
-      const calculatedHash = calculateHash(progress);
-      if (calculatedHash !== progress.integrity) {
+    let progress;
+    try {
+      progress = deserializeFromDisk(raw);
+    } catch (deserializeError) {
+      if (deserializeError.message === 'INTEGRITY_CHECK_FAILED') {
         console.error('🚨 [SECURITY] Progress file integrity check failed! File may have been tampered with.');
-        // Delete corrupted file as safety measure
-        await fsPromises.unlink(progressPath);
-        return null;
+      } else {
+        console.error('🔐 [SECURITY] Progress file decryption failed:', deserializeError.message);
       }
-    } else {
-      // For backwards compatibility or first run with new security
-      console.warn('⚠️ [SECURITY] Progress file missing integrity hash. Proceeding but marking for update.');
+      // Delete corrupted/tampered file as safety measure
+      await fsPromises.unlink(progressPath);
+      return null;
     }
     
     // Store in memory for potential resume

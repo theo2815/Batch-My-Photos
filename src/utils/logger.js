@@ -5,21 +5,23 @@
  * - In Development: Logs to console as normal
  * - In Production: Suppresses logs to keep stdout clean and improve performance,
  *   except for Errors and Warnings which are still important.
+ * - VERBOSE_LOGGING flag: When enabled, allows info/debug logs in production
+ *   for diagnosing user-reported issues without running from source.
  */
 
-const { app } = require('electron');
+const config = require('../main/config');
 
-const isDevelopment = !app.isPackaged;
+const shouldLog = config.isDevelopment || config.features.VERBOSE_LOGGING;
 
 const logger = {
   info: (...args) => {
-    if (isDevelopment) {
+    if (shouldLog) {
       console.log(...args);
     }
   },
   
   log: (...args) => {
-    if (isDevelopment) {
+    if (shouldLog) {
       console.log(...args);
     }
   },
@@ -35,18 +37,18 @@ const logger = {
   },
   
   debug: (...args) => {
-    if (isDevelopment) {
+    if (shouldLog) {
       console.debug(...args);
     }
   },
   
   // Special method for performance timing that works in both but is cleaner in prod
   time: (label) => {
-    if (isDevelopment) console.time(label);
+    if (shouldLog) console.time(label);
   },
   
   timeEnd: (label) => {
-    if (isDevelopment) console.timeEnd(label);
+    if (shouldLog) console.timeEnd(label);
   }
 };
 

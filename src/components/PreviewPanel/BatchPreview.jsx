@@ -5,39 +5,13 @@
  * Includes "Load More" functionality for viewing additional files and batches
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle } from 'lucide-react';
+import { generateBatchFolderName } from '../../utils/batchNaming';
 import './PreviewPanel.css';
 
 const FILES_PER_LOAD = 10; // Number of files to show per "Load More" click
 const BATCHES_PER_LOAD = 10; // Number of batches to show per "Load More" click
-
-/**
- * Generates a folder name based on the pattern and batch index.
- * Replicates logic from backend for consistent preview.
- */
-function generateBatchFolderName(pattern, batchIndex, totalBatches) {
-  let name = pattern || 'Batch';
-  
-  // Default behavior: if no {count} variable, append _{count}
-  if (!name.toLowerCase().includes('{count}')) {
-    name = `${name}_{count}`;
-  }
-  
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const date = now.toISOString().split('T')[0]; // YYYY-MM-DD
-  
-  const padding = Math.max(3, String(totalBatches).length);
-  const count = String(batchIndex + 1).padStart(padding, '0');
-  
-  return name
-    .replace(/{year}/gi, year)
-    .replace(/{month}/gi, month)
-    .replace(/{date}/gi, date)
-    .replace(/{count}/gi, count);
-}
 
 /**
  * @param {Object} props
@@ -53,10 +27,16 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
   const [visibleFilesCount, setVisibleFilesCount] = useState({}); // { batchNumber: count }
   const [visibleBatchesCount, setVisibleBatchesCount] = useState(10); // Number of batches to show
 
+  // Track which filenames have already been requested to avoid duplicate fetches.
+  // Using a ref instead of depending on `thumbnails` state prevents the
+  // effect → setState → effect re-trigger loop.
+  const requestedFilesRef = useRef(new Set());
+
   // Reset visible counts when batch details change
   useEffect(() => {
     setVisibleFilesCount({});
     setThumbnails({});
+    requestedFilesRef.current = new Set();
     setVisibleBatchesCount(10);
   }, [batchDetails]);
 
@@ -73,9 +53,14 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
     const visibleCount = visibleFilesCount[expandedBatch] || 5;
     const filesToShow = (batch.allFiles || batch.sampleFiles || []).slice(0, visibleCount);
     
-    // Check which files need thumbnails
-    const missingFiles = filesToShow.filter(f => !thumbnails[f]);
+    // Check which files haven't been requested yet (using ref, not state)
+    const missingFiles = filesToShow.filter(f => !requestedFilesRef.current.has(f));
     if (missingFiles.length === 0) return;
+
+    // Mark these files as requested immediately to prevent duplicate fetches
+    for (const file of missingFiles) {
+      requestedFilesRef.current.add(file);
+    }
 
     const fetchThumbnails = async () => {
       setLoadingThumbnails(true);
@@ -84,13 +69,17 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
         setThumbnails(prev => ({ ...prev, ...newThumbnails }));
       } catch (err) {
         console.error('Failed to fetch thumbnails:', err);
+        // Remove from requested set so they can be retried
+        for (const file of missingFiles) {
+          requestedFilesRef.current.delete(file);
+        }
       } finally {
         setLoadingThumbnails(false);
       }
     };
 
     fetchThumbnails();
-  }, [expandedBatch, folderPath, batchDetails, visibleFilesCount, thumbnails]);
+  }, [expandedBatch, folderPath, batchDetails, visibleFilesCount]);
 
   // Handle "Load More Files" click
   const handleLoadMoreFiles = (batchNumber, totalFiles) => {

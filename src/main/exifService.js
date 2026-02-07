@@ -1,31 +1,81 @@
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const exifr = require('exifr');
+const { EXIF_CONCURRENCY } = require('./constants');
 
 /**
  * Service to handle EXIF data extraction efficiently
  */
 
-// Concurrency limit for EXIF operations to prevent high memory/CPU usage
-const CONCURRENCY_LIMIT = 20;
+// ============================================================================
+// IN-MEMORY CACHE
+// ============================================================================
 
 /**
- * Extract date taken from files with concurrency control
- * Fallback to file creation time if EXIF is missing
+ * Cache entry: { cacheKey: string, dateMap: Object }
+ * Only one folder is cached at a time (the current working folder).
+ * Cleared automatically when the folder or file list changes.
+ */
+let exifCache = { cacheKey: null, dateMap: null };
+
+/**
+ * Generate a cache key from folderPath + sorted file list.
+ * Uses a fast hash so comparing 50k filenames is cheap.
+ * 
+ * @param {string} folderPath
+ * @param {string[]} files
+ * @returns {string} Cache key
+ */
+function buildCacheKey(folderPath, files) {
+  const hash = crypto.createHash('md5');
+  hash.update(folderPath);
+  // Sort to ensure order-independent cache hits
+  const sorted = [...files].sort();
+  for (const f of sorted) {
+    hash.update(f);
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Clear the EXIF cache (e.g. when switching folders).
+ */
+function clearCache() {
+  exifCache = { cacheKey: null, dateMap: null };
+}
+
+// ============================================================================
+// MAIN EXTRACTION
+// ============================================================================
+
+/**
+ * Extract date taken from files with concurrency control.
+ * Results are cached in memory — repeat calls with the same folder and
+ * file list return instantly.
+ * 
+ * Fallback to file creation time if EXIF is missing.
  * 
  * @param {string[]} files - Array of filenames
  * @param {string} folderPath - Base folder path
  * @returns {Promise<Object>} Map of filename -> timestamp (ms)
  */
 async function extractExifDates(files, folderPath) {
+  // Check cache first
+  const cacheKey = buildCacheKey(folderPath, files);
+  if (exifCache.cacheKey === cacheKey && exifCache.dateMap) {
+    console.log(`📸 [EXIF] Cache hit — returning ${files.length} cached dates`);
+    return exifCache.dateMap;
+  }
+
   const dateMap = {};
   const totalFiles = files.length;
   
   console.log(`📸 [EXIF] Extracting dates for ${totalFiles} files...`);
   
   // Process files in chunks to limit concurrency
-  for (let i = 0; i < totalFiles; i += CONCURRENCY_LIMIT) {
-    const chunk = files.slice(i, i + CONCURRENCY_LIMIT);
+  for (let i = 0; i < totalFiles; i += EXIF_CONCURRENCY) {
+    const chunk = files.slice(i, i + EXIF_CONCURRENCY);
     
     await Promise.all(chunk.map(async (fileName) => {
       const filePath = path.join(folderPath, fileName);
@@ -67,14 +117,16 @@ async function extractExifDates(files, folderPath) {
         dateMap[fileName] = 0;
       }
     }));
-    
-    // Optional: could emit progress here if we passed an event emitter
   }
   
-  console.log(`📸 [EXIF] Date extraction complete.`);
+  // Store in cache
+  exifCache = { cacheKey, dateMap };
+  
+  console.log(`📸 [EXIF] Date extraction complete. Results cached.`);
   return dateMap;
 }
 
 module.exports = {
-  extractExifDates
+  extractExifDates,
+  clearCache
 };

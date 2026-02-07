@@ -13,6 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const { FILE_MOVE_CHUNK_SIZE } = require('./src/main/constants');
 
 // In-memory rollback manifest (session-based, lost on app restart)
 let rollbackManifest = null;
@@ -124,16 +125,14 @@ async function executeRollback(appState, progressCallback) {
   }
   
   // Process files in chunks for responsiveness
-  const CHUNK_SIZE = 100;
-  
-  for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+  for (let i = 0; i < operations.length; i += FILE_MOVE_CHUNK_SIZE) {
     // Check for cancellation
     if (appState?.batchCancelled) {
       console.log('⚠️ [ROLLBACK] Operation cancelled');
       break;
     }
     
-    const chunk = operations.slice(i, i + CHUNK_SIZE);
+    const chunk = operations.slice(i, i + FILE_MOVE_CHUNK_SIZE);
     
     for (const op of chunk) {
       try {
@@ -161,7 +160,7 @@ async function executeRollback(appState, progressCallback) {
     // Send progress update
     if (progressCallback) {
       progressCallback({
-        current: Math.min(i + CHUNK_SIZE, operations.length),
+        current: Math.min(i + FILE_MOVE_CHUNK_SIZE, operations.length),
         total: operations.length,
         restoredFiles
       });

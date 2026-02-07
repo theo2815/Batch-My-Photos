@@ -9,6 +9,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const config = require('./config');
 
 /**
  * Registry of user-selected folders that are allowed to be accessed.
@@ -28,39 +29,6 @@ const allowedPaths = new Set();
  * Cleared when new paths are registered.
  */
 const realPathCache = new Map();
-
-/**
- * Validates that a path is within a user-selected allowed directory.
- * SYNCHRONOUS VERSION - for backwards compatibility only.
- * 
- * WARNING: This version does NOT protect against symlink attacks.
- * Use isPathAllowedAsync() for full protection.
- * 
- * @param {string} targetPath - The path to validate
- * @returns {boolean} True if the path is allowed
- * @deprecated Use isPathAllowedAsync() for symlink protection
- */
-function isPathAllowed(targetPath) {
-  if (!targetPath || typeof targetPath !== 'string') {
-    return false;
-  }
-  
-  // Normalize the path to resolve any ../ or ./ sequences
-  const normalizedTarget = path.resolve(targetPath);
-  
-  // Check if path is within any allowed directory
-  for (const allowedPath of allowedPaths) {
-    const normalizedAllowed = path.resolve(allowedPath);
-    
-    // Check if target is the allowed path itself or a subdirectory
-    if (normalizedTarget === normalizedAllowed || 
-        normalizedTarget.startsWith(normalizedAllowed + path.sep)) {
-      return true;
-    }
-  }
-  
-  return false;
-}
 
 /**
  * Validates that a path is within a user-selected allowed directory.
@@ -170,28 +138,28 @@ function sanitizeOutputPrefix(prefix) {
 
 /**
  * Validates and bounds maxFilesPerBatch to prevent DoS.
+ * Uses centralized limits from config.
  * 
  * @param {any} value - User-provided value
- * @returns {number} Valid value between 1 and 10000
+ * @returns {number} Valid value between 1 and MAX_FILES_PER_BATCH_CEILING
  */
 function validateMaxFilesPerBatch(value) {
   const num = parseInt(value, 10);
   
   if (isNaN(num) || num < 1) {
     console.warn('🔒 [SECURITY] Invalid maxFilesPerBatch, using default:', value);
-    return 500; // default
+    return config.limits.DEFAULT_FILES_PER_BATCH;
   }
   
-  if (num > 10000) {
-    console.warn('🔒 [SECURITY] maxFilesPerBatch too high, clamping to 10000:', value);
-    return 10000;
+  if (num > config.limits.MAX_FILES_PER_BATCH_CEILING) {
+    console.warn('🔒 [SECURITY] maxFilesPerBatch too high, clamping to', config.limits.MAX_FILES_PER_BATCH_CEILING, ':', value);
+    return config.limits.MAX_FILES_PER_BATCH_CEILING;
   }
   
   return num;
 }
 
 module.exports = {
-  isPathAllowed,
   isPathAllowedAsync,
   registerAllowedPath,
   sanitizeOutputPrefix,

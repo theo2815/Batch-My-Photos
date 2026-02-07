@@ -12,51 +12,25 @@
 
 const { ipcMain, dialog, shell, nativeImage } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const fsPromises = require('fs').promises;
 
 // Import logic modules
 const progressManager = require('../../progressManager');
 const rollbackManager = require('../../rollbackManager');
 const logger = require('../utils/logger');
+const config = require('./config');
+const { sanitizeError } = require('../utils/errorSanitizer');
 const { groupFilesByBaseName, calculateBatches, yieldToMain } = require('./batchEngine');
 const exifService = require('./exifService');
-const { isSameDrive, syncMove, calculateDirSize } = require('./fileUtils');
-const { isPathAllowed, isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
-
-/**
- * Generates a folder name based on the pattern and batch index.
- * Supports variables: {count}, {date}, {year}, {month}
- * 
- * @param {string} pattern - The user-provided naming pattern
- * @param {number} batchIndex - 0-based index of the batch
- * @param {number} totalBatches - Total number of batches (for padding)
- * @returns {string} The formatted folder name
- */
-function generateBatchFolderName(pattern, batchIndex, totalBatches) {
-  let name = pattern || 'Batch';
-  
-  // Default behavior: if no {count} variable, append _{count} to match legacy behavior
-  if (!name.includes('{count}')) {
-    name = `${name}_{count}`;
-  }
-  
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const date = now.toISOString().split('T')[0]; // YYYY-MM-DD
-  
-  // Pad count based on total batches magnitude (min 3 digits)
-  // e.g. 10 batches -> 01, 100 batches -> 001
-  const padding = Math.max(3, String(totalBatches).length);
-  const count = String(batchIndex + 1).padStart(padding, '0');
-  
-  return name
-    .replace(/{year}/gi, year)
-    .replace(/{month}/gi, month)
-    .replace(/{date}/gi, date)
-    .replace(/{count}/gi, count);
-}
+const { executeFileOperations } = require('./batchExecutor');
+const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
+const { generateBatchFolderName } = require('../utils/batchNaming');
+const {
+  STAT_CONCURRENCY,
+  FOLDER_CONCURRENCY,
+  THUMBNAIL_SIZE,
+  THUMBNAIL_CONCURRENCY
+} = require('./constants');
 
 /**
  * Main export: Register all IPC handlers
@@ -139,8 +113,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
       
       return { success: true, path: normalizedPath };
     } catch (error) {
-      console.error('Failed to register dropped folder:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'register-dropped-folder') };
     }
   });
 }
@@ -195,10 +168,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         // The renderer only needs aggregate stats; preview-batches will recalculate groups when needed
       };
     } catch (error) {
-      console.error("Scan Error:", error);
       return {
         success: false,
-        error: error.message,
+        error: sanitizeError(error, 'scan-folder'),
       };
     }
   });
@@ -238,7 +210,6 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         console.log('📊 [SORT] Collecting file stats for date sorting...');
         fileStats = {};
         // Process in parallel with concurrency limit
-        const STAT_CONCURRENCY = 50;
         for (let i = 0; i < files.length; i += STAT_CONCURRENCY) {
           const chunk = files.slice(i, i + STAT_CONCURRENCY);
           await Promise.all(chunk.map(async (file) => {
@@ -264,7 +235,6 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // Create all batch folders first (Parallel Optimized)
       // Process in chunks to prevent file handle exhaustion
       console.time('FOLDER_CREATION');
-      const FOLDER_CONCURRENCY = 20;
       for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
         const chunkPromises = [];
         for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
@@ -324,227 +294,19 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         batchInfo
       });
       
-      // Track errors for both move and copy modes
-      const errors = [];
-      
-      if (mode === 'move') {
-        // Check if this is a cross-drive move (requires copy+delete instead of rename)
-        const isCrossDrive = operations.length > 0 && 
-          !isSameDrive(operations[0].sourcePath, operations[0].destPath);
-        
-        if (isCrossDrive) {
-          // CROSS-DRIVE MOVE: Use async copy+delete to avoid blocking main process
-          logger.log('📀 [MOVE] Cross-drive move detected - using async copy+delete');
-          
-          // ATOMIC INDEX MANAGEMENT: Prevents race condition where multiple workers
-          // could read the same opCursor value before any increments it.
-          const cursor = { index: 0 };
-          const getNextIndex = () => cursor.index++;
-          
-          // Match UV_THREADPOOL_SIZE for optimal I/O parallelism
-          const MAX_CONCURRENCY = 64;
-          const moveErrors = [];
-          
-          const worker = async () => {
-            while (!appState.batchCancelled) {
-              const opIndex = getNextIndex();
-              if (opIndex >= operations.length) break;
-              
-              const op = operations[opIndex];
-              
-              try {
-                // Copy file first
-                await fsPromises.copyFile(op.sourcePath, op.destPath);
-                // SECURITY FIX: Verify copy succeeded before deleting source
-                const [srcStat, destStat] = await Promise.all([
-                  fsPromises.stat(op.sourcePath),
-                  fsPromises.stat(op.destPath)
-                ]);
-                if (srcStat.size !== destStat.size) {
-                  throw new Error(`Copy verification failed - size mismatch`);
-                }
-                // Then delete source (safe now that copy is verified)
-                await fsPromises.unlink(op.sourcePath);
-                // Track in memory (fast, non-blocking)
-                progressManager.addProcessedFiles([op.fileName]);
-              } catch (err) {
-                moveErrors.push({ file: op.fileName, error: err.message });
-              }
-              
-              processedFiles++;
-            }
-          };
-          
-          // Start workers
-          const workers = [];
-          const threadCount = Math.min(MAX_CONCURRENCY, operations.length);
-          for (let i = 0; i < threadCount; i++) {
-            workers.push(worker());
-          }
-          
-          // Centralized progress saves and UI updates
-          const progressInterval = setInterval(async () => {
-            const currentBatch = Math.floor((processedFiles / totalFiles) * batches.length);
-            event.sender.send('batch-progress', {
-              current: currentBatch,
-              total: batches.length,
-              processedFiles,
-              totalFiles
-            });
-            // Save to disk every 2 seconds (atomic write)
-            await progressManager.saveProgressToDisk();
-          }, 2000);
-          
-          await Promise.all(workers);
-          
-          clearInterval(progressInterval);
-          
-          // Final save
-          await progressManager.saveProgressToDisk();
-          
-          event.sender.send('batch-progress', {
-            current: batches.length,
-            total: batches.length,
-            processedFiles: totalFiles,
-            totalFiles
-          });
-          
-          errors.push(...moveErrors);
-          
-        } else {
-          // SAME-DRIVE MOVE: Use fast sync rename (O(1) operation)
-          logger.log('⚡ [MOVE] Same-drive move - using fast sync rename');
-          const CHUNK_SIZE = 100; // Process 100 files, then update UI
-          let lastSaveTime = Date.now();
-          
-          for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
-            // Check for cancellation between chunks
-            if (appState.batchCancelled) {
-              console.log('⚠️ [CANCEL] Batch cancelled during move operation');
-              break;
-            }
-            
-            // Process chunk synchronously (fast for same-drive)
-            const chunk = operations.slice(i, i + CHUNK_SIZE);
-            const chunkFileNames = [];
-            for (const op of chunk) {
-              try {
-                fs.renameSync(op.sourcePath, op.destPath);
-                chunkFileNames.push(op.fileName);
-              } catch (err) {
-                errors.push({ file: op.fileName, error: err.message });
-              }
-            }
-            
-            // Track processed files in memory
-            progressManager.addProcessedFiles(chunkFileNames);
-            
-            // Update processed count
-            processedFiles = Math.min(i + CHUNK_SIZE, operations.length);
-            
-            // Send progress update
-            const currentBatch = Math.floor((processedFiles / totalFiles) * batches.length);
-            event.sender.send('batch-progress', {
-              current: currentBatch,
-              total: batches.length,
-              processedFiles,
-              totalFiles
-            });
-            
-            // Save to disk every 2 seconds
-            const now = Date.now();
-            if (now - lastSaveTime >= 2000) {
-              lastSaveTime = now;
-              await progressManager.saveProgressToDisk();
-            }
-            
-            // Yield to event loop to let UI update (only if more chunks remain)
-            if (i + CHUNK_SIZE < operations.length) {
-              await new Promise(r => setImmediate(r));
-            }
-          }
-          
-          // Final save
-          await progressManager.saveProgressToDisk();
-          
-          // Send final progress
-          event.sender.send('batch-progress', {
-            current: batches.length,
-            total: batches.length,
-            processedFiles: totalFiles,
-            totalFiles
-          });
+      // Delegate file processing to the shared batch executor
+      const { processedFiles: finalProcessed, errors } = await executeFileOperations(
+        operations, mode, {
+          totalFiles,
+          batchCount: batches.length,
+          initialProcessed: 0,
+          isCancelled: () => appState.batchCancelled,
+          onProgress: (progress) => event.sender.send('batch-progress', progress),
+          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
-        
-      } else {
-        // ASYNC COPY - Uses worker pool for progress updates
-        console.log('📋 [COPY] Using async copy with', 64, 'concurrent workers');
-        
-        // ATOMIC INDEX MANAGEMENT: Prevents race condition where multiple workers
-        // could read the same opCursor value before any increments it.
-        const cursor = { index: 0 };
-        const getNextIndex = () => cursor.index++;
-        
-        // Match UV_THREADPOOL_SIZE (set at startup) for optimal I/O parallelism
-        const MAX_CONCURRENCY = 64;
-        const copyErrors = [];  // Local error collection
-        
-        const worker = async () => {
-          while (!appState.batchCancelled) {
-            const opIndex = getNextIndex();
-            if (opIndex >= operations.length) break;
-            
-            const op = operations[opIndex];
-            
-            try {
-              await fsPromises.copyFile(op.sourcePath, op.destPath);
-              // Track in memory (fast, non-blocking)
-              progressManager.addProcessedFiles([op.fileName]);
-            } catch (err) {
-              copyErrors.push({ file: op.fileName, error: err.message });
-            }
-            
-            processedFiles++;
-          }
-        };
-        
-        // Start workers
-        const workers = [];
-        const threadCount = Math.min(MAX_CONCURRENCY, operations.length);
-        for (let i = 0; i < threadCount; i++) {
-          workers.push(worker());
-        }
-        
-        // Centralized progress saves and UI updates (single interval, no race conditions)
-        const progressInterval = setInterval(async () => {
-          const currentBatch = Math.floor((processedFiles / totalFiles) * batches.length);
-          event.sender.send('batch-progress', {
-            current: currentBatch,
-            total: batches.length,
-            processedFiles,
-            totalFiles
-          });
-          // Save to disk every 2 seconds (atomic write)
-          await progressManager.saveProgressToDisk();
-        }, 2000);
-        
-        await Promise.all(workers);
-        
-        clearInterval(progressInterval);
-        
-        // Final save to disk
-        await progressManager.saveProgressToDisk();
-        
-        event.sender.send('batch-progress', {
-          current: batches.length,
-          total: batches.length,
-          processedFiles: totalFiles,
-          totalFiles
-        });
-        
-        // Use copyErrors for result
-        errors.push(...copyErrors);
-      }
+      );
+      processedFiles = finalProcessed;
       
       console.timeEnd('FILE_MOVING');
       console.timeEnd('TOTAL_BATCH_EXECUTION');
@@ -574,8 +336,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         errors: errors.length > 0 ? errors.slice(0, 10) : null  // Return first 10 errors
       };
       
-      // Save rollback manifest for successful move operations
-      if (!wasCancelled && mode === 'move') {
+      // Save rollback manifest for successful move operations (if feature is enabled)
+      if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
         rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
@@ -594,7 +356,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
     } catch (error) {
       return {
         success: false,
-        error: error.message,
+        error: sanitizeError(error, 'execute-batch'),
       };
     }
   });
@@ -619,7 +381,6 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       if (sortBy.startsWith('date')) {
         fileStats = {};
         // Process in parallel with concurrency limit
-        const STAT_CONCURRENCY = 50;
         for (let i = 0; i < files.length; i += STAT_CONCURRENCY) {
           const chunk = files.slice(i, i + STAT_CONCURRENCY);
           await Promise.all(chunk.map(async (file) => {
@@ -663,7 +424,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
     } catch (error) {
       return {
         success: false,
-        error: error.message,
+        error: sanitizeError(error, 'preview-batches'),
       };
     }
   });
@@ -686,7 +447,7 @@ function registerFileSystemHandlers(ipcMain, getMainWindow) {
       await shell.openPath(folderPath);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'open-folder') };
     }
   });
 }
@@ -746,20 +507,46 @@ function registerPreferenceHandlers(ipcMain, store) {
   ipcMain.handle('get-presets', async () => store.get('presets', []));
 
   ipcMain.handle('save-preset', async (event, { name, settings }) => {
-    if (!name || !settings) return false;
+    // SECURITY: Validate inputs exist and are correct types
+    if (!name || typeof name !== 'string') return false;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
+    
+    // SECURITY: Enforce max length for preset name (prevent storage bloat)
+    const safeName = name.trim().substring(0, config.limits.MAX_PRESET_NAME_LENGTH);
+    if (safeName.length === 0) return false;
+    
+    // SECURITY: Only allow known settings keys to prevent arbitrary data injection
+    const safeSettings = {};
+    for (const key of config.limits.ALLOWED_SETTINGS_KEYS) {
+      if (settings[key] !== undefined) {
+        // Only allow string and null values (all settings are strings or null)
+        const val = settings[key];
+        if (val === null || typeof val === 'string') {
+          safeSettings[key] = typeof val === 'string' ? val.substring(0, config.limits.MAX_SETTING_VALUE_LENGTH) : val;
+        }
+      }
+    }
     
     // Get existing presets
     let presets = store.get('presets', []);
     
     // Remove existing preset with same name if exists (overwrite)
-    presets = presets.filter(p => p.name !== name);
+    presets = presets.filter(p => p.name !== safeName);
+    
+    // SECURITY: Cap total number of presets to prevent unbounded storage growth
+    if (presets.length >= config.limits.MAX_PRESETS) {
+      console.warn('🔒 [SECURITY] Max presets reached, removing oldest');
+      // Sort by updatedAt ascending and remove the oldest
+      presets.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+      presets = presets.slice(presets.length - config.limits.MAX_PRESETS + 1);
+    }
     
     // Add new preset
-    presets.push({ name, settings, updatedAt: Date.now() });
+    presets.push({ name: safeName, settings: safeSettings, updatedAt: Date.now() });
     
     // Save back to store
     store.set('presets', presets);
-    console.log('💾 [PRESETS] Saved preset:', name);
+    console.log('💾 [PRESETS] Saved preset:', safeName);
     return true;
   });
 
@@ -925,156 +712,21 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       }
       console.timeEnd('FOLDER_CREATION');
       
-      let processedFiles = processedFileNames.length;
-      const errors = [];
-      
       console.time('FILE_MOVING');
       
-      if (mode === 'move') {
-        const isCrossDrive = remainingOperations.length > 0 && 
-          !isSameDrive(remainingOperations[0].sourcePath, remainingOperations[0].destPath);
-        
-        if (isCrossDrive) {
-          // CROSS-DRIVE MOVE: Use async copy+delete
-          logger.log('📀 [RESUME] Cross-drive move detected');
-          
-          const cursor = { index: 0 };
-          const getNextIndex = () => cursor.index++;
-          const MAX_CONCURRENCY = 64;
-          const moveErrors = [];
-          
-          const worker = async () => {
-            while (!appState.batchCancelled) {
-              const opIndex = getNextIndex();
-              if (opIndex >= remainingOperations.length) break;
-              const op = remainingOperations[opIndex];
-              try {
-                await fsPromises.copyFile(op.sourcePath, op.destPath);
-                // SECURITY FIX: Verify copy succeeded before deleting source
-                const [srcStat, destStat] = await Promise.all([
-                  fsPromises.stat(op.sourcePath),
-                  fsPromises.stat(op.destPath)
-                ]);
-                if (srcStat.size !== destStat.size) {
-                  throw new Error(`Copy verification failed - size mismatch`);
-                }
-                await fsPromises.unlink(op.sourcePath);
-                progressManager.addProcessedFiles([op.fileName]);
-              } catch (err) {
-                moveErrors.push({ file: op.fileName, error: err.message });
-              }
-              processedFiles++;
-            }
-          };
-          
-          const workers = [];
-          const threadCount = Math.min(MAX_CONCURRENCY, remainingOperations.length);
-          for (let i = 0; i < threadCount; i++) {
-            workers.push(worker());
-          }
-          
-          const progressInterval = setInterval(async () => {
-            const currentBatch = Math.floor((processedFiles / totalFiles) * (batchInfo?.length || 1));
-            event.sender.send('batch-progress', {
-              current: currentBatch,
-              total: batchInfo?.length || 1,
-              processedFiles,
-              totalFiles
-            });
-            await progressManager.saveProgressToDisk();
-          }, 2000);
-          
-          await Promise.all(workers);
-          clearInterval(progressInterval);
-          await progressManager.saveProgressToDisk();
-          errors.push(...moveErrors);
-          
-        } else {
-          // SAME-DRIVE MOVE: Fast sync rename
-          logger.log('⚡ [RESUME] Same-drive move detected');
-          const CHUNK_SIZE = 100;
-          let lastSaveTime = Date.now();
-          
-          for (let i = 0; i < remainingOperations.length; i += CHUNK_SIZE) {
-            if (appState.batchCancelled) break;
-            
-            const chunk = remainingOperations.slice(i, i + CHUNK_SIZE);
-            const chunkFileNames = [];
-            for (const op of chunk) {
-              try {
-                fs.renameSync(op.sourcePath, op.destPath);
-                chunkFileNames.push(op.fileName);
-              } catch (err) {
-                errors.push({ file: op.fileName, error: err.message });
-              }
-            }
-            progressManager.addProcessedFiles(chunkFileNames);
-            processedFiles = Math.min(processedFileNames.length + i + CHUNK_SIZE, totalFiles);
-            
-            event.sender.send('batch-progress', {
-              current: Math.floor((processedFiles / totalFiles) * (batchInfo?.length || 1)),
-              total: batchInfo?.length || 1,
-              processedFiles,
-              totalFiles
-            });
-            
-            const now = Date.now();
-            if (now - lastSaveTime >= 2000) {
-              lastSaveTime = now;
-              await progressManager.saveProgressToDisk();
-            }
-            
-            if (i + CHUNK_SIZE < remainingOperations.length) {
-              await new Promise(r => setImmediate(r));
-            }
-          }
-          await progressManager.saveProgressToDisk();
+      // Delegate file processing to the shared batch executor
+      const resumeBatchCount = batchInfo?.length || 1;
+      const { processedFiles: finalProcessed, errors } = await executeFileOperations(
+        remainingOperations, mode, {
+          totalFiles,
+          batchCount: resumeBatchCount,
+          initialProcessed: processedFileNames.length,
+          isCancelled: () => appState.batchCancelled,
+          onProgress: (progress) => event.sender.send('batch-progress', progress),
+          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
-      } else {
-        // COPY MODE
-        logger.log('📋 [RESUME] Copy mode');
-        const cursor = { index: 0 };
-        const getNextIndex = () => cursor.index++;
-        const MAX_CONCURRENCY = 64;
-        const copyErrors = [];
-        
-        const worker = async () => {
-          while (!appState.batchCancelled) {
-            const opIndex = getNextIndex();
-            if (opIndex >= remainingOperations.length) break;
-            const op = remainingOperations[opIndex];
-            try {
-              await fsPromises.copyFile(op.sourcePath, op.destPath);
-              progressManager.addProcessedFiles([op.fileName]);
-            } catch (err) {
-              copyErrors.push({ file: op.fileName, error: err.message });
-            }
-            processedFiles++;
-          }
-        };
-        
-        const workers = [];
-        const threadCount = Math.min(MAX_CONCURRENCY, remainingOperations.length);
-        for (let i = 0; i < threadCount; i++) {
-          workers.push(worker());
-        }
-        
-        const progressInterval = setInterval(async () => {
-          const currentBatch = Math.floor((processedFiles / totalFiles) * (batchInfo?.length || 1));
-          event.sender.send('batch-progress', {
-            current: currentBatch,
-            total: batchInfo?.length || 1,
-            processedFiles,
-            totalFiles
-          });
-          await progressManager.saveProgressToDisk();
-        }, 2000);
-        
-        await Promise.all(workers);
-        clearInterval(progressInterval);
-        await progressManager.saveProgressToDisk();
-        errors.push(...copyErrors);
-      }
+      );
       
       console.timeEnd('FILE_MOVING');
       console.timeEnd('RESUME_BATCH_EXECUTION');
@@ -1088,7 +740,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         success: !wasCancelled,
         cancelled: wasCancelled,
         batchesCreated: batchInfo?.length || 0,
-        filesProcessed: processedFiles,
+        filesProcessed: finalProcessed,
         totalFiles,
         results: batchInfo || [],
         outputDir: outputDir || folderPath,
@@ -1098,7 +750,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       };
       
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'resume-batch') };
     }
   });
 }
@@ -1112,8 +764,12 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
   /**
    * Handler: Check if rollback is available
    * Returns summary info about the last batch operation if rollback is possible
+   * Respects the ROLLBACK_ENABLED feature flag.
    */
   ipcMain.handle('check-rollback-available', async () => {
+    if (!config.features.ROLLBACK_ENABLED) {
+      return { available: false };
+    }
     return rollbackManager.checkRollbackAvailable();
   });
   
@@ -1138,7 +794,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
       
     } catch (error) {
       console.timeEnd('ROLLBACK_EXECUTION');
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'rollback-batch') };
     }
   });
   
@@ -1154,25 +810,43 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
   /**
    * Handler: Get image thumbnails
    * Generates small thumbnails for preview using sharp (handles EXIF orientation)
+   * 
+   * SECURITY: Validates folderPath against allowed paths and sanitizes fileNames
+   * to prevent path traversal attacks (e.g. "../../etc/passwd").
    */
   ipcMain.handle('get-thumbnails', async (event, { folderPath, fileNames }) => {
+    // SECURITY: Validate folder path is in allowed list
+    if (!(await isPathAllowedAsync(folderPath))) {
+      console.warn('🔒 [SECURITY] Blocked get-thumbnails on unregistered path:', folderPath);
+      return {};
+    }
+    
+    // SECURITY: Validate fileNames is an array
+    if (!Array.isArray(fileNames)) {
+      console.warn('🔒 [SECURITY] get-thumbnails received non-array fileNames');
+      return {};
+    }
+    
     const sharp = require('sharp');
-    const THUMBNAIL_SIZE = 40;
-    const CONCURRENCY = 10;
     const thumbnails = {};
     
     // Supported image extensions
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'];
     
-    // Filter to only image files
+    // Filter to only image files AND sanitize filenames:
+    // - Reject entries containing path separators (/ or \) to prevent traversal
+    // - Reject entries containing ".." sequences
+    // - Only allow valid image extensions
     const imageFiles = fileNames.filter(f => {
+      if (typeof f !== 'string') return false;
+      if (f.includes('/') || f.includes('\\') || f.includes('..')) return false;
       const ext = path.extname(f).toLowerCase();
       return imageExtensions.includes(ext);
     });
     
     // Process in chunks for concurrency control
-    for (let i = 0; i < imageFiles.length; i += CONCURRENCY) {
-      const chunk = imageFiles.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < imageFiles.length; i += THUMBNAIL_CONCURRENCY) {
+      const chunk = imageFiles.slice(i, i + THUMBNAIL_CONCURRENCY);
       
       await Promise.all(chunk.map(async (fileName) => {
         try {

@@ -241,5 +241,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 });
 
 // Log when preload script is loaded (helpful for debugging)
-console.log('PhotoBatcher preload script loaded');
+console.log('BatchMyPhotos preload script loaded');
 

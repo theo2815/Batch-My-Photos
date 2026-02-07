@@ -3,11 +3,12 @@
  * Handles the creation and management of the main application window
  */
 
-const { BrowserWindow, app } = require('electron');
+const { BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const logger = require('../utils/logger');
+const config = require('./config');
 
 // Keep a global reference of the window to prevent garbage collection
 let mainWindow = null;
@@ -38,6 +39,7 @@ function createWindow() {
       preload: path.join(PROJECT_ROOT, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true, // SECURITY: Sandboxes the renderer — safe because preload only uses contextBridge
       v8Code: false, // Disable V8 code cache to avoid Windows permission errors
     },
     backgroundColor: '#1a1a2e',
@@ -48,10 +50,10 @@ function createWindow() {
   const hasDistBuild = fs.existsSync(distPath);
   
   // SECURITY FIX: Robust detection for all scenarios:
-  // 1. Packaged app (app.isPackaged = true) → Always use dist build
+  // 1. Packaged app (config.isProduction = true) → Always use dist build
   // 2. npm run electron with dist build → Use dist build  
   // 3. npm run start (Vite dev server) → Use localhost:5173
-  const isPackaged = app.isPackaged;
+  const isPackaged = config.isProduction;
   const shouldUseDistBuild = isPackaged || hasDistBuild;
   
   if (shouldUseDistBuild) {

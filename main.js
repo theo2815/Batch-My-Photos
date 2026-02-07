@@ -15,8 +15,8 @@
  */
 
 // OPTIMIZATION: Thread Pool for Windows File Operations
-// Balanced value: high enough for concurrency, low enough for memory efficiency
-process.env.UV_THREADPOOL_SIZE = 64;
+const { UV_THREADPOOL_SIZE } = require('./src/main/constants');
+process.env.UV_THREADPOOL_SIZE = UV_THREADPOOL_SIZE;
 console.log('🚀 [STARTUP] UV_THREADPOOL_SIZE set to:', process.env.UV_THREADPOOL_SIZE);
 
 const { app, ipcMain, protocol } = require('electron');
@@ -36,6 +36,7 @@ const Store = require('electron-store');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 const { isPathAllowedAsync } = require('./src/main/securityManager');
+const logger = require('./src/utils/logger');
 
 // ============================================================================
 // CACHE CONFIGURATION (Windows Permission Fix)
@@ -46,7 +47,7 @@ if (!fs.existsSync(cachePath)) {
   fs.mkdirSync(cachePath, { recursive: true });
 }
 app.setPath('cache', cachePath);
-console.log('💾 [CACHE] Set cache path to:', cachePath);
+logger.log('💾 [CACHE] Set cache path to:', cachePath);
 
 // ============================================================================
 // PERSISTENT STATE MANAGEMENT
@@ -77,12 +78,6 @@ const appState = {
 
 app.whenReady().then(() => {
   // Handle media:// protocol to serve local files securely
-  // SECURITY FIX: Robust detection for all scenarios:
-  // 1. Packaged app (app.isPackaged = true) → Always use dist build
-  // 2. Development mode (npm run start) → Use localhost:5173
-  const isPackaged = app.isPackaged;
-  // Only use dist build if packaged. In dev, we always want the dev server.
-  const shouldUseDistBuild = isPackaged;
   protocol.handle('media', async (request) => {
     // 1. Strip protocol (media:// or media:///)
     let filePath = request.url.replace(/^media:\/\/+/, '');
@@ -98,19 +93,15 @@ app.whenReady().then(() => {
     // 4. Normalize path to use correct OS separators (fixes mixed / and \)
     decodedPath = path.normalize(decodedPath);
     
-    console.log('🔍 [MEDIA_DEBUG] Request URL:', request.url);
-    console.log('🔍 [MEDIA_DEBUG] Raw Path:', filePath);
-    console.log('🔍 [MEDIA_DEBUG] Decoded Path:', decodedPath);
+    logger.debug('🔍 [MEDIA] Serving:', decodedPath);
 
     // 5. Convert to proper file URL matches standard URL encoding (spaces -> %20, etc.)
     // This ensures net.fetch can find the file even if path has special characters
     const fileUrl = pathToFileURL(decodedPath).href;
 
-    console.log('🔍 [MEDIA_DEBUG] Final File URL:', fileUrl);
-
     // SECURITY FIX: Validate path is within allowed directories
     if (!(await isPathAllowedAsync(decodedPath))) {
-      console.warn('🔒 [SECURITY] Media request blocked for unregistered path:', decodedPath);
+      logger.warn('🔒 [SECURITY] Media request blocked for unregistered path:', decodedPath);
       return new Response('Access Denied', { status: 403 });
     }
 
@@ -132,12 +123,11 @@ app.whenReady().then(() => {
       
       return new Response(webStream, {
         headers: { 
-          'Content-Type': mimeType,
-          'Access-Control-Allow-Origin': '*' 
+          'Content-Type': mimeType
         }
       });
     } catch (e) {
-      console.error('❌ [MEDIA_DEBUG] Error serving file:', decodedPath, e);
+      logger.error('❌ [MEDIA] Error serving file:', decodedPath, e.message);
       return new Response('Not Found: ' + e.message, { status: 404 });
     }
   });
@@ -164,4 +154,4 @@ app.on('activate', () => {
 // Register all IPC handlers from the handlers module
 registerIpcHandlers(ipcMain, store, getMainWindow, appState);
 
-console.log('✅ [IPC] All handlers registered successfully');
+logger.log('✅ [IPC] All handlers registered successfully');
