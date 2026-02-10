@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2 } from 'lucide-react';
+import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2, ScanEye, Pencil } from 'lucide-react';
 import CustomSelect from '../common/CustomSelect';
 import Tooltip from '../common/Tooltip';
 import { ValidationModal, DeletePresetModal } from '../Modals';
@@ -19,10 +19,15 @@ function SettingsPanel({
   batchMode,
   sortBy,
   outputDir, 
+  blurDetectionEnabled,
+  blurSensitivity,
+  folderPath,
   // Props from parent
   validationError,
   isRefreshingPreview,
+  isAnalyzingBlur,
   onChange,
+  onOpenBlurModal,
   onSelectOutputFolder,
   selectedPresetName, // Lifted state
   onPresetSelect    // Lifted state setter
@@ -103,7 +108,9 @@ function SettingsPanel({
       outputPrefix,
       batchMode,
       sortBy,
-      outputDir
+      outputDir,
+      blurDetectionEnabled: blurDetectionEnabled ? 'true' : 'false',
+      blurSensitivity,
     };
 
     if (window.electronAPI?.savePreset) {
@@ -124,7 +131,9 @@ function SettingsPanel({
       outputPrefix,
       batchMode,
       sortBy,
-      outputDir
+      outputDir,
+      blurDetectionEnabled: blurDetectionEnabled ? 'true' : 'false',
+      blurSensitivity,
     };
 
     if (window.electronAPI?.savePreset) {
@@ -166,7 +175,9 @@ function SettingsPanel({
         outputPrefix: preset.settings.outputPrefix,
         batchMode: preset.settings.batchMode,
         sortBy: preset.settings.sortBy,
-        outputDir: preset.settings.batchMode === 'move' ? null : (preset.settings.outputDir || null)
+        outputDir: preset.settings.batchMode === 'move' ? null : (preset.settings.outputDir || null),
+        blurDetectionEnabled: preset.settings.blurDetectionEnabled,
+        blurSensitivity: preset.settings.blurSensitivity,
       });
     }
   };
@@ -381,7 +392,45 @@ function SettingsPanel({
         />
       </div>
 
-      
+      {/* Blur Detection */}
+      <div className="setting-row blur-detection-row">
+        <label>
+          <ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:
+          {isAnalyzingBlur && <Loader2 size={14} className="settings-loading-spinner" />}
+        </label>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={blurDetectionEnabled}
+            onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
+            role="switch"
+            aria-checked={blurDetectionEnabled}
+          />
+          <span className="toggle-track">
+            <span className="toggle-label on">On</span>
+            <span className="toggle-label off">Off</span>
+            <span className="toggle-knob" />
+          </span>
+        </label>
+      </div>
+
+      {blurDetectionEnabled && (
+        <div className="setting-row blur-sensitivity-row">
+          <label>Sensitivity:</label>
+          <button
+            className="change-sensitivity-btn"
+            onClick={onOpenBlurModal}
+            disabled={isAnalyzingBlur}
+            title="Change blur detection sensitivity"
+          >
+            <span className="change-sensitivity-label">
+              {blurSensitivity === 'strict' ? 'Strict' : blurSensitivity === 'lenient' ? 'Lenient' : 'Moderate'}
+            </span>
+            <Pencil size={12} />
+          </button>
+        </div>
+      )}
+
       {/* Move vs Copy Mode */}
       <div className="setting-row mode-toggle">
         <label>Batch Mode:</label>

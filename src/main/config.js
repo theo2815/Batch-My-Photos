@@ -113,6 +113,13 @@ const features = {
    * app restarts. Users can undo past operations from the history panel.
    */
   HISTORY_ENABLED: envBool('BATCH_HISTORY_ENABLED', true),
+
+  /**
+   * Enable the blur detection feature.
+   * When enabled, users can toggle blur analysis in the settings panel
+   * to detect and separate blurry photos during batching.
+   */
+  BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', true),
 };
 
 // ============================================================================
@@ -138,7 +145,7 @@ const limits = {
   DEFAULT_FILES_PER_BATCH: 500,
 
   /** Allowed keys in preset settings (whitelist for injection prevention) */
-  ALLOWED_SETTINGS_KEYS: ['maxFilesPerBatch', 'outputPrefix', 'batchMode', 'sortBy', 'outputDir'],
+  ALLOWED_SETTINGS_KEYS: ['maxFilesPerBatch', 'outputPrefix', 'batchMode', 'sortBy', 'outputDir', 'blurDetectionEnabled', 'blurSensitivity'],
 
   /** Maximum number of persisted rollback history entries */
   MAX_HISTORY_ENTRIES: envInt('BATCH_MAX_HISTORY_ENTRIES', 20, 1, 100),

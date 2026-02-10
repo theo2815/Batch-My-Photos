@@ -22,9 +22,10 @@ import { useSettings } from './hooks/useSettings';
 import { useFolderSelection } from './hooks/useFolderSelection';
 import { useBatchExecution } from './hooks/useBatchExecution';
 import { useRollback } from './hooks/useRollback';
+import { useBlurDetection } from './hooks/useBlurDetection';
 
 // Components
-import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal } from './components/Modals';
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal } from './components/Modals';
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
@@ -59,7 +60,22 @@ function App() {
     selectedPresetName, refreshingField, setRefreshingField,
     setSelectedPresetName, resetSettings, handleSettingsChange,
     handleSelectOutputFolder,
+    blurDetectionEnabled, blurSensitivity,
   } = settings;
+
+  const blurDetection = useBlurDetection({
+    folderPath,
+    blurDetectionEnabled,
+    blurSensitivity,
+  });
+  const {
+    blurryGroups, isAnalyzing: isAnalyzingBlur,
+    runBlurAnalysis, resetBlurState, clearAnalysisCache,
+  } = blurDetection;
+
+  // Blur sensitivity modal state
+  const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
+  const [analysisRequestId, setAnalysisRequestId] = useState(0);
 
   const batch = useBatchExecution({ setAppState, setError });
   const {
@@ -105,6 +121,7 @@ function App() {
     setFolderPath(path);
     setError(null);
     resetSettings();
+    resetBlurState();
     setExpandedBatch(null);
 
     try {
@@ -136,7 +153,7 @@ function App() {
       setError(err.message);
       setAppState(STATES.ERROR);
     }
-  }, [resetSettings]);
+  }, [resetSettings, resetBlurState]);
 
   const folder = useFolderSelection({ setAppState, setError, scanFolder });
   const {
@@ -170,8 +187,11 @@ function App() {
     previewCancelledRef.current = false;
     setIsRefreshingPreview(true);
 
+    // Pass blurry groups as excludeGroups if blur detection is enabled
+    const excludeGroups = blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null;
+
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy);
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, excludeGroups);
       if (!previewCancelledRef.current) {
         if (preview.success) {
           setPreviewResults(preview);
@@ -187,7 +207,7 @@ function App() {
         setRefreshingField(null);
       }
     }
-  }, [folderPath, maxFilesPerBatch, sortBy, setRefreshingField]);
+  }, [folderPath, maxFilesPerBatch, sortBy, blurDetectionEnabled, blurryGroups, setRefreshingField]);
 
   useEffect(() => {
     if (appStateRef.current !== STATES.READY) return;
@@ -205,6 +225,68 @@ function App() {
       previewCancelledRef.current = true;
     };
   }, [refreshPreview]);
+
+  // Track when blur toggle just turned on (to show modal instead of auto-analyzing)
+  const prevBlurEnabledRef = useRef(blurDetectionEnabled);
+
+  // Trigger blur analysis when sensitivity or folder changes (but NOT on initial toggle-on)
+  useEffect(() => {
+    const justEnabled = !prevBlurEnabledRef.current && blurDetectionEnabled;
+    prevBlurEnabledRef.current = blurDetectionEnabled;
+
+    if (!blurDetectionEnabled) {
+      // When toggled off, reset blur state so groups return to normal batches
+      resetBlurState();
+      return;
+    }
+    if (!folderPath || appStateRef.current !== STATES.READY) return;
+
+    // Show the sensitivity modal when toggle just turned on (manual or via preset)
+    if (justEnabled) {
+      setShowBlurSensitivityModal(true);
+      return;
+    }
+
+    // Re-analyze on sensitivity change, folder change, or explicit request (analysisRequestId)
+    runBlurAnalysis();
+  }, [blurDetectionEnabled, blurSensitivity, folderPath, analysisRequestId, runBlurAnalysis, resetBlurState]);
+
+  // Called when user clicks "Start Analysis" in the sensitivity modal
+  const handleConfirmBlurAnalysis = useCallback((selectedSensitivity) => {
+    handleSettingsChange('blurSensitivity', selectedSensitivity);
+    setShowBlurSensitivityModal(false);
+    clearAnalysisCache();
+    setAnalysisRequestId(id => id + 1);
+  }, [handleSettingsChange, clearAnalysisCache]);
+
+  // Called when user dismisses the sensitivity modal without starting
+  const handleDismissBlurModal = useCallback(() => {
+    setShowBlurSensitivityModal(false);
+    handleSettingsChange('blurDetectionEnabled', false);
+  }, [handleSettingsChange]);
+
+  // Called from SettingsPanel "Change Sensitivity" button
+  const handleOpenBlurModal = useCallback(() => {
+    setShowBlurSensitivityModal(true);
+  }, []);
+
+  // Refresh preview when blurry groups change (after analysis completes or user un-flags)
+  useEffect(() => {
+    if (appStateRef.current !== STATES.READY) return;
+    if (!blurDetectionEnabled) return;
+
+    // Debounce to avoid rapid re-renders when multiple groups are un-flagged
+    const timer = setTimeout(() => {
+      if (appStateRef.current === STATES.READY) {
+        refreshPreview();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // We intentionally exclude refreshPreview from deps to avoid infinite loops.
+    // This effect should only fire when blurryGroups changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blurryGroups, blurDetectionEnabled]);
 
   // ============================================================================
   // VALIDATION & EXECUTION WRAPPERS
@@ -257,6 +339,7 @@ function App() {
       sortBy,
       selectedPresetName,
       previewBatchCount: previewResults?.batchCount || 0,
+      blurryGroups: blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null,
     });
   };
 
@@ -272,6 +355,7 @@ function App() {
     setError(null);
     setExpandedBatch(null);
     resetSettings();
+    resetBlurState();
     // Reset batch execution state so stale data doesn't bleed into next run
     setExecutionResults(null);
     setProgress({ current: 0, total: 0 });
@@ -336,12 +420,14 @@ function App() {
             previewResults={previewResults}
             isRefreshingPreview={isRefreshingPreview}
             refreshingField={refreshingField}
-            settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir }}
+            settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity }}
             validationError={validationError}
             expandedBatch={expandedBatch}
             selectedPresetName={selectedPresetName}
             onPresetSelect={setSelectedPresetName}
+            blurDetection={blurDetection}
             onSettingsChange={handleSettingsChange}
+            onOpenBlurModal={handleOpenBlurModal}
             onToggleBatch={(batchNumber) =>
               setExpandedBatch(expandedBatch === batchNumber ? null : batchNumber)
             }
@@ -464,6 +550,13 @@ function App() {
         result={safetyCheckResult}
         onGoBack={handleDismissSafetyCheck}
         onProceed={handleOverrideSafetyCheck}
+      />
+
+      <BlurSensitivityModal
+        isOpen={showBlurSensitivityModal}
+        currentSensitivity={blurSensitivity}
+        onStart={handleConfirmBlurAnalysis}
+        onCancel={handleDismissBlurModal}
       />
     </div>
   );

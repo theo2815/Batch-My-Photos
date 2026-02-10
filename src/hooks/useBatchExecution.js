@@ -47,7 +47,7 @@ export function useBatchExecution({ setAppState, setError }) {
    */
   const runBatchExecution = useCallback(async ({
     folderPath, maxFilesPerBatch, outputPrefix, batchMode, outputDir, sortBy,
-    selectedPresetName, previewBatchCount,
+    selectedPresetName, previewBatchCount, blurryGroups = null,
   }) => {
     // Auto-save current preset if one is selected
     if (selectedPresetName && window.electronAPI?.savePreset) {
@@ -76,7 +76,8 @@ export function useBatchExecution({ setAppState, setError }) {
         outputPrefix.trim(),
         batchMode,
         batchMode === 'copy' ? outputDir : null,
-        sortBy
+        sortBy,
+        blurryGroups
       );
 
       if (results.cancelled) {

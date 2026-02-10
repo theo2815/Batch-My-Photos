@@ -12,3 +12,4 @@ export { default as UndoConfirmationModal } from './UndoConfirmationModal';
 export { default as DeletePresetModal } from './DeletePresetModal';
 export { default as HistoryModal } from './HistoryModal';
 export { default as SafetyCheckModal } from './SafetyCheckModal';
+export { default as BlurSensitivityModal } from './BlurSensitivityModal';

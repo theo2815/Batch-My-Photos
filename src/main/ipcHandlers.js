@@ -22,6 +22,7 @@ const config = require('./config');
 const { sanitizeError } = require('../utils/errorSanitizer');
 const { groupFilesByBaseName, calculateBatches, yieldToMain } = require('./batchEngine');
 const exifService = require('./exifService');
+const blurDetectionService = require('./blurDetectionService');
 const { executeFileOperations } = require('./batchExecutor');
 const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
 const { collectFileStats, isSameDrive, getDiskSpace, testWritePermission, formatBytes, calculateTotalSize, SPACE_BUFFER_MULTIPLIER } = require('./fileUtils');
@@ -31,7 +32,10 @@ const {
   STAT_CONCURRENCY,
   FOLDER_CONCURRENCY,
   THUMBNAIL_SIZE,
-  THUMBNAIL_CONCURRENCY
+  THUMBNAIL_CONCURRENCY,
+  PREVIEW_MAX_DIMENSION,
+  PREVIEW_JPEG_QUALITY,
+  PREVIEW_CACHE_SIZE,
 } = require('./constants');
 
 /**
@@ -159,7 +163,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // 3. Group files with yielding for large sets
       const fileGroups = await groupFilesByBaseName(files);
       
-      const totalFiles = files.length;
+      // Count only recognized image/RAW/video files (excludes non-media files like CSV, TXT, etc.)
+      const totalFiles = Object.values(fileGroups).reduce((sum, group) => sum + group.length, 0);
       const totalGroups = Object.keys(fileGroups).length;
       // OPTIMIZATION: Use reduce instead of spread (...) to avoid stack overflow on >65k groups
       const largestGroup = Object.values(fileGroups).reduce((max, group) => Math.max(max, group.length), 0);
@@ -185,7 +190,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Execute the batch splitting operation
    * OPTIMIZED: Uses concurrency pool instead of batch chunks
    */
-  ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc' }) => {
+  ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
     logger.time('TOTAL_BATCH_EXECUTION');
     try {
       // SECURITY: Validate paths are allowed (with symlink protection)
@@ -218,8 +223,22 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         fileStats = await exifService.extractExifDates(files, folderPath);
       }
       
-      // Recalculate batches with user's sort preference
+      // Group files and separate blurry groups if provided
       const fileGroups = await groupFilesByBaseName(files);
+      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups : []);
+      const blurryFiles = [];
+      
+      if (blurryGroupSet.size > 0) {
+        for (const baseName of blurryGroupSet) {
+          if (fileGroups[baseName]) {
+            blurryFiles.push(...fileGroups[baseName]);
+            delete fileGroups[baseName];
+          }
+        }
+        logger.log(`🔍 [BLUR] Separated ${blurryFiles.length} blurry files from ${blurryGroupSet.size} groups`);
+      }
+      
+      // Recalculate batches with user's sort preference (blurry groups excluded)
       const batches = await calculateBatches(fileGroups, safeMaxFiles, sortBy, fileStats);
       
       const baseOutputDir = (mode === 'copy' && outputDir) ? outputDir : folderPath;
@@ -236,6 +255,14 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
         }
         await Promise.all(chunkPromises);
+      }
+      
+      // Create the blurry folder if there are blurry files
+      const blurryFolderName = blurryFiles.length > 0 ? `${safePrefix}_Blurry` : null;
+      if (blurryFolderName) {
+        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
+        await fsPromises.mkdir(blurryFolderPath, { recursive: true });
+        logger.log(`🔍 [BLUR] Created blurry folder: ${blurryFolderName}`);
       }
       logger.timeEnd('FOLDER_CREATION');
 
@@ -262,15 +289,31 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         
         if (batchIndex % 20 === 0) await yieldToMain();
       }
+      
+      // Append blurry file operations (they go to the blurry folder)
+      if (blurryFolderName && blurryFiles.length > 0) {
+        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
+        for (const fileName of blurryFiles) {
+          operations.push({
+            fileName,
+            sourcePath: path.join(folderPath, fileName),
+            destPath: path.join(blurryFolderPath, fileName),
+            batchIndex: batches.length // Last "batch" index
+          });
+        }
+      }
 
       // HIGH-PERFORMANCE FILE PROCESSING
       logger.time('FILE_MOVING');
       
-      // Build batch info for display
+      // Build batch info for display (includes blurry folder)
       const batchInfo = batches.map((b, i) => ({ 
         folder: generateBatchFolderName(safePrefix, i, batches.length),
         fileCount: b.length 
       }));
+      if (blurryFolderName) {
+        batchInfo.push({ folder: blurryFolderName, fileCount: blurryFiles.length });
+      }
       
       // Start progress tracking for crash recovery
       const allFileNames = operations.map(op => op.fileName);
@@ -287,10 +330,11 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       });
       
       // Delegate file processing to the shared batch executor
+      const totalBatchCount = batches.length + (blurryFolderName ? 1 : 0);
       const { processedFiles: finalProcessed, errors } = await executeFileOperations(
         operations, mode, {
           totalFiles,
-          batchCount: batches.length,
+          batchCount: totalBatchCount,
           initialProcessed: 0,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
@@ -311,21 +355,29 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         await progressManager.clearProgress();
       }
       
+      // Build results array (includes blurry folder)
+      const resultsArray = batches.map((b, i) => ({ 
+        folder: generateBatchFolderName(safePrefix, i, batches.length),
+        fileCount: b.length 
+      }));
+      if (blurryFolderName) {
+        resultsArray.push({ folder: blurryFolderName, fileCount: blurryFiles.length });
+      }
+      
       const result = {
         success: !wasCancelled,
         cancelled: wasCancelled,
-        batchesCreated: batches.length,
+        batchesCreated: totalBatchCount,
         filesProcessed: processedFiles,
         totalFiles: totalFiles,
         mode,  // Include mode for rollback availability check
-        results: batches.map((b, i) => ({ 
-          folder: generateBatchFolderName(safePrefix, i, batches.length),
-          fileCount: b.length 
-        })),
+        results: resultsArray,
         outputDir: baseOutputDir,
         hasErrors: errors.length > 0,
         errorCount: errors.length,
-        errors: errors.length > 0 ? errors.slice(0, 10) : null  // Return first 10 errors
+        errors: errors.length > 0 ? errors.slice(0, 10) : null,  // Return first 10 errors
+        blurryFileCount: blurryFiles.length,
+        blurryFolderName: blurryFolderName,
       };
       
       // Save rollback manifest for successful move operations (if feature is enabled)
@@ -362,7 +414,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Calculate batch preview
    * OPTIMIZED: async + yielding
    */
-  ipcMain.handle('preview-batches', async (event, { folderPath, maxFilesPerBatch, sortBy = 'name-asc' }) => {
+  ipcMain.handle('preview-batches', async (event, { folderPath, maxFilesPerBatch, sortBy = 'name-asc', excludeGroups = null }) => {
     try {
       // SECURITY: Validate path is allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -385,6 +437,18 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       }
       
       const fileGroups = await groupFilesByBaseName(files);
+      
+      // Separate blurry groups if excludeGroups is provided
+      const blurryFiles = [];
+      if (Array.isArray(excludeGroups) && excludeGroups.length > 0) {
+        for (const baseName of excludeGroups) {
+          if (fileGroups[baseName]) {
+            blurryFiles.push(...fileGroups[baseName]);
+            delete fileGroups[baseName];
+          }
+        }
+      }
+      
       const batches = await calculateBatches(fileGroups, safeMaxFiles, sortBy, fileStats);
       
       const oversizedGroups = Object.entries(fileGroups)
@@ -406,12 +470,66 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         batchSizes: batches.map(b => b.length),
         batchDetails,
         oversizedGroups,
-        totalFiles: files.length,
+        // Count only recognized image/RAW/video files (excludes non-media files like CSV, TXT, etc.)
+        totalFiles: Object.values(fileGroups).reduce((sum, g) => sum + g.length, 0) + blurryFiles.length,
+        blurryFiles,
+        blurryFileCount: blurryFiles.length,
       };
     } catch (error) {
       return {
         success: false,
         error: sanitizeError(error, 'preview-batches'),
+      };
+    }
+  });
+
+  /**
+   * Handler: Analyze folder images for blur
+   * Runs asynchronously after scan completes, sending progress updates.
+   * Uses blurDetectionService which analyzes JPEG/PNG thumbnails via Laplacian variance.
+   */
+  ipcMain.handle('analyze-blur', async (event, { folderPath, threshold = 'moderate' }) => {
+    try {
+      // SECURITY: Validate path is allowed
+      if (!(await isPathAllowedAsync(folderPath))) {
+        logger.warn('🔒 [SECURITY] Blocked analyze-blur on unregistered path:', folderPath);
+        return { success: false, error: 'Access denied: folder not selected through dialog' };
+      }
+
+      // Validate threshold value
+      const validThresholds = ['strict', 'moderate', 'lenient'];
+      const safeThreshold = validThresholds.includes(threshold) ? threshold : 'moderate';
+
+      // Read directory and group files
+      const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
+      const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+      const fileGroups = await groupFilesByBaseName(files);
+
+      // Run blur analysis with progress reporting
+      const blurResults = await blurDetectionService.analyzeBlur(
+        fileGroups,
+        folderPath,
+        safeThreshold,
+        (progress) => {
+          event.sender.send('blur-progress', progress);
+        }
+      );
+
+      // Count blurry groups
+      const blurryCount = Object.values(blurResults).filter(r => r.isBlurry).length;
+      const totalAnalyzed = Object.values(blurResults).filter(r => r.score >= 0).length;
+
+      return {
+        success: true,
+        blurResults,
+        totalAnalyzed,
+        blurryCount,
+        totalGroups: Object.keys(blurResults).length,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: sanitizeError(error, 'analyze-blur'),
       };
     }
   });
@@ -967,6 +1085,81 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
     }
     
     return thumbnails;
+  });
+
+  // --------------------------------------------------------------------------
+  // Image Preview — medium-resolution preview for modal viewing
+  // --------------------------------------------------------------------------
+
+  /**
+   * Simple LRU cache for preview images.
+   * Maps filePath -> { dataUrl, width, height }
+   * Evicts oldest entry when size exceeds PREVIEW_CACHE_SIZE.
+   */
+  const previewCache = new Map();
+
+  ipcMain.handle('get-image-preview', async (event, { folderPath, fileName }) => {
+    // SECURITY: Validate folder path is in allowed list
+    if (!(await isPathAllowedAsync(folderPath))) {
+      logger.warn('🔒 [SECURITY] Blocked get-image-preview on unregistered path:', folderPath);
+      return { success: false, error: 'Access denied' };
+    }
+
+    // SECURITY: Validate fileName
+    if (typeof fileName !== 'string') {
+      return { success: false, error: 'Invalid file name' };
+    }
+    if (fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+      logger.warn('🔒 [SECURITY] get-image-preview path traversal attempt:', fileName);
+      return { success: false, error: 'Invalid file name' };
+    }
+
+    // Validate extension
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.tiff', '.tif'];
+    const ext = path.extname(fileName).toLowerCase();
+    if (!imageExtensions.includes(ext)) {
+      return { success: false, error: 'Unsupported image format' };
+    }
+
+    const filePath = path.join(folderPath, fileName);
+
+    // Check LRU cache
+    if (previewCache.has(filePath)) {
+      const cached = previewCache.get(filePath);
+      // Move to end (most recently used)
+      previewCache.delete(filePath);
+      previewCache.set(filePath, cached);
+      return { success: true, ...cached };
+    }
+
+    try {
+      const { data, info } = await sharp(filePath)
+        .rotate() // Auto-rotate based on EXIF
+        .resize(PREVIEW_MAX_DIMENSION, PREVIEW_MAX_DIMENSION, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: PREVIEW_JPEG_QUALITY })
+        .toBuffer({ resolveWithObject: true });
+
+      const result = {
+        dataUrl: `data:image/jpeg;base64,${data.toString('base64')}`,
+        width: info.width,
+        height: info.height,
+      };
+
+      // Add to LRU cache, evict oldest if full
+      previewCache.set(filePath, result);
+      if (previewCache.size > PREVIEW_CACHE_SIZE) {
+        const oldestKey = previewCache.keys().next().value;
+        previewCache.delete(oldestKey);
+      }
+
+      return { success: true, ...result };
+    } catch (err) {
+      logger.warn(`[PREVIEW] Failed to generate preview: ${fileName}`, err.message);
+      return { success: false, error: 'Failed to generate preview for this file format' };
+    }
   });
 }
 

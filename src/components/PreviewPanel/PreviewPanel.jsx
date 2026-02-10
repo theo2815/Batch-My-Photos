@@ -38,14 +38,17 @@ function PreviewPanel({
   // New props for preset lifting
   selectedPresetName,
   onPresetSelect,
+  // Blur detection props
+  blurDetection,
   // Existing props
-  onSettingsChange,
-  onToggleBatch,
-  onSelectOutputFolder,
-  onProceed,
-  onReset
+    onSettingsChange,
+    onOpenBlurModal,
+    onToggleBatch,
+    onSelectOutputFolder,
+    onProceed,
+    onReset
 }) {
-  const { maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir } = settings;
+  const { maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity } = settings;
   
   return (
     <div className="preview-container">
@@ -61,6 +64,9 @@ function PreviewPanel({
         totalGroups={scanResults?.totalGroups || 0}
         batchCount={previewResults?.batchCount || 0}
         isLoading={isRefreshingPreview}
+        blurDetectionEnabled={blurDetectionEnabled}
+        isAnalyzingBlur={blurDetection?.isAnalyzing}
+        blurryCount={blurDetection?.blurryCount || 0}
       />
       
       {/* Settings Panel */}
@@ -70,10 +76,15 @@ function PreviewPanel({
         batchMode={batchMode}
         sortBy={sortBy}
         outputDir={outputDir}
+        blurDetectionEnabled={blurDetectionEnabled}
+        blurSensitivity={blurSensitivity}
+        folderPath={folderPath}
         validationError={validationError}
         isRefreshingPreview={isRefreshingPreview}
+        isAnalyzingBlur={blurDetection?.isAnalyzing}
         refreshingField={refreshingField}
         onChange={onSettingsChange}
+        onOpenBlurModal={onOpenBlurModal}
         onSelectOutputFolder={onSelectOutputFolder}
         // Pass preset props
         selectedPresetName={selectedPresetName}
@@ -87,6 +98,8 @@ function PreviewPanel({
         expandedBatch={expandedBatch}
         onToggleBatch={onToggleBatch}
         folderPath={folderPath}
+        blurDetection={blurDetection}
+        blurDetectionEnabled={blurDetectionEnabled}
       />
       
       {/* Warning for oversized groups */}
@@ -125,22 +138,31 @@ function PreviewPanel({
       </div>
       
       {/* Action Buttons */}
-      <div className="action-buttons">
-        <button className="btn secondary" onClick={onReset} disabled={isRefreshingPreview}>
-          <RotateCcw size={16} /> Select Different Folder
-        </button>
-        <button className="btn primary" onClick={onProceed} disabled={isRefreshingPreview}>
-          {isRefreshingPreview ? (
-            <>
-              <Loader2 size={16} className="icon-inline icon-spin" /> Calculating...
-            </>
-          ) : (
-            <>
-              <CheckCircle size={16} className="icon-inline" /> Proceed with Batching
-            </>
-          )}
-        </button>
-      </div>
+      {(() => {
+        const isBlurAnalyzing = blurDetection?.isAnalyzing || false;
+        return (
+          <div className="action-buttons">
+            <button className="btn secondary" onClick={onReset} disabled={isRefreshingPreview || isBlurAnalyzing}>
+              <RotateCcw size={16} /> Select Different Folder
+            </button>
+            <button className="btn primary" onClick={onProceed} disabled={isRefreshingPreview || isBlurAnalyzing}>
+              {isBlurAnalyzing ? (
+                <>
+                  <Loader2 size={16} className="icon-inline icon-spin" /> Analyzing blur...
+                </>
+              ) : isRefreshingPreview ? (
+                <>
+                  <Loader2 size={16} className="icon-inline icon-spin" /> Calculating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={16} className="icon-inline" /> Proceed with Batching
+                </>
+              )}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

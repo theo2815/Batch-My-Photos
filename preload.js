@@ -36,8 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [sortBy='name-asc'] - Sort order for files
    * @returns {Promise<Object>} Preview results including batch count and sizes
    */
-  previewBatches: (folderPath, maxFilesPerBatch, sortBy = 'name-asc') => 
-    ipcRenderer.invoke('preview-batches', { folderPath, maxFilesPerBatch, sortBy }),
+  previewBatches: (folderPath, maxFilesPerBatch, sortBy = 'name-asc', excludeGroups = null) => 
+    ipcRenderer.invoke('preview-batches', { folderPath, maxFilesPerBatch, sortBy, excludeGroups }),
   
   /**
    * Executes the batch splitting operation
@@ -51,8 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [sortBy='name-asc'] - Sort order for files
    * @returns {Promise<Object>} Execution results
    */
-  executeBatch: (folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc') =>
-    ipcRenderer.invoke('execute-batch', { folderPath, maxFilesPerBatch, outputPrefix, mode, outputDir, sortBy }),
+  executeBatch: (folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null) =>
+    ipcRenderer.invoke('execute-batch', { folderPath, maxFilesPerBatch, outputPrefix, mode, outputDir, sortBy, blurryGroups }),
   
   /**
    * Opens a folder selection dialog for output folder (used in copy mode)
@@ -92,7 +92,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Result with success status
    */
   cancelBatch: () => ipcRenderer.invoke('cancel-batch'),
-  
+
+  // ============================================================================
+  // BLUR DETECTION APIs
+  // ============================================================================
+
+  /**
+   * Analyze images in a folder for blur using Laplacian variance.
+   * Processes JPEG/PNG files only (one per file group).
+   * 
+   * @param {string} folderPath - Path to the folder to analyze
+   * @param {string} [threshold='moderate'] - Sensitivity: 'strict' | 'moderate' | 'lenient'
+   * @returns {Promise<Object>} { success, blurResults, totalAnalyzed, blurryCount, totalGroups }
+   */
+  analyzeBlur: (folderPath, threshold = 'moderate') =>
+    ipcRenderer.invoke('analyze-blur', { folderPath, threshold }),
+
+  /**
+   * Listen for blur analysis progress updates
+   * 
+   * @param {Function} callback - Called with { current, total }
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onBlurProgress: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('blur-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('blur-progress', listener);
+    };
+  },
+
   // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
   // ============================================================================
@@ -157,6 +186,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   getThumbnails: (folderPath, fileNames) => 
     ipcRenderer.invoke('get-thumbnails', { folderPath, fileNames }),
+
+  /**
+   * Get a medium-resolution preview image for modal viewing
+   * @param {string} folderPath - Path to folder containing the image
+   * @param {string} fileName - File name to preview
+   * @returns {Promise<Object>} { success, dataUrl, width, height } or { success: false, error }
+   */
+  getImagePreview: (folderPath, fileName) =>
+    ipcRenderer.invoke('get-image-preview', { folderPath, fileName }),
   
   /**
    * Clean up stale recent folders that no longer exist

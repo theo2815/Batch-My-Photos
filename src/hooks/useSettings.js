@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Hook for managing batch settings (maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, presets).
+ * Hook for managing batch settings (maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, presets, blur detection).
  */
 export function useSettings() {
   const [maxFilesPerBatch, setMaxFilesPerBatch] = useState('500');
@@ -11,6 +11,8 @@ export function useSettings() {
   const [outputDir, setOutputDir] = useState(null);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const [refreshingField, setRefreshingField] = useState(null);
+  const [blurDetectionEnabled, setBlurDetectionEnabled] = useState(false);
+  const [blurSensitivity, setBlurSensitivity] = useState('moderate');
 
   const resetSettings = useCallback(() => {
     setMaxFilesPerBatch('500');
@@ -20,6 +22,8 @@ export function useSettings() {
     setOutputDir(null);
     setSelectedPresetName('');
     setRefreshingField(null);
+    setBlurDetectionEnabled(false);
+    setBlurSensitivity('moderate');
   }, []);
 
   const handleSettingsChange = useCallback((key, value) => {
@@ -29,6 +33,8 @@ export function useSettings() {
       if (settings.maxFilesPerBatch !== undefined) setMaxFilesPerBatch(settings.maxFilesPerBatch);
       if (settings.outputPrefix !== undefined) setOutputPrefix(settings.outputPrefix);
       if (settings.sortBy !== undefined) setSortBy(settings.sortBy);
+      if (settings.blurDetectionEnabled !== undefined) setBlurDetectionEnabled(settings.blurDetectionEnabled === 'true' || settings.blurDetectionEnabled === true);
+      if (settings.blurSensitivity !== undefined) setBlurSensitivity(settings.blurSensitivity);
 
       if (settings.batchMode !== undefined) {
         setBatchMode(settings.batchMode);
@@ -62,6 +68,12 @@ export function useSettings() {
       case 'outputDir':
         setOutputDir(value);
         break;
+      case 'blurDetectionEnabled':
+        setBlurDetectionEnabled(value);
+        break;
+      case 'blurSensitivity':
+        setBlurSensitivity(value);
+        break;
       default:
         break;
     }
@@ -84,6 +96,8 @@ export function useSettings() {
     outputDir,
     selectedPresetName,
     refreshingField,
+    blurDetectionEnabled,
+    blurSensitivity,
     setRefreshingField,
     setSelectedPresetName,
     resetSettings,

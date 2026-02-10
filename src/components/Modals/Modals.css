@@ -961,3 +961,292 @@
   margin-top: 1px;
   opacity: 0.7;
 }
+
+/* ============================================================================
+   BLUR SENSITIVITY MODAL
+   ============================================================================ */
+
+.blur-sensitivity-modal {
+  max-width: 420px;
+}
+
+.blur-sensitivity-modal h3 {
+  color: var(--accent-primary);
+}
+
+.sensitivity-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0 var(--space-lg);
+  text-align: left;
+}
+
+.sensitivity-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.sensitivity-card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.sensitivity-card.selected {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.sensitivity-radio {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--transition-fast);
+}
+
+.sensitivity-card.selected .sensitivity-radio {
+  border-color: var(--accent-primary);
+}
+
+.sensitivity-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+
+.sensitivity-card.selected .sensitivity-radio-dot {
+  background: var(--accent-primary);
+}
+
+.sensitivity-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sensitivity-card-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.sensitivity-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* ============================================================================
+   IMAGE PREVIEW MODAL
+   ============================================================================ */
+
+.image-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn var(--transition-fast);
+  outline: none;
+}
+
+.image-preview-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+  max-height: 85vh;
+}
+
+.image-preview-img {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  animation: fadeIn var(--transition-normal);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-preview-img-fading {
+  position: absolute;
+  opacity: 0.3;
+  filter: blur(2px);
+  animation: none;
+}
+
+/* Close button */
+.image-preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10001;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.image-preview-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* Navigation arrows */
+.image-preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10001;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0.5;
+}
+
+.image-preview-nav:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  opacity: 1;
+}
+
+.image-preview-nav-left {
+  left: 16px;
+}
+
+.image-preview-nav-right {
+  right: 16px;
+}
+
+/* Loading spinner */
+.image-preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 200px;
+  min-height: 200px;
+}
+
+/* Error state */
+.image-preview-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-2xl);
+}
+
+.image-preview-error p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.image-preview-error span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: monospace;
+  word-break: break-all;
+}
+
+/* Bottom info bar */
+.image-preview-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+}
+
+.image-preview-filename {
+  font-weight: 500;
+  color: #fff;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-preview-dimensions,
+.image-preview-blur-score,
+.image-preview-position {
+  font-family: 'Courier New', Courier, monospace;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+}
+
+.image-preview-position {
+  margin-left: auto;
+}
+
+/* Restore button in preview info bar */
+.image-preview-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.image-preview-restore-btn:hover {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: #22c55e;
+  color: #fff;
+  transform: scale(1.05);
+}
