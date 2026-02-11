@@ -1,0 +1,2195 @@
+/**
+ * Desktop App Styles — ported for pixel-level web demo parity
+ *
+ * These are the actual CSS variables, component styles, and animations
+ * from the BatchMyPhotos Electron app, scoped under `.sim-app` so they
+ * don't leak into the marketing website.
+ */
+
+/* ============================================================================
+   DESIGN TOKENS (from desktop variables.css)
+   ============================================================================ */
+
+.sim-app {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #383838;
+  --bg-glass: rgba(45, 45, 45, 0.95);
+
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+
+  --accent-primary: #3b82f6;
+  --accent-secondary: #2563eb;
+  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 10px rgba(59, 130, 246, 0.2);
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* base */
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Oxygen, Ubuntu, sans-serif;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   LAYOUT — App Header + Main + Footer  (desktop layout.css)
+   ============================================================================ */
+
+.sim-app-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+
+.sim-header {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.sim-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sim-header h1 svg {
+  -webkit-text-fill-color: initial;
+  color: var(--accent-primary);
+}
+
+.sim-header p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.header-actions {
+  position: absolute;
+  right: var(--space-lg);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.header-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: var(--space-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.header-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sim-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--space-lg);
+}
+
+/* Auto-margin centers the child when content is shorter than container,
+   but doesn't clip the top when content overflows (unlike align-items:center). */
+.sim-main > * {
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+/* When content is tall and should start from the top (PreviewStep), remove auto-margin */
+.sim-main.scroll > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.sim-footer {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sim-footer .email-link {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.sim-footer .email-link:hover {
+  color: var(--accent-secondary);
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   HELPER CLASSES  (from desktop base.css + App.css)
+   ============================================================================ */
+
+.sim-app .icon-inline {
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-right: 6px;
+}
+
+.sim-app .text-primary { color: var(--accent-primary); }
+.sim-app .text-warning { color: var(--warning); }
+.sim-app .text-error { color: var(--error); }
+.sim-app .text-success { color: var(--success); }
+
+/* ============================================================================
+   BUTTONS  (from desktop App.css)
+   ============================================================================ */
+
+.sim-app .action-buttons {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.sim-app .btn {
+  padding: var(--space-md) var(--space-xl);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: inherit;
+}
+
+.sim-app .btn.primary {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  box-shadow: var(--shadow-md);
+}
+
+.sim-app .btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.sim-app .btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sim-app .btn.secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.sim-app .btn.secondary:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sim-app .btn.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sim-app .btn.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+.sim-app .btn.danger:hover {
+  background: var(--error);
+  color: #ffffff;
+}
+
+.sim-app .btn:active {
+  transform: scale(0.98);
+}
+
+/* ============================================================================
+   BOX SPINNER  (from desktop Common.css)
+   ============================================================================ */
+
+.sim-app .loader {
+  width: 48px;
+  height: 48px;
+  background: var(--text-primary);
+  display: block;
+  margin: 20px auto;
+  position: relative;
+  box-sizing: border-box;
+  animation: sim-rotationBack 1.2s linear infinite;
+  will-change: transform;
+}
+
+.sim-app .loader::before {
+  content: '';
+  box-sizing: border-box;
+  left: 0;
+  top: 0;
+  transform: rotate(45deg);
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  background: var(--text-primary);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+}
+
+.sim-app .loader::after {
+  content: '';
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: var(--bg-secondary);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes sim-rotationBack {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+.sim-app .spinner {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  color: var(--accent-primary);
+}
+
+/* ============================================================================
+   DROP ZONE  (from desktop DropZone.css)
+   ============================================================================ */
+
+.sim-app .idle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 400px;
+}
+
+.sim-app .drop-zone {
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 4/3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--text-muted);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.sim-app .drop-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent-gradient);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.sim-app .drop-zone:hover,
+.sim-app .drop-zone.drag-over {
+  border-color: var(--accent-primary);
+  transform: scale(1.02);
+  box-shadow: var(--shadow-glow);
+}
+
+.sim-app .drop-zone:hover::before,
+.sim-app .drop-zone.drag-over::before {
+  opacity: 0.1;
+}
+
+.sim-app .drop-zone-content {
+  text-align: center;
+  z-index: 1;
+}
+
+.sim-app .drop-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  animation: sim-float 3s ease-in-out infinite;
+}
+
+@keyframes sim-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+.sim-app .drop-zone h2 {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-xs);
+  color: var(--text-primary);
+}
+
+.sim-app .drop-zone p {
+  color: var(--text-secondary);
+}
+
+/* Demo folder sidebar (web-only addition) */
+.sim-app .demo-sidebar {
+  width: 260px;
+  background: var(--bg-primary);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sim-app .demo-sidebar-header {
+  padding: var(--space-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sim-app .demo-sidebar-header h3 {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-xs);
+}
+
+.sim-app .demo-sidebar-header p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.sim-app .demo-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sim-app .folder-card {
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.sim-app .folder-card:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(4px);
+}
+
+.sim-app .folder-card.selected {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.sim-app .folder-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.sim-app .folder-card-title .icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.sim-app .folder-card-title h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-app .folder-card-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: var(--space-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sim-app .folder-card-meta {
+  display: flex;
+  gap: var(--space-md);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.sim-app .folder-card-meta span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sim-app .folder-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--space-sm);
+}
+
+.sim-app .folder-card-tags .tag {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.sim-app .folder-card-tags .tag.raw {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+/* ============================================================================
+   STATUS CARDS  (from desktop StatusCards.css)
+   ============================================================================ */
+
+.sim-app .status-card {
+  text-align: center;
+  padding: var(--space-2xl);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  max-width: 500px;
+  width: 100%;
+}
+
+.sim-app .status-card h2 {
+  margin: var(--space-lg) 0 var(--space-sm);
+  font-size: 1.5rem;
+}
+
+.sim-app .status-card p {
+  color: var(--text-secondary);
+}
+
+.sim-app .success-icon,
+.sim-app .error-icon {
+  font-size: 4rem;
+  display: flex;
+  justify-content: center;
+}
+
+/* Progress Bar */
+.sim-app .progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin: var(--space-lg) 0;
+  overflow: hidden;
+}
+
+.sim-app .progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-fast);
+}
+
+.sim-app .sub-progress {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: var(--space-sm);
+}
+
+/* Cancel Button */
+.sim-app .cancel-btn {
+  margin-top: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  background: transparent;
+  border: 2px solid var(--error);
+  border-radius: var(--radius-md);
+  color: var(--error);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: inherit;
+}
+
+.sim-app .cancel-btn:hover {
+  background: var(--error);
+  color: #ffffff;
+}
+
+/* Results Summary */
+.sim-app .results-summary {
+  margin: var(--space-lg) 0;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  text-align: left;
+}
+
+.sim-app .result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sim-app .result-row:last-child {
+  border-bottom: none;
+}
+
+.sim-app .result-row .folder-name {
+  font-family: monospace;
+  color: var(--accent-primary);
+}
+
+.sim-app .result-row .file-count {
+  color: var(--text-muted);
+}
+
+.sim-app .more-results {
+  margin-top: var(--space-sm);
+  font-style: italic;
+  text-align: center;
+}
+
+/* ============================================================================
+   PREVIEW CONTAINER  (from desktop PreviewPanel.css)
+   ============================================================================ */
+
+.sim-app .preview-container {
+  width: 100%;
+  max-width: 700px;
+  animation: sim-fadeIn var(--transition-normal);
+}
+
+@keyframes sim-fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Folder Info */
+.sim-app .folder-info {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.sim-app .folder-info h2 {
+  font-size: 1.75rem;
+  margin-bottom: var(--space-xs);
+}
+
+.sim-app .folder-path {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+/* Stats Grid */
+.sim-app .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.sim-app .stats-grid.has-blur {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.sim-app .stat-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  text-align: center;
+  transition: transform var(--transition-fast);
+}
+
+.sim-app .stat-card:hover {
+  transform: translateY(-4px);
+}
+
+.sim-app .stat-card.highlight {
+  background: var(--accent-gradient);
+}
+
+.sim-app .stat-card.blur-stat {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.sim-app .stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: var(--space-xs);
+}
+
+.sim-app .stat-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.sim-app .stat-card.highlight .stat-label,
+.sim-app .stat-card.blur-stat .stat-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sim-app .stat-card.blur-stat .stat-value {
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ============================================================================
+   SETTINGS PANEL  (from desktop PreviewPanel.css)
+   ============================================================================ */
+
+.sim-app .settings-panel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.sim-app .settings-panel h3 {
+  margin-bottom: var(--space-md);
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.sim-app .setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  gap: var(--space-md);
+}
+
+.sim-app .setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.sim-app .setting-row label {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sim-app .setting-row input[type="text"],
+.sim-app .setting-row input[type="number"] {
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+  width: 230px;
+  text-align: right;
+  transition: border-color var(--transition-fast);
+  font-family: inherit;
+}
+
+.sim-app .setting-row input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Folder name preview */
+.sim-app .folder-name-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sim-app .setting-hint {
+  font-size: 0.75rem;
+  margin-top: 4px;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+/* Custom Select (matching desktop) */
+.sim-app .custom-select {
+  width: 230px;
+  cursor: pointer;
+  position: relative;
+  color: var(--text-primary);
+  z-index: 100;
+}
+
+.sim-app .custom-select.open {
+  z-index: 1001;
+}
+
+.sim-app .select-selected {
+  background-color: var(--bg-tertiary);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border: 1px solid transparent;
+  transition: all 300ms;
+}
+
+.sim-app .custom-select:hover .select-selected {
+  background-color: var(--bg-primary);
+}
+
+.sim-app .custom-select.open .select-selected {
+  border-color: var(--accent-primary);
+  background-color: var(--bg-primary);
+}
+
+.sim-app .select-arrow {
+  height: 14px;
+  width: 14px;
+  color: var(--text-secondary);
+  transition: transform 300ms;
+  transform: rotate(-90deg);
+}
+
+.sim-app .custom-select.open .select-arrow {
+  transform: rotate(0deg);
+  color: var(--text-primary);
+}
+
+.sim-app .select-options {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  padding: 5px;
+  background-color: var(--bg-tertiary);
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 300ms;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin-top: 8px;
+  pointer-events: none;
+}
+
+.sim-app .custom-select.open .select-options {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.sim-app .select-option {
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  transition: all 300ms;
+  background-color: transparent;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.sim-app .select-option:hover {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sim-app .select-option.active {
+  background-color: var(--bg-primary);
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+/* Mode Toggle */
+.sim-app .mode-buttons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.sim-app .mode-btn {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: inherit;
+}
+
+.sim-app .mode-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sim-app .mode-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.sim-app .mode-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: var(--space-sm);
+  font-style: italic;
+}
+
+/* Toggle Switch (blur detection) */
+.sim-app .toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 26px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sim-app .toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sim-app .toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  transition: background var(--transition-normal), border-color var(--transition-normal);
+  overflow: hidden;
+}
+
+.sim-app .toggle-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.sim-app .toggle-label.on  { left: 7px;  color: #fff; opacity: 0; }
+.sim-app .toggle-label.off { right: 6px; color: var(--text-muted); opacity: 1; }
+
+.sim-app .toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform var(--transition-normal), background var(--transition-normal);
+}
+
+.sim-app .toggle-switch input:checked + .toggle-track {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-color: #d97706;
+}
+
+.sim-app .toggle-switch input:checked + .toggle-track .toggle-knob {
+  transform: translateX(26px);
+  background: #fff;
+}
+
+.sim-app .toggle-switch input:checked + .toggle-track .toggle-label.on  { opacity: 1; }
+.sim-app .toggle-switch input:checked + .toggle-track .toggle-label.off { opacity: 0; }
+
+/* Blur sensitivity button */
+.sim-app .change-sensitivity-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  max-width: 220px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  font-family: inherit;
+}
+
+.sim-app .change-sensitivity-btn:hover {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.sim-app .blur-sensitivity-row {
+  margin-top: -4px;
+  padding-left: 8px;
+}
+
+/* Presets Section */
+.sim-app .presets-section {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sim-app .presets-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sim-app .presets-controls {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  align-items: center;
+}
+
+.sim-app .presets-menu-container {
+  position: relative;
+}
+
+.sim-app .btn-icon {
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.sim-app .btn-icon:hover {
+  background: var(--bg-primary);
+}
+
+.sim-app .btn-icon.active {
+  background: var(--bg-primary);
+}
+
+.sim-app .settings-menu {
+  position: absolute;
+  top: 120%;
+  right: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  z-index: 1000;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  animation: sim-slideInMenu 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sim-slideInMenu {
+  from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.sim-app .settings-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.sim-app .settings-menu-item:hover {
+  background-color: var(--bg-primary);
+  transform: translateX(4px);
+}
+
+.sim-app .settings-menu-item.danger:hover {
+  background-color: rgba(255, 69, 58, 0.15);
+}
+
+.sim-app .menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 4px 0;
+}
+
+/* Preset naming row */
+.sim-app .preset-naming-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.sim-app .preset-name-input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.sim-app .preset-name-input:focus {
+  outline: none;
+}
+
+.sim-app .btn-small {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.sim-app .btn-small:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
+.sim-app .btn-small.primary {
+  background: var(--accent-gradient);
+  color: #ffffff;
+}
+
+.sim-app .btn-small:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   BATCH PREVIEW ACCORDION  (from desktop PreviewPanel.css)
+   ============================================================================ */
+
+.sim-app .batch-preview {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.sim-app .batch-preview h3 {
+  margin-bottom: var(--space-md);
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.sim-app .batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sim-app .batch-item {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.sim-app .batch-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.sim-app .batch-header:hover,
+.sim-app .batch-header.expanded {
+  background: var(--accent-primary);
+}
+
+.sim-app .batch-header.blur-batch {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.sim-app .batch-header.blur-batch:hover,
+.sim-app .batch-header.blur-batch.expanded {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+.sim-app .batch-name {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.sim-app .batch-count {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.sim-app .batch-header.expanded .batch-count,
+.sim-app .batch-header:hover .batch-count {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sim-app .expand-icon {
+  font-size: 0.75rem;
+  transition: transform var(--transition-fast);
+}
+
+.sim-app .batch-files {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.sim-app .file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 0;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.sim-app .file-thumbnail {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.sim-app .thumbnail-placeholder {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sim-app .file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-app .load-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  margin-top: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.sim-app .load-more-btn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+/* ============================================================================
+   WARNING & CONFIRMATION BOXES  (from desktop PreviewPanel.css)
+   ============================================================================ */
+
+.sim-app .confirmation-box {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  text-align: center;
+}
+
+.sim-app .confirmation-box p {
+  margin-bottom: var(--space-sm);
+  color: var(--text-secondary);
+}
+
+.sim-app .confirmation-box .note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ============================================================================
+   MODAL (Blur Sensitivity, Confirmation)  (from desktop Modals.css)
+   ============================================================================ */
+
+.sim-app .modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: sim-fadeIn var(--transition-fast);
+}
+
+.sim-app .modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: sim-slideUp var(--transition-normal);
+}
+
+@keyframes sim-slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sim-app .modal-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-md);
+}
+
+.sim-app .modal-content h3 {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-sm);
+  color: var(--accent-primary);
+}
+
+.sim-app .modal-content p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+.sim-app .modal-buttons {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
+.sim-app .modal-buttons .btn {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+}
+
+/* Sensitivity cards (matching desktop) */
+.sim-app .sensitivity-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+  text-align: left;
+}
+
+.sim-app .sensitivity-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.sim-app .sensitivity-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.sim-app .sensitivity-card.selected {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.sim-app .sensitivity-radio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sim-app .sensitivity-card.selected .sensitivity-radio {
+  border-color: var(--accent-primary);
+}
+
+.sim-app .sensitivity-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.sim-app .sensitivity-card.selected .sensitivity-radio-dot {
+  background: var(--accent-primary);
+}
+
+.sim-app .sensitivity-card-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: block;
+}
+
+.sim-app .sensitivity-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+/* Confirmation modal */
+.sim-app .confirmation-modal {
+  max-width: 450px;
+}
+
+.sim-app .confirmation-details {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin: var(--space-lg) 0;
+  text-align: left;
+}
+
+.sim-app .confirmation-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sim-app .confirmation-row:last-child {
+  border-bottom: none;
+}
+
+.sim-app .confirmation-label {
+  color: var(--text-secondary);
+}
+
+.sim-app .confirmation-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ============================================================================
+   SPIN ANIMATION
+   ============================================================================ */
+
+@keyframes sim-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sim-app .spin-icon {
+  animation: sim-spin 1s linear infinite;
+}
+
+/* ============================================================================
+   TOOLTIP  (from desktop Tooltip.css)
+   ============================================================================ */
+
+.sim-app .tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sim-app .tooltip-text {
+  position: absolute;
+  opacity: 0;
+  background: var(--accent-gradient);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 9999;
+  box-shadow: var(--shadow-md);
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+}
+
+.sim-app .tooltip-wrapper:hover .tooltip-text {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* CTA banner for web demo */
+.sim-app .demo-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-top: var(--space-lg);
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.sim-app .demo-cta a {
+  color: var(--accent-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sim-app .demo-cta a:hover {
+  text-decoration: underline;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   IMAGE PREVIEW MODAL
+   Matches desktop app's ImagePreviewModal.jsx / PreviewPanel.css
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.image-preview-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* Navigation arrows */
+.image-preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+  z-index: 10001;
+}
+
+.image-preview-nav:hover {
+  background: rgba(255, 255, 255, 0.2);
+  opacity: 1;
+}
+
+.image-preview-nav-left {
+  left: 16px;
+}
+
+.image-preview-nav-right {
+  right: 16px;
+}
+
+/* Image container */
+.image-preview-container {
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.image-preview-img {
+  width: 640px;
+  height: 480px;
+  max-width: 80vw;
+  max-height: 70vh;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  user-select: none;
+  -webkit-user-drag: none;
+  animation: imagePreviewFadeIn 0.2s ease;
+}
+
+.image-preview-placeholder-icon {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.image-preview-placeholder-label {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+@keyframes imagePreviewFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Bottom info bar */
+.image-preview-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 24px 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.image-preview-filename {
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-preview-dimensions,
+.image-preview-meta {
+  color: rgba(255, 255, 255, 0.55);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+}
+
+.image-preview-blur {
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.image-preview-position {
+  color: rgba(255, 255, 255, 0.45);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
+/* Clickable thumbnail in batch file list */
+.sim-app .file-item .thumbnail-placeholder {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sim-app .file-item .thumbnail-placeholder:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FILE EXPLORER
+   In-browser simulated file explorer — mimics OS file browser after batch
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Overlay */
+.explorer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: explorerFadeIn 0.15s ease;
+}
+
+@keyframes explorerFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Window chrome */
+.explorer-window {
+  width: 100%;
+  max-width: 880px;
+  height: 600px;
+  background: #1e1e1e;
+  border: 1px solid #3f3f46;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Title Bar ───────────────────────────────────────── */
+.explorer-titlebar {
+  height: 36px;
+  background: #27272a;
+  border-bottom: 1px solid #3f3f46;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.explorer-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.explorer-titlebar-icon {
+  color: #fbbf24;
+}
+
+.explorer-titlebar-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.explorer-titlebar-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* ─── Toolbar ─────────────────────────────────────────── */
+.explorer-toolbar {
+  height: 40px;
+  background: #27272a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.explorer-toolbar-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.explorer-toolbar-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.explorer-toolbar-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.explorer-toolbar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.explorer-view-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.explorer-view-btn:hover {
+  color: var(--text-secondary);
+}
+
+.explorer-view-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Breadcrumb ──────────────────────────────────────── */
+.explorer-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+}
+
+.breadcrumb-segment {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-segment:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.breadcrumb-segment.active {
+  color: var(--text-primary);
+  cursor: default;
+  font-weight: 500;
+}
+
+.breadcrumb-sep {
+  color: var(--text-muted);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+/* ─── Content Area ────────────────────────────────────── */
+.explorer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  background: #1a1a1a;
+}
+
+/* ─── Folder Grid (root view) ─────────────────────────── */
+.explorer-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.explorer-folder-card {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 12px 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.explorer-folder-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.explorer-folder-card:active {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.explorer-folder-icon {
+  color: #fbbf24;
+  display: flex;
+}
+
+.explorer-folder-card.blur-folder .explorer-folder-icon {
+  color: var(--warning);
+}
+
+.explorer-folder-name {
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  line-height: 1.3;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-folder-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+/* ─── File Grid (inside a folder) ─────────────────────── */
+.explorer-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+}
+
+.explorer-file-card {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition-fast);
+}
+
+.explorer-file-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.explorer-file-card:active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.explorer-file-thumb {
+  width: 72px;
+  height: 54px;
+  border-radius: 4px;
+  position: relative;
+}
+
+.explorer-file-blur-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(234, 179, 8, 0.85);
+  border-radius: 3px;
+  padding: 2px 3px;
+  color: #000;
+  display: flex;
+}
+
+.explorer-file-name {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  line-height: 1.25;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ─── File List View ──────────────────────────────────── */
+.explorer-file-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.explorer-list-header {
+  display: grid;
+  grid-template-columns: 28px 1fr 80px 90px 140px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.explorer-file-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 80px 90px 140px;
+  gap: 8px;
+  padding: 4px 8px;
+  align-items: center;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+  width: 100%;
+}
+
+.explorer-file-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.explorer-file-row-thumb {
+  width: 24px;
+  height: 18px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.explorer-file-row-name {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-file-row-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.explorer-file-row-blur {
+  font-size: 0.72rem;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ─── Load More ───────────────────────────────────────── */
+.explorer-load-more {
+  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.explorer-load-more:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+
+.explorer-load-more.list-mode {
+  border-radius: 0;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.explorer-load-more-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* ─── Status Bar ──────────────────────────────────────── */
+.explorer-status-bar {
+  height: 28px;
+  background: #27272a;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+/* ─── "Open in Explorer" Button ───────────────────────── */
+.btn.explorer-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  gap: 8px;
+}
+
+.btn.explorer-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}

@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+
+/* ═══════════════════════════════════════════════════════════════════
+   Landing Page – Desktop App Animations
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Floating animation for DropZone icon (matches desktop sim-float) */
+.landing-float {
+  animation: landingFloat 3s ease-in-out infinite;
+}
+
+@keyframes landingFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+/* Box Spinner – CSS-only rotating cube matching desktop Common.css */
+.landing-box-spinner {
+  width: 48px;
+  height: 48px;
+  background: white;
+  display: block;
+  margin: 0 auto 16px;
+  position: relative;
+  box-sizing: border-box;
+  animation: landingRotationBack 1.2s linear infinite;
+}
+
+.landing-box-spinner::before {
+  content: '';
+  box-sizing: border-box;
+  left: 0;
+  top: 0;
+  transform: rotate(45deg);
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  background: white;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+}
+
+.landing-box-spinner::after {
+  content: '';
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #2d2d2d;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes landingRotationBack {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+/* Fade-in for modals */
+.fade-in {
+  animation: landingFadeIn 0.15s ease;
+}
+
+@keyframes landingFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Hero shimmer line */
+@keyframes heroShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.hero-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(99,102,241,0.15) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: heroShimmer 3s ease-in-out infinite;
+}
+
+/* Hero floating orbs */
+@keyframes heroOrb1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,-20px) scale(1.1); } }
+@keyframes heroOrb2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-20px,30px) scale(0.9); } }
+.hero-orb-1 { animation: heroOrb1 8s ease-in-out infinite; }
+.hero-orb-2 { animation: heroOrb2 10s ease-in-out infinite; }
+
+/* Footer modal entrance */
+@keyframes footerModalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Custom scrollbar for modal body – dark mode (default) */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* Custom scrollbar – light mode */
+:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+/* Auth card entrance */
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.auth-card-in { animation: authCardIn 0.5s ease-out; }
+
+/* Auth input subtle glow on focus */
+.auth-input:focus { box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 1px 2px rgba(0,0,0,0.3); }
