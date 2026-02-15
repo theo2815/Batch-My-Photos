@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
-import { Camera, Mail, Lock, Eye, EyeOff, User, ShieldCheck, ArrowRight, Loader2, Sparkles } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, ShieldCheck, ArrowRight, Loader2, Sparkles } from 'lucide-react'
+import GoogleAuthButton from '../components/GoogleAuthButton'
+import { getPasswordStrength } from '../utils/passwordStrength'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -34,7 +36,7 @@ export default function Register() {
       return
     }
 
-    const { error } = await supabase.auth.signUp({
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -42,30 +44,15 @@ export default function Register() {
       },
     })
 
-    if (error) {
-      setError(error.message)
+    if (authError) {
+      setError(authError.message)
     } else {
       navigate('/dashboard')
     }
     setLoading(false)
   }
 
-  /* Password strength indicator */
-  const getStrength = () => {
-    if (!password) return { level: 0, label: '', color: '' }
-    let score = 0
-    if (password.length >= 6) score++
-    if (password.length >= 10) score++
-    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++
-    if (/\d/.test(password)) score++
-    if (/[^A-Za-z0-9]/.test(password)) score++
-
-    if (score <= 1) return { level: 1, label: 'Weak', color: 'bg-red-500' }
-    if (score <= 2) return { level: 2, label: 'Fair', color: 'bg-amber-500' }
-    if (score <= 3) return { level: 3, label: 'Good', color: 'bg-indigo-500' }
-    return { level: 4, label: 'Strong', color: 'bg-emerald-500' }
-  }
-  const strength = getStrength()
+  const strength = getPasswordStrength(password)
 
   return (
     <div className={`relative min-h-screen flex items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-gray-50'} overflow-hidden px-4 py-20`}>
@@ -83,13 +70,25 @@ export default function Register() {
           {/* Logo + heading */}
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2.5 group mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                <Camera className="w-5 h-5 text-white" />
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${isDark ? 'from-slate-800 to-slate-900 border border-white/[0.08] shadow-xl shadow-black/30' : 'from-gray-100 to-gray-200 border border-gray-200 shadow-lg shadow-gray-200/50'} flex items-center justify-center`}>
+                <img src="/app_icon.png" alt="Logo" className="w-7 h-7 rounded-md" />
               </div>
               <span className={`text-lg font-bold ${isDark ? 'text-white group-hover:text-indigo-300' : 'text-gray-900 group-hover:text-indigo-600'} transition-colors`}>Batch My Photos</span>
             </Link>
             <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Create your account</h1>
             <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Start organizing your photos in minutes</p>
+          </div>
+
+          {/* Google Register */}
+          <div className="mb-6">
+            <GoogleAuthButton text="Sign up with Google" />
+          </div>
+
+          {/* Divider */}
+          <div className="mb-6 flex items-center gap-3">
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+            <span className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'} uppercase tracking-wider`}>or sign up with email</span>
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
           </div>
 
           {/* Error */}
@@ -234,7 +233,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
             >
               {loading ? (
                 <>
@@ -265,9 +264,9 @@ export default function Register() {
 
           {/* Divider */}
           <div className="my-7 flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/[0.06]" />
-            <span className="text-xs text-slate-600 uppercase tracking-wider">or</span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+            <span className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'} uppercase tracking-wider`}>or</span>
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
           </div>
 
           {/* Login CTA */}

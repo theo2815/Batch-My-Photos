@@ -1,13 +1,15 @@
 
 import { useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import PricingModal from '../components/PricingModal'
 import { supabase } from '../lib/supabase'
+import { useSubscription } from '../hooks/useSubscription'
 import { useTheme } from '../context/ThemeContext'
 import {
   Crown, Sparkles, Download, Settings, HelpCircle, CreditCard,
-  ChevronDown, ShieldCheck, LogOut, User, Key, Monitor,
-  ArrowRight, ExternalLink, Mail, Lock, Play,
-  Copy, Check, Camera, FileText, MessageCircle, X, Shield,
+  ShieldCheck, User, Key, Monitor,
+  ArrowRight, ExternalLink, Lock, Play,
+  Copy, Check, FileText, MessageCircle, X, Shield, AlertTriangle,
 } from 'lucide-react'
 
 /* ─── Modal content (mirrors Footer modals) ──────────────────────────────── */
@@ -81,7 +83,7 @@ const getDashModals = (isDark) => ({
         </div>
         <div>
           <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Third-party services</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>We use Supabase for authentication and Stripe for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
+          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>We use Supabase for authentication and PayMongo for payment processing. Both handle only the minimum data required (email, payment info) and are compliant with applicable data privacy regulations.</p>
         </div>
         <div>
           <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Your rights</h4>
@@ -93,11 +95,18 @@ const getDashModals = (isDark) => ({
       </div>
     ),
   },
+
+  managePlan: {
+    title: 'Manage Your Plan',
+    icon: CreditCard,
+    color: 'text-indigo-400',
+    body: null, // Placeholder — content will be injected dynamically
+  },
 })
 
-function DashModal({ modalKey, onClose }) {
+function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
   const { isDark } = useTheme()
-  const content = getDashModals(isDark)[modalKey]
+  const content = getDashModals(isDark, { onUpgrade, checkoutLoading })[modalKey]
   useEffect(() => {
     if (!content) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -133,47 +142,81 @@ function DashModal({ modalKey, onClose }) {
   )
 }
 
-/* ─── Mock subscription (swap with real Stripe/DB later) ─────────────────── */
-const MOCK_SUB = {
-  plan: 'Free',
-  status: 'active',
-  renewalDate: null,
-  billingCycle: null,
-  paymentMethod: null,
-  licenseKey: null,
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function Dashboard() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { isDark } = useTheme()
   const [user, setUser]             = useState(null)
   const [loading, setLoading]       = useState(true)
-  const [profileOpen, setProfileOpen] = useState(false)
   const [copied, setCopied]         = useState(false)
   const [activeModal, setActiveModal] = useState(null)
-  const sub   = MOCK_SUB
-  const isFree = sub.plan === 'Free'
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [confirmCancel, setConfirmCancel]   = useState(false)
+  const [paymentMsg, setPaymentMsg] = useState(null)
+  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription } = useSubscription()
+  const isFree = !sub || sub.plan === 'free'
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { navigate('/login'); return }
-      setUser(session.user)
+      setUser(session?.user ?? null)
       setLoading(false)
     })
-  }, [navigate])
-
-  const handleLogout = async () => { await supabase.auth.signOut(); navigate('/') }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   const copyKey = () => {
-    if (!sub.licenseKey) return
+    if (!sub?.licenseKey) return
     navigator.clipboard.writeText(sub.licenseKey)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Handle payment redirect params (?payment=success or ?payment=cancelled)
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment')
+    if (paymentStatus === 'success') {
+      setPaymentMsg({ type: 'success', text: '🎉 Verifying your payment…' })
+      setSearchParams({}, { replace: true }) // Clean URL
+
+      // Verify payment directly with PayMongo (webhook fallback)
+      verifyPayment().then((result) => {
+        if (result?.verified) {
+          setPaymentMsg({ type: 'success', text: '🎉 Payment confirmed! Your Pro plan is now active.' })
+        } else {
+          // Webhook may have handled it — just refetch
+          refetchSub()
+          setPaymentMsg({ type: 'success', text: '🎉 Payment successful! Refreshing your plan…' })
+        }
+        setTimeout(() => setPaymentMsg(null), 6000)
+      })
+    } else if (paymentStatus === 'cancelled') {
+      setPaymentMsg({ type: 'info', text: 'Payment was cancelled. You can try again anytime.' })
+      setSearchParams({}, { replace: true })
+      setTimeout(() => setPaymentMsg(null), 5000)
+    }
+  }, [searchParams, setSearchParams, refetchSub, verifyPayment])
+
+  const handleUpgrade = async () => {
+    try {
+      setCheckoutLoading(true)
+      const checkoutUrl = await createCheckout()
+      // Open PayMongo checkout in a new tab
+      window.open(checkoutUrl, '_blank')
+    } catch (err) {
+      console.error('Checkout error:', err)
+      setPaymentMsg({ type: 'error', text: err.message || 'Failed to start checkout. Please try again.' })
+      setTimeout(() => setPaymentMsg(null), 5000)
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
+
   /* ── Loading state ── */
-  if (loading) return (
+  if (loading || subLoading) return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
@@ -205,6 +248,17 @@ export default function Dashboard() {
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-24 pb-20">
 
+        {/* Payment notification toast */}
+        {paymentMsg && (
+          <div className={`mb-6 rounded-xl px-5 py-4 text-sm flex items-center gap-3 animate-[footerModalIn_0.2s_ease-out] ${
+            paymentMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+            : paymentMsg.type === 'error'   ? 'bg-red-500/10 border border-red-500/20 text-red-300'
+            : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300'
+          }`}>
+            <span>{paymentMsg.text}</span>
+          </div>
+        )}
+
         {/* ════════════════════════════════════════════════════════════════════
             HERO  —  Welcome banner with avatar + profile menu
            ════════════════════════════════════════════════════════════════════ */}
@@ -214,7 +268,7 @@ export default function Dashboard() {
             {/* Left: greeting */}
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg font-bold text-white shadow-lg shadow-indigo-500/25">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shadow-md shadow-indigo-500/20">
                   {initials}
                 </div>
                 <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 ${isDark ? 'border-slate-950' : 'border-gray-50'}`} title="Online" />
@@ -235,44 +289,6 @@ export default function Dashboard() {
               >
                 <Play className="w-3.5 h-3.5 text-indigo-400" /> Try Demo
               </Link>
-
-              {/* Profile button */}
-              <div className="relative">
-                <button
-                  onClick={() => setProfileOpen(p => !p)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]' : 'border-gray-200 bg-white hover:bg-gray-50'} transition-colors cursor-pointer`}
-                >
-                  <Settings className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-                  <ChevronDown className={`w-3.5 h-3.5 ${isDark ? 'text-slate-500' : 'text-gray-400'} transition-transform duration-200 ${profileOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {profileOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                    <div className={`absolute right-0 mt-2.5 w-60 rounded-2xl border ${isDark ? 'border-white/[0.08] bg-slate-900/95 backdrop-blur-xl shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-xl shadow-gray-200/50'} py-1.5 z-50`} style={{ animation: 'footerModalIn 0.15s ease-out' }}>
-                      <div className={`px-4 py-3 border-b ${isDark ? 'border-white/[0.06]' : 'border-gray-200'}`}>
-                        <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} truncate`}>{displayName}</p>
-                        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'} truncate mt-0.5`}>{user?.email}</p>
-                      </div>
-                      {[
-                        { icon: User, label: 'Edit Profile' },
-                        { icon: Lock, label: 'Change Password' },
-                        { icon: Mail, label: 'Update Email' },
-                        { icon: Settings, label: 'Preferences' },
-                      ].map(({ icon: I, label }) => (
-                        <button key={label} onClick={() => { setProfileOpen(false); navigate('/settings') }} className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-[13px] ${isDark ? 'text-slate-400 hover:text-white hover:bg-white/[0.04]' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'} transition-colors cursor-pointer`}>
-                          <I className="w-4 h-4" /> {label}
-                        </button>
-                      ))}
-                      <div className={`border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-200'} mt-1 pt-1`}>
-                        <button onClick={handleLogout} className="flex items-center gap-2.5 w-full px-4 py-2.5 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/[0.06] transition-colors cursor-pointer">
-                          <LogOut className="w-4 h-4" /> Sign out
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
             </div>
           </div>
         </section>
@@ -297,13 +313,13 @@ export default function Dashboard() {
                 <h2 className={`text-lg sm:text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>Download BatchMyPhotos</h2>
                 <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed max-w-lg`}>
                   Organize, rename, and batch-process thousands of photos in seconds.
-                  Everything runs locally — your files never leave your machine.
+                  Everything runs locally, your files never leave your machine.
                 </p>
               </div>
 
               {/* CTA */}
               <div className="shrink-0 flex flex-col gap-2.5">
-                <button className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:brightness-110 transition-all cursor-pointer">
+                <button className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer">
                   <Download className="w-4 h-4" /> Download for Windows
                 </button>
                 <span className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} text-center`}>v1.0.0 · Windows 10+</span>
@@ -349,13 +365,13 @@ export default function Dashboard() {
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/15 to-purple-500/15 border border-indigo-500/10 flex items-center justify-center">
                   {isFree
-                    ? <Camera className="w-5 h-5 text-indigo-400" />
+                    ? <Sparkles className="w-5 h-5 text-indigo-400" />
                     : <Crown  className="w-5 h-5 text-amber-400" />}
                 </div>
                 <div>
-                  <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} tracking-tight`}>{sub.plan}</p>
+                  <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} tracking-tight`}>{isFree ? 'Free' : 'Pro'}</p>
                   <p className={`text-[13px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                    {isFree ? 'Free forever · core features included' : `Billed ${sub.billingCycle?.toLowerCase()} · renews ${sub.renewalDate}`}
+                    {isFree ? 'Free forever · core features included' : sub?.expires_at ? `Active until ${new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'Pro plan active'}
                   </p>
                 </div>
               </div>
@@ -363,10 +379,11 @@ export default function Dashboard() {
               {/* Quick details row */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Billing', value: sub.billingCycle || '—' },
-                  { label: 'Payment', value: sub.paymentMethod || '—' },
+                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱500/mo' },
+                  { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
+                  { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 10} batches`, full: true },
                 ].map(d => (
-                  <div key={d.label} className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3`}>
+                  <div key={d.label} className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
                     <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-0.5`}>{d.label}</p>
                     <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{d.value}</p>
                   </div>
@@ -391,15 +408,23 @@ export default function Dashboard() {
               {/* Action buttons */}
               <div className="flex flex-wrap gap-3">
                 {isFree ? (
-                  <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:brightness-110 transition-all cursor-pointer">
-                    <Sparkles className="w-4 h-4" /> Upgrade to Pro
+                  <button
+                    onClick={() => setActiveModal('pricing')}
+                    disabled={checkoutLoading}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {checkoutLoading ? (
+                      <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
+                    )}
                   </button>
                 ) : (
-                  <button className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
+                  <button onClick={() => setActiveModal('managePlan')} className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
                     Manage Plan
                   </button>
                 )}
-                <button className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
+                <button onClick={() => navigate('/billing')} className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
                   <CreditCard className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} /> Billing History
                 </button>
               </div>
@@ -420,7 +445,7 @@ export default function Dashboard() {
 
               {/* Avatar row */}
               <div className="flex items-center gap-3.5 mb-5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-base font-bold text-white shadow-md shadow-indigo-500/20 shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-base font-bold text-white shadow-md shadow-indigo-500/20 shrink-0">
                   {initials}
                 </div>
                 <div className="min-w-0">
@@ -433,13 +458,13 @@ export default function Dashboard() {
               {/* Setting rows */}
               <div className="space-y-1.5 flex-1">
                 {[
-                  { icon: User, label: 'Edit Profile' },
-                  { icon: Lock, label: 'Change Password' },
-                  { icon: Mail, label: 'Update Email' },
-                ].map(({ icon: I, label }) => (
-                  <button key={label} onClick={() => navigate('/settings')} className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/[0.04] text-slate-400 hover:text-slate-200' : 'hover:bg-gray-50 text-gray-500 hover:text-gray-700'} text-sm transition-colors cursor-pointer group`}>
+                  { icon: User, label: 'Edit Profile', path: '/settings' },
+                  { icon: Lock, label: 'Change Password', path: '/settings#password' },
+                  { icon: Settings, label: 'Preferences', path: '/settings#preferences' },
+                ].map(({ icon: Icon, label, path }) => (
+                  <button key={label} onClick={() => navigate(path)} className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/[0.04] text-slate-400 hover:text-slate-200' : 'hover:bg-gray-50 text-gray-500 hover:text-gray-700'} text-sm transition-colors cursor-pointer group`}>
                     <span className="flex items-center gap-2.5">
-                      <I className={`w-3.5 h-3.5 ${isDark ? 'text-slate-600 group-hover:text-slate-400' : 'text-gray-400 group-hover:text-gray-500'} transition-colors`} /> {label}
+                      <Icon className={`w-3.5 h-3.5 ${isDark ? 'text-slate-600 group-hover:text-slate-400' : 'text-gray-400 group-hover:text-gray-500'} transition-colors`} /> {label}
                     </span>
                     <ArrowRight className={`w-3 h-3 ${isDark ? 'text-slate-700 group-hover:text-slate-500' : 'text-gray-300 group-hover:text-gray-400'} group-hover:translate-x-0.5 transition-all`} />
                   </button>
@@ -466,11 +491,11 @@ export default function Dashboard() {
                 { icon: FileText,   label: 'Documentation',    desc: 'Guides & getting started',     href: null, modal: 'documentation' },
                 { icon: MessageCircle, label: 'Contact Support', desc: 'We typically reply same day', href: 'mailto:batchmyphotos@gmail.com' },
                 { icon: ShieldCheck, label: 'Privacy Policy',  desc: 'How we protect your data',     href: null, modal: 'privacyPolicy' },
-              ].map(({ icon: I, label, desc, href, modal }) => {
+              ].map(({ icon: Icon, label, desc, href, modal }) => {
                 const inner = (
                   <>
                     <div className={`w-9 h-9 rounded-xl ${isDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'} flex items-center justify-center mb-3.5 group-hover:border-indigo-500/20 group-hover:bg-indigo-500/5 transition-colors`}>
-                      <I className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'} group-hover:text-indigo-400 transition-colors`} />
+                      <Icon className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'} group-hover:text-indigo-400 transition-colors`} />
                     </div>
                     <p className={`text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-gray-700'} mb-0.5`}>{label}</p>
                     <p className={`text-[12px] ${isDark ? 'text-slate-600' : 'text-gray-400'} leading-snug`}>{desc}</p>
@@ -507,7 +532,159 @@ export default function Dashboard() {
       </div>
 
       {/* ── Modals ── */}
-      {activeModal && <DashModal modalKey={activeModal} onClose={() => setActiveModal(null)} />}
+      {activeModal && activeModal !== 'managePlan' && activeModal !== 'pricing' && (
+        <DashModal modalKey={activeModal} onClose={() => setActiveModal(null)} onUpgrade={handleUpgrade} checkoutLoading={checkoutLoading} />
+      )}
+
+      {/* ── Pricing Modal ── */}
+      <PricingModal
+        isOpen={activeModal === 'pricing'}
+        onClose={() => setActiveModal(null)}
+        onUpgrade={handleUpgrade}
+        checkoutLoading={checkoutLoading}
+      />
+
+      {/* ── Manage Plan Modal ── */}
+      {activeModal === 'managePlan' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className={`relative w-full max-w-md max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-white/[0.06]' : 'border-gray-200'} shrink-0`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'} flex items-center justify-center text-indigo-400`}>
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Manage Your Plan</h3>
+              </div>
+              <button onClick={() => setActiveModal(null)} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 overflow-y-auto flex-1 custom-scrollbar space-y-5">
+              {confirmCancel ? (
+                // Cancellation Confirmation View
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'} flex gap-3`}>
+                    <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className={`font-bold text-sm ${isDark ? 'text-red-400' : 'text-red-700'} mb-1`}>Cancel Subscription?</h4>
+                      <p className={`text-sm ${isDark ? 'text-red-200' : 'text-red-600'} leading-relaxed`}>
+                        This will <strong>immediately</strong> downgrade your account to the Free plan. You will lose access to Pro features right now.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setConfirmCancel(false)}
+                      className={`flex-1 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-slate-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}
+                    >
+                      Keep Plan
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setCheckoutLoading(true) // reuse loading state
+                          await cancelSubscription()
+                          setActiveModal(null)
+                          setConfirmCancel(false)
+                          setPaymentMsg({ type: 'info', text: 'Subscription cancelled. You are now on the Free plan.' })
+                          setTimeout(() => setPaymentMsg(null), 5000)
+                        } catch (err) {
+                          console.error(err)
+                          setPaymentMsg({ type: 'error', text: 'Failed to cancel subscription' })
+                        } finally {
+                          setCheckoutLoading(false)
+                        }
+                      }}
+                      disabled={checkoutLoading}
+                      className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {checkoutLoading ? 'Processing…' : 'Confirm Cancel'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Standard Management View
+                <>
+                  {/* Current Plan Badge */}
+                  <div className={`rounded-xl p-4 ${isDark ? 'bg-indigo-500/[0.06] border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-100'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>Current Plan</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                        {sub?.plan === 'pro' ? 'Pro' : 'Free'}
+                      </span>
+                    </div>
+                    <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {sub?.plan === 'pro' ? '₱500' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
+                    </p>
+                  </div>
+
+                  {/* Plan Details */}
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Status', value: sub?.status === 'active' ? '✅ Active' : '⚠️ ' + (sub?.status || 'Unknown') },
+                      { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
+                      { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
+                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 10 used` },
+                    ].map((item) => (
+                      <div key={item.label} className={`flex items-center justify-between py-2.5 px-3 rounded-lg ${isDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
+                        <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.label}</span>
+                        <span className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Features list */}
+                  <div className={`rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gray-50'} p-4`}>
+                    <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Included Features</p>
+                    <ul className="space-y-2.5 text-sm">
+                      {[
+                        { text: 'Unlimited batches', included: sub?.plan === 'pro' },
+                        { text: 'Offline processing', included: sub?.plan === 'pro' },
+                        { text: 'Custom watermarks', included: sub?.plan === 'pro' },
+                        { text: 'Blur detection', included: sub?.plan === 'pro' },
+                      ].map((f) => (
+                        <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-slate-600' : 'text-gray-400')}`}>
+                          {f.included
+                            ? <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                            : <X className="w-4 h-4 shrink-0 opacity-50" />
+                          }
+                          <span>{f.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2.5 pt-1">
+                    <button
+                      onClick={() => { setActiveModal(null); navigate('/billing') }}
+                      className={`w-full py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-slate-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2`}
+                    >
+                      <CreditCard className="w-4 h-4" /> View Billing History
+                    </button>
+                    
+                    {sub?.plan === 'pro' && (
+                      <button
+                        onClick={() => setConfirmCancel(true)}
+                        className={`w-full py-2 text-xs font-medium ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} transition-colors cursor-pointer`}
+                      >
+                        Cancel Subscription
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

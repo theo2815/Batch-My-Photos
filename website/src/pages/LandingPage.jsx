@@ -495,7 +495,7 @@ const MockFileExplorer = () => {
 const FAQ_ITEMS = [
   {
     q: "Are my photos uploaded anywhere?",
-    a: "No. Everything runs locally on your machine. Your files never leave your computer—there are no uploads, no cloud processing, and no third-party access. Ever.",
+    a: "No. Everything runs locally on your machine. Your files never leave your computer, there is no uploads, no cloud processing, and no third-party access. Ever.",
   },
   {
     q: "How accurate is the live demo compared to the real app?",
@@ -503,7 +503,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can it handle very large folders (10,000+ photos)?",
-    a: "Yes. The app is designed for real-world workloads of 5,000 to 20,000+ photos. It processes files directly on your file system, so performance scales with your hardware—not a server.",
+    a: "Yes. The app is designed for real-world workloads of 5,000 to 20,000+ photos. It processes files directly on your file system, so performance scales with your hardware not a server.",
   },
   {
     q: "What if I don't like the result? Can I undo?",
@@ -511,7 +511,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Where can I upload my batches after processing?",
-    a: "Anywhere. Once your photos are sorted into folders, you can upload them to Google Photos, Dropbox, WeTransfer, social media—any platform that accepts standard files and folders.",
+    a: "Anywhere. Once your photos are sorted into folders, you can upload them to Google Photos, Dropbox, WeTransfer, social media, any platform that accepts standard files and folders.",
   },
   {
     q: "Is it safe? Will it corrupt or delete my photos?",
@@ -519,7 +519,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What if the app crashes or I accidentally close it?",
-    a: "No worries—your progress is saved automatically. If the app closes, you can resume right where you left off. Files already processed stay in their folders, and Undo still works after a restart.",
+    a: "No worries, your progress is saved automatically. If the app closes, you can resume right where you left off. Files already processed stay in their folders, and Undo still works after a restart.",
   },
   {
     q: "Is it really free?",
@@ -622,7 +622,7 @@ export default function LandingPage() {
 
             {/* Sub-headline */}
             <p className={`mt-6 text-lg sm:text-xl leading-8 ${isDark ? 'text-slate-400' : 'text-gray-500'} max-w-2xl mx-auto`}>
-              Drag a folder in, tweak your settings, and let Batch My Photos organize everything into clean, labeled batches — right on your machine.
+              Drag a folder in, tweak your settings, and let Batch My Photos organize everything into clean, labeled batches right on your machine.
             </p>
 
             {/* CTA buttons */}
@@ -699,10 +699,10 @@ export default function LandingPage() {
             <div className="w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl" />
           </div>
           <h3 className={`relative text-3xl sm:text-4xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-4`}>
-            See it in action — no download needed
+            See it in action no download needed
           </h3>
           <p className={`relative text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} mb-10 max-w-xl mx-auto`}>
-            Try the full workflow right in your browser. Drag a folder, tweak settings, preview batches, and watch them process — all in our interactive demo.
+            Try the full workflow right in your browser. Drag a folder, tweak settings, preview batches, and watch them process all in our interactive demo.
           </p>
           <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
@@ -731,7 +731,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-2xl text-center mb-16">
             <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">Built for Real Workflows</span>
             <h2 className={`mt-4 text-3xl sm:text-5xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Features that actually save you time</h2>
-            <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Everything you need to go from a messy photo dump to perfectly organized batches—without the headache.</p>
+            <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Everything you need to go from a messy photo dump to perfectly organized batches without the headache.</p>
           </div>
 
           {/* Feature cards grid */}
@@ -745,7 +745,7 @@ export default function LandingPage() {
                   <Layers className="w-6 h-6 text-indigo-400" />
                 </div>
                 <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Batch Photo Processing</h3>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Automatically split thousands of photos into clean, manageable batches based on your limits. Set a max per folder—500, 1000, whatever you need—and we handle the rest.</p>
+                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Automatically split thousands of photos into clean, manageable batches based on your limits. Set a max per folder to 500, 1000, whatever you need, and we handle the rest.</p>
               </div>
             </div>
 
@@ -757,7 +757,7 @@ export default function LandingPage() {
                   <Eye className="w-6 h-6 text-amber-400" />
                 </div>
                 <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Blurry Photo Detection</h3>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Flag blurry images before they waste your time. Choose Strict, Moderate, or Lenient sensitivity to catch exactly the level of blur you care about—then review or remove in one click.</p>
+                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Flag blurry images before they waste your time. Choose Strict, Moderate, or Lenient sensitivity to catch exactly the level of blur you care about, then review or remove in one click.</p>
                 {/* Sensitivity pills */}
                 <div className="flex gap-2 mt-4">
                   {['Strict', 'Moderate', 'Lenient'].map(s => (
@@ -782,7 +782,7 @@ export default function LandingPage() {
                   <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Watermarking</h3>
                   <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/20">Coming Soon</span>
                 </div>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Apply a custom watermark to every photo in a batch, automatically. Toggle it on or off per batch—your brand, your terms, zero manual work.</p>
+                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Apply a custom watermark to every photo in a batch, automatically. Toggle it on or off per batch your brand, your terms, zero manual work.</p>
               </div>
             </div>
 
@@ -828,7 +828,7 @@ export default function LandingPage() {
             <div>
               <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">Who It's For</span>
               <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Built for people who deal with <em className="not-italic text-indigo-400">way too many photos</em></h2>
-              <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>If you've ever stared at a folder with 10,000 unsorted images and thought "where do I even start?"—this is for you.</p>
+              <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>If you've ever stared at a folder with 10,000 unsorted images and thought "where do I even start?" this is for you.</p>
 
               <div className="mt-10 space-y-6">
                 {/* Persona 1 */}
@@ -840,7 +840,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Wedding &amp; Event Photographers</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>You shoot 5,000–20,000 photos per event. You need them split into clean, deliverable batches—fast. No second-guessing, no miscounts.</p>
+                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>You shoot 5,000–20,000 photos per event. You need them split into clean, deliverable batches fast. No second-guessing, no miscounts.</p>
                   </div>
                 </div>
 
@@ -866,7 +866,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Anyone Tired of Manual Sorting</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Maybe you're organizing family vacations, school events, or personal archives. If you've ever spent an evening dragging files into folders one by one—those days are over.</p>
+                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Maybe you're organizing family vacations, school events, or personal archives. If you've ever spent an evening dragging files into folders one by one, those days are over.</p>
                   </div>
                 </div>
               </div>
@@ -888,7 +888,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Handles Real-World Scale</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Designed for 5,000 to 20,000+ photos per session. Batch sizes, folder names, and sort order are all under your control—no arbitrary limits.</p>
+                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Designed for 5,000 to 20,000+ photos per session. Batch sizes, folder names, and sort order are all under your control, no arbitrary limits.</p>
                   </div>
                 </div>
 
@@ -914,7 +914,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>100% Offline. Your Files Stay Yours.</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Nothing gets uploaded. Nothing leaves your machine. The app works entirely on your local file system—fast, private, and always available.</p>
+                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Nothing gets uploaded. Nothing leaves your machine. The app works entirely on your local file system, fast, private, and always available.</p>
                   </div>
                 </div>
 
@@ -967,7 +967,7 @@ export default function LandingPage() {
             Your photos deserve better than manual sorting.
           </h2>
           <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} max-w-xl mx-auto leading-relaxed`}>
-            Batch My Photos handles the tedious part so you can get back to what matters. Try it in your browser first — no account, no install, no risk.
+            Batch My Photos handles the tedious part so you can get back to what matters. Try it in your browser first, no account, no install, no risk.
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -1003,7 +1003,7 @@ const content = [
   {
     title: "1. Drag & Drop Import",
     description:
-      "Start by dragging a folder containing thousands of photos directly into the app. We instantly scan and prepare them for processing—no uploads required.",
+      "Start by dragging a folder containing thousands of photos directly into the app. We instantly scan and prepare them for processing, no uploads required.",
     content: (
         <div className="w-full h-full bg-[#1e1e1e] flex items-center justify-center">
             <div className="w-full max-w-100 aspect-4/3 border-2 border-dashed border-[#71717a] rounded-xl flex items-center justify-center bg-[#2d2d2d] hover:border-[#3b82f6] hover:scale-[1.02] hover:shadow-[0_0_10px_rgba(59,130,246,0.2)] transition-all cursor-pointer relative overflow-hidden group">
@@ -1104,7 +1104,7 @@ const content = [
   {
     title: "6. The Hard Part Is Over",
     description:
-      "Your files are already sorted into clean batches. Open them in the file explorer and upload anywhere—no stress, no late-night manual sorting.",
+      "Your files are already sorted into clean batches. Open them in the file explorer and upload anywhere, no stress, no late-night manual sorting.",
     content: <MockFileExplorer />,
   },
 ];

@@ -53,8 +53,16 @@ export default function Navbar() {
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
+  const [loggingOut, setLoggingOut] = useState(false)
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await supabase.auth.signOut()
+      navigate('/')
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   // Theme-driven styling
@@ -134,11 +142,13 @@ export default function Navbar() {
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
-                      dark ? 'text-slate-300 bg-white/[0.06] hover:bg-white/[0.1]' : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+                    disabled={loggingOut}
+                    className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                      dark ? 'text-slate-300 bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50' : 'text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50'
                     }`}
                   >
-                    Logout
+                    {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                    {loggingOut ? 'Logging out…' : 'Logout'}
                   </button>
                 </>
               ) : (
@@ -217,7 +227,16 @@ export default function Navbar() {
               {user ? (
                 <>
                   <Link to="/dashboard" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-slate-300' : 'text-gray-700'}`}>Dashboard</Link>
-                  <button onClick={handleLogout} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-slate-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>Logout</button>
+                  <button 
+                    onClick={handleLogout} 
+                    disabled={loggingOut}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                      dark ? 'text-slate-400 hover:text-white disabled:opacity-50' : 'text-gray-600 hover:text-gray-900 disabled:opacity-50'
+                    }`}
+                  >
+                    {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                    {loggingOut ? 'Logging out…' : 'Logout'}
+                  </button>
                 </>
               ) : (
                 <>

@@ -15,7 +15,7 @@ const MODALS = {
         <p className="text-slate-400 leading-relaxed">Welcome to Batch My Photos! Here's how to get organized in just a few minutes.</p>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">1. Import your photos</h4>
-          <p className="text-sm text-slate-400 leading-relaxed">Drag and drop a folder containing your photos directly into the app. We'll scan everything instantly — no uploading, no cloud, just your local files.</p>
+          <p className="text-sm text-slate-400 leading-relaxed">Drag and drop a folder containing your photos directly into the app. We'll scan everything instantly, no uploading, no cloud, just your local files.</p>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">2. Configure your settings</h4>
@@ -27,7 +27,7 @@ const MODALS = {
         </div>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">4. Process &amp; done</h4>
-          <p className="text-sm text-slate-400 leading-relaxed">Hit Start and watch your photos get sorted into clean, labeled folders. If you change your mind, hit Undo — everything goes right back where it was.</p>
+          <p className="text-sm text-slate-400 leading-relaxed">Hit Start and watch your photos get sorted into clean, labeled folders. If you change your mind, hit undo and everything goes right back where it was.</p>
         </div>
         <div className="pt-3 border-t border-white/[0.06]">
           <p className="text-xs text-slate-500">💡 Tip: Try the Live Demo first to see the full workflow without installing anything.</p>
@@ -143,7 +143,7 @@ const MODALS = {
         </div>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">Third-party services</h4>
-          <p className="text-sm text-slate-400 leading-relaxed">We use Supabase for authentication and Stripe for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
+          <p className="text-sm text-slate-400 leading-relaxed">We use Supabase for authentication and Paymongo for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">Your rights</h4>
@@ -165,7 +165,7 @@ const MODALS = {
         <p className="text-slate-400 leading-relaxed">By using Batch My Photos, you agree to the following terms. We've kept them short, clear, and fair.</p>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">Usage</h4>
-          <p className="text-sm text-slate-400 leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process — we don't monitor, review, or access your files.</p>
+          <p className="text-sm text-slate-400 leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process we don't monitor, review, or access your files.</p>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">Free &amp; Pro plans</h4>
@@ -259,11 +259,11 @@ export default function Footer() {
             {/* Brand column */}
             <div className="md:col-span-1">
               <Link to="/" className="flex items-center gap-2 group">
-                <Camera className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+                <img src="/app_icon.png" alt="BatchMyPhotos" className="w-6 h-6 rounded-md shadow-sm" />
                 <span className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Batch My Photos</span>
               </Link>
               <p className={`mt-3 text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'} leading-relaxed`}>
-                Sort thousands of photos into clean, labeled batches — privately, on your machine.
+                Sort thousands of photos into clean, labeled batches privately, on your machine.
               </p>
               <div className="flex items-center gap-3 mt-5">
                 <a href="mailto:batchmyphotos@gmail.com" className={`w-8 h-8 rounded-lg ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-slate-500 hover:text-white' : 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-all`} aria-label="Email us">
@@ -307,9 +307,11 @@ export default function Footer() {
           {/* Divider */}
           <div className={`mt-14 pt-8 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'} flex flex-col sm:flex-row items-center justify-between gap-4`}>
             <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>&copy; {year} BatchMyPhotos. All rights reserved.</p>
-            <p className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-              Made with <Heart className="w-3 h-3 text-rose-500/70" /> for photographers everywhere
-            </p>
+            <div className={`flex flex-col sm:flex-row items-center gap-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+              <span>Developed by <strong className={isDark ? 'text-slate-500' : 'text-gray-500'}>Theo Cedric Chan</strong></span>
+              <span className="hidden sm:inline">·</span>
+              <a href="mailto:theocedricchan28@gmail.com" className="hover:text-indigo-400 transition-colors">theocedricchan28@gmail.com</a>
+            </div>
             <div className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Your photos never leave your device</span>

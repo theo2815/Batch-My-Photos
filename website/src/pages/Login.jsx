@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
-import { Camera, Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
+import GoogleAuthButton from '../components/GoogleAuthButton'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -12,7 +13,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const { isDark } = useTheme()
 
   const handleLogin = async (e) => {
@@ -20,13 +20,13 @@ export default function Login() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (error) {
-      setError(error.message)
+    if (authError) {
+      setError(authError.message)
     } else {
       navigate('/dashboard')
     }
@@ -49,13 +49,25 @@ export default function Login() {
           {/* Logo + heading */}
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2.5 group mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                <Camera className="w-5 h-5 text-white" />
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${isDark ? 'from-slate-800 to-slate-900 border border-white/[0.08] shadow-xl shadow-black/30' : 'from-gray-100 to-gray-200 border border-gray-200 shadow-lg shadow-gray-200/50'} flex items-center justify-center`}>
+                <img src="/app_icon.png" alt="Logo" className="w-7 h-7 rounded-md" />
               </div>
               <span className={`text-lg font-bold ${isDark ? 'text-white group-hover:text-indigo-300' : 'text-gray-900 group-hover:text-indigo-600'} transition-colors`}>Batch My Photos</span>
             </Link>
             <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Welcome back</h1>
             <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Sign in to continue organizing your photos</p>
+          </div>
+
+          {/* Google Login */}
+          <div className="mb-6">
+            <GoogleAuthButton />
+          </div>
+
+          {/* Divider */}
+          <div className="mb-6 flex items-center gap-3">
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+            <span className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'} uppercase tracking-wider`}>or sign in with email</span>
+            <div className={`flex-1 h-px ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
           </div>
 
           {/* Error */}
@@ -97,9 +109,9 @@ export default function Login() {
                 <label htmlFor="password" className={`block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   Password
                 </label>
-                <button type="button" className={`text-xs ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'} transition-colors`}>
+                <Link to="/forgot-password" className={`text-xs ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'} transition-colors`}>
                   Forgot password?
-                </button>
+                </Link>
               </div>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
@@ -126,25 +138,13 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Remember me */}
-            <div className="flex items-center gap-2">
-              <input
-                id="remember"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className={`w-4 h-4 rounded ${isDark ? 'border-white/[0.15] bg-white/[0.04]' : 'border-gray-300 bg-white'} text-indigo-500 focus:ring-indigo-500/30 focus:ring-offset-0 cursor-pointer`}
-              />
-              <label htmlFor="remember" className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} cursor-pointer select-none`}>
-                Remember me
-              </label>
-            </div>
+
 
             {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
             >
               {loading ? (
                 <>

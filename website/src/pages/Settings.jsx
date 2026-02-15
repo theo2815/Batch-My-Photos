@@ -4,24 +4,12 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import {
-  Camera, User, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2,
-  Check, Sun, Moon, Monitor, ShieldCheck, ArrowRight, Palette,
+  User, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2,
+  Check, Sun, Moon, Monitor, ShieldCheck, Palette,
 } from 'lucide-react'
+import { getPasswordStrength } from '../utils/passwordStrength'
 
-/* ─── Password strength (same logic as Register) ─────────────────────────── */
-const getPasswordStrength = (pw) => {
-  if (!pw) return { level: 0, label: '', color: '' }
-  let score = 0
-  if (pw.length >= 6) score++
-  if (pw.length >= 10) score++
-  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++
-  if (/\d/.test(pw)) score++
-  if (/[^A-Za-z0-9]/.test(pw)) score++
-  if (score <= 1) return { level: 1, label: 'Weak', color: 'bg-red-500' }
-  if (score <= 2) return { level: 2, label: 'Fair', color: 'bg-amber-500' }
-  if (score <= 3) return { level: 3, label: 'Good', color: 'bg-indigo-500' }
-  return { level: 4, label: 'Strong', color: 'bg-emerald-500' }
-}
+
 
 /* ─── Theme options ──────────────────────────────────────────────────────── */
 const THEMES = [
@@ -39,12 +27,13 @@ export default function Settings() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { navigate('/login'); return }
-      setUser(session.user)
+      if (session) {
+        setUser(session.user)
+      }
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate('/login')
+      if (!session) navigate('/')
       else setUser(session.user)
     })
     return () => subscription.unsubscribe()
@@ -52,6 +41,7 @@ export default function Settings() {
 
   /* ── Profile ── */
   const [displayName, setDisplayName] = useState('')
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMsg, setProfileMsg] = useState(null)
 
@@ -59,12 +49,39 @@ export default function Settings() {
     if (user) setDisplayName(user.user_metadata?.full_name || '')
   }, [user])
 
+  const handleEditClick = () => {
+    setIsEditingProfile(true)
+    setProfileMsg(null)
+  }
+
+  const handleCancelClick = () => {
+    setIsEditingProfile(false)
+    setDisplayName(user?.user_metadata?.full_name || '')
+    setProfileMsg(null)
+  }
+
   const handleProfileSave = async (e) => {
     e.preventDefault()
     setProfileSaving(true)
     setProfileMsg(null)
-    const { error } = await supabase.auth.updateUser({ data: { full_name: displayName } })
-    setProfileMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Profile updated!' })
+
+    const { data, error } = await supabase.auth.updateUser({ 
+      data: { 
+        full_name: displayName,
+        name: displayName // Also update 'name' as some providers (like Google) use this field
+      } 
+    })
+    
+    if (error) {
+      setProfileMsg({ type: 'error', text: error.message })
+    } else {
+      setUser(data.user) // Update local user state immediately
+      setProfileMsg({ type: 'success', text: 'Profile updated!' })
+      setIsEditingProfile(false)
+      // Auto-dismiss success message
+      setTimeout(() => setProfileMsg(null), 3000)
+    }
+    
     setProfileSaving(false)
   }
 
@@ -89,21 +106,6 @@ export default function Settings() {
     setPwSaving(false)
   }
 
-  /* ── Email ── */
-  const [newEmail, setNewEmail] = useState('')
-  const [emailSaving, setEmailSaving] = useState(false)
-  const [emailMsg, setEmailMsg] = useState(null)
-
-  const handleEmailSave = async (e) => {
-    e.preventDefault()
-    setEmailMsg(null)
-    if (!newEmail || newEmail === user?.email) { setEmailMsg({ type: 'error', text: 'Please enter a different email address.' }); return }
-    setEmailSaving(true)
-    const { error } = await supabase.auth.updateUser({ email: newEmail })
-    setEmailMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Verification email sent! Check your inbox.' })
-    if (!error) setNewEmail('')
-    setEmailSaving(false)
-  }
 
   /* ── Theme (from context) ── */
   const { theme, setTheme, isDark } = useTheme()
@@ -157,13 +159,27 @@ export default function Settings() {
         {/* ═══════════════════════════════════════════════════════════════════
             EDIT PROFILE
            ═══════════════════════════════════════════════════════════════════ */}
-        <section className="auth-card-in mb-6" style={{ animationDelay: '0.05s' }}>
+        <section id="profile" className="auth-card-in mb-6" style={{ animationDelay: '0.05s' }}>
           <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                <User className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
+                  <User className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                </div>
+                <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Edit Profile</h2>
               </div>
-              <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Edit Profile</h2>
+              {!isEditingProfile && (
+                <button
+                  onClick={handleEditClick}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                    isDark 
+                      ? 'border-white/[0.1] text-indigo-400 hover:bg-white/[0.05]' 
+                      : 'border-gray-200 text-indigo-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Edit
+                </button>
+              )}
             </div>
 
             {profileMsg && (
@@ -192,7 +208,12 @@ export default function Settings() {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Jane Doe"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-slate-600' : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all`}
+                    disabled={!isEditingProfile}
+                    className={`auth-input block w-full rounded-xl border ${
+                      isDark 
+                        ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-slate-600 disabled:opacity-50 disabled:cursor-default' 
+                        : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-default'
+                    } py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all`}
                   />
                 </div>
               </div>
@@ -212,17 +233,33 @@ export default function Settings() {
                     className={`block w-full rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} py-3 pl-10 pr-4 text-sm cursor-not-allowed`}
                   />
                 </div>
-                <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>To change your email, use the section below.</p>
+                <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>To protect your account, email cannot be changed.</p>
               </div>
 
-              <button
-                type="submit"
-                disabled={profileSaving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-              >
-                {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Save Changes
-              </button>
+              {isEditingProfile && (
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelClick}
+                    disabled={profileSaving}
+                    className={`px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+                      isDark 
+                        ? 'border-white/[0.1] text-slate-300 hover:bg-white/[0.05]' 
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </section>
@@ -230,7 +267,7 @@ export default function Settings() {
         {/* ═══════════════════════════════════════════════════════════════════
             CHANGE PASSWORD
            ═══════════════════════════════════════════════════════════════════ */}
-        <section className="auth-card-in mb-6" style={{ animationDelay: '0.1s' }}>
+        <section id="password" className="auth-card-in mb-6" style={{ animationDelay: '0.1s' }}>
           <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
             <div className="flex items-center gap-2.5 mb-5">
               <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
@@ -332,7 +369,7 @@ export default function Settings() {
               <button
                 type="submit"
                 disabled={pwSaving || !newPassword || !confirmPassword}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
               >
                 {pwSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
                 Update Password
@@ -342,82 +379,9 @@ export default function Settings() {
         </section>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            CHANGE EMAIL
-           ═══════════════════════════════════════════════════════════════════ */}
-        <section className="auth-card-in mb-6" style={{ animationDelay: '0.15s' }}>
-          <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                <Mail className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-              </div>
-              <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Change Email</h2>
-            </div>
-
-            {emailMsg && (
-              <div className={`mb-5 rounded-xl px-4 py-3 text-sm flex items-start gap-2 ${
-                emailMsg.type === 'error'
-                  ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-              }`}>
-                <span className="shrink-0 mt-0.5">{emailMsg.type === 'error' ? '⚠' : '✓'}</span>
-                <span>{emailMsg.text}</span>
-              </div>
-            )}
-
-            {/* Current email */}
-            <div className={`mb-5 rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3.5`}>
-              <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-1`}>Current email</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{user?.email}</p>
-                {user?.email_confirmed_at ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">
-                    <ShieldCheck className="w-3 h-3" /> Verified
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wider">
-                    Unverified
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <form onSubmit={handleEmailSave} className="space-y-5">
-              <div>
-                <label htmlFor="newEmail" className={`block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'} mb-2`}>
-                  New email address
-                </label>
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <Mail className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                  </div>
-                  <input
-                    id="newEmail"
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="newemail@example.com"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-slate-600' : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all`}
-                  />
-                </div>
-                <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>A verification link will be sent to both your current and new email.</p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={emailSaving || !newEmail}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-              >
-                {emailSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                Update Email
-              </button>
-            </form>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════════════════════════
             THEME
            ═══════════════════════════════════════════════════════════════════ */}
-        <section className="auth-card-in mb-6" style={{ animationDelay: '0.2s' }}>
+        <section id="preferences" className="auth-card-in mb-6" style={{ animationDelay: '0.2s' }}>
           <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
             <div className="flex items-center gap-2.5 mb-5">
               <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
