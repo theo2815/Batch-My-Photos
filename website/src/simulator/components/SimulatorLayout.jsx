@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, X, Minus, Square, Command, History, Sun } from 'lucide-react';
+import { Camera, X, Minus, Square, Command, History, Sun, Moon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../styles/desktop.css';
 
@@ -13,14 +13,16 @@ import '../styles/desktop.css';
  * scrollMain — If true, the main area scrolls naturally (for PreviewStep)
  *              instead of flex-centering content vertically.
  */
-const SimulatorLayout = ({ children, scrollMain = false }) => {
+const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHistory = false, modals, simTheme = 'dark', onToggleTheme }) => {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 font-sans selection:bg-indigo-500/30">
-      <div className="sim-app w-full max-w-[900px] h-[700px] bg-[#1e1e1e] rounded-xl border border-[#27272a] shadow-2xl flex flex-col overflow-hidden relative">
+      <div className={`sim-app ${simTheme === 'light' ? 'light' : ''} w-full max-w-[900px] h-[700px] rounded-xl border shadow-2xl flex flex-col overflow-hidden relative`}
+           style={{ background: simTheme === 'light' ? '#f5f7fa' : '#1e1e1e', borderColor: simTheme === 'light' ? '#d1d5db' : '#27272a' }}>
         
         {/* ─── macOS Title Bar ────────────────────────────────────────── */}
-        <div className="h-10 bg-[#27272a] flex items-center justify-between px-4 border-b border-[#3f3f46] shrink-0 select-none">
-          <div className="flex items-center space-x-2 text-slate-400 text-xs font-medium">
+        <div className="h-10 flex items-center justify-between px-4 border-b shrink-0 select-none"
+             style={{ background: simTheme === 'light' ? '#e8ecf1' : '#27272a', borderColor: simTheme === 'light' ? '#d1d5db' : '#3f3f46' }}>
+          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#4a4a6a' : '#94a3b8' }}>
             <div className="flex space-x-2 mr-4">
               <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors cursor-pointer group flex items-center justify-center">
                 <Link to="/" className="opacity-0 group-hover:opacity-100 text-black">
@@ -37,7 +39,7 @@ const SimulatorLayout = ({ children, scrollMain = false }) => {
             <Command size={14} className="text-indigo-400" />
             <span>BatchMyPhotos - Demo Mode</span>
           </div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
+          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: simTheme === 'light' ? '#8888a8' : '#64748b' }}>
             Interactive Web Demo
           </div>
         </div>
@@ -53,8 +55,16 @@ const SimulatorLayout = ({ children, scrollMain = false }) => {
             </h1>
             <p>Organize your photos into batch folders</p>
             <div className="header-actions">
-              <button className="header-btn" title="Operation History"><History size={20} /></button>
-              <button className="header-btn" title="Toggle theme"><Sun size={20} /></button>
+              <button
+                className="header-btn"
+                title="Operation History"
+                onClick={onShowHistory}
+              >
+                <History size={20} />
+              </button>
+              <button className="header-btn" title="Toggle theme" onClick={onToggleTheme}>
+                {simTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
             </div>
           </div>
 
@@ -71,6 +81,9 @@ const SimulatorLayout = ({ children, scrollMain = false }) => {
             </a>
           </div>
         </div>
+
+        {/* ─── Modals (inside .sim-app so they inherit CSS variables) ── */}
+        {modals}
       </div>
 
       {/* ─── Mobile Warning ─────────────────────────────────────────── */}

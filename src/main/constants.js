@@ -191,6 +191,22 @@ const BLUR_EDGE_THRESHOLDS = {
  */
 const BLUR_EDGE_PIXEL_THRESHOLD = 15;
 
+// ============================================================================
+// AI BLUR DETECTION
+// ============================================================================
+
+/**
+ * Number of images to send per batch to the AI blur detection service.
+ * MobileNetV3-Small processes 20 images efficiently in a single forward pass.
+ */
+const BLUR_AI_BATCH_SIZE = 20;
+
+/**
+ * Timeout in milliseconds for each batch request to the AI service.
+ * 30 seconds is generous for local inference; increase for cloud deployment.
+ */
+const BLUR_AI_TIMEOUT_MS = 30000;
+
 module.exports = {
   UV_THREADPOOL_SIZE,
   MAX_FILE_CONCURRENCY,
@@ -211,4 +227,6 @@ module.exports = {
   BLUR_THRESHOLDS,
   BLUR_EDGE_THRESHOLDS,
   BLUR_EDGE_PIXEL_THRESHOLD,
+  BLUR_AI_BATCH_SIZE,
+  BLUR_AI_TIMEOUT_MS,
 };

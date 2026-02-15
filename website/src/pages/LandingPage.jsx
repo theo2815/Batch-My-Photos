@@ -92,7 +92,7 @@ const MockSettingsPanel = () => {
             </div>
 
             {/* Detect Blur */}
-            <div className="flex flex-col space-y-3 pt-2">
+            <div className="flex flex-col space-y-3 pt-2 hidden">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center text-[#a1a1aa]">
                         <ScanEye className="w-4 h-4 mr-2" /> Detect Blurry Photos:
@@ -499,7 +499,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How accurate is the live demo compared to the real app?",
-    a: "The demo simulates the exact same workflow and logic as the desktop app. The only difference is it uses generated sample data instead of your real photos. What you see in the demo is what you get.",
+    a: "This live demo follows the same workflow and logic as the desktop app, but uses sample data instead of real photos. It’s meant to give you a feel for how everything works. For the best experience with your own files, we recommend downloading the desktop app."
   },
   {
     q: "Can it handle very large folders (10,000+ photos)?",
@@ -756,18 +756,11 @@ export default function LandingPage() {
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 mb-5 group-hover:bg-amber-500/20 transition-colors">
                   <Eye className="w-6 h-6 text-amber-400" />
                 </div>
-                <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Blurry Photo Detection</h3>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Flag blurry images before they waste your time. Choose Strict, Moderate, or Lenient sensitivity to catch exactly the level of blur you care about, then review or remove in one click.</p>
-                {/* Sensitivity pills */}
-                <div className="flex gap-2 mt-4">
-                  {['Strict', 'Moderate', 'Lenient'].map(s => (
-                    <span key={s} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${
-                      s === 'Moderate'
-                        ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
-                        : isDark ? 'bg-white/[0.04] text-slate-500' : 'bg-gray-100 text-gray-500'
-                    }`}>{s}</span>
-                  ))}
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Blurry Photo Detection</h3>
+                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20">Coming Soon</span>
                 </div>
+                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Flag blurry images before they waste your time. Choose strict, moderate, or lenient sensitivity to catch exactly the level of blur you care about.</p>
               </div>
             </div>
 

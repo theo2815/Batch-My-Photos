@@ -392,10 +392,22 @@ function SettingsPanel({
         />
       </div>
 
-      {/* Blur Detection */}
-      <div className="setting-row blur-detection-row">
-        <label>
+      {/* Blur Detection - COMING SOON */}
+      <div className="setting-row blur-detection-row" style={{ opacity: 0.5, pointerEvents: 'none', position: 'relative' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:
+          <span style={{
+            fontSize: '10px',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            backgroundColor: 'rgb(99 102 241 / 0.2)',
+            color: 'rgb(165 180 252)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            Coming Soon
+          </span>
           {isAnalyzingBlur && <Loader2 size={14} className="settings-loading-spinner" />}
         </label>
         <label className="toggle-switch">
@@ -405,6 +417,7 @@ function SettingsPanel({
             onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
             role="switch"
             aria-checked={blurDetectionEnabled}
+            disabled
           />
           <span className="toggle-track">
             <span className="toggle-label on">On</span>
@@ -415,13 +428,13 @@ function SettingsPanel({
       </div>
 
       {blurDetectionEnabled && (
-        <div className="setting-row blur-sensitivity-row">
+        <div className="setting-row blur-sensitivity-row" style={{ opacity: 0.5, pointerEvents: 'none' }}>
           <label>Sensitivity:</label>
           <button
             className="change-sensitivity-btn"
             onClick={onOpenBlurModal}
-            disabled={isAnalyzingBlur}
-            title="Change blur detection sensitivity"
+            disabled={true}
+            title="Feature coming soon"
           >
             <span className="change-sensitivity-label">
               {blurSensitivity === 'strict' ? 'Strict' : blurSensitivity === 'lenient' ? 'Lenient' : 'Moderate'}

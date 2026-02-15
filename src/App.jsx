@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Camera, Sun, Moon, Mail, History } from 'lucide-react';
+import { Camera, Sun, Moon, Mail, History, Loader2 } from 'lucide-react';
 
 // Constants
 import { STATES } from './constants/appStates';
@@ -24,13 +24,27 @@ import { useBatchExecution } from './hooks/useBatchExecution';
 import { useRollback } from './hooks/useRollback';
 import { useBlurDetection } from './hooks/useBlurDetection';
 
+// Authentication Components
+import { LoginScreen } from './components/Auth/LoginScreen';
+import { ProfileDropdown } from './components/Auth/ProfileDropdown';
+
 // Components
 import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal } from './components/Modals';
-import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard } from './components/StatusCards';
+import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
+import BoxSpinner from './components/common/BoxSpinner';
 
 function App() {
+  // ============================================================================
+  // AUTHENTICATION STATE
+  // ============================================================================
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
+
   // ============================================================================
   // CORE STATE
   // ============================================================================
@@ -88,6 +102,8 @@ function App() {
     // Safety check
     safetyCheckResult, showSafetyWarning,
     handleOverrideSafetyCheck, handleDismissSafetyCheck,
+    // Batch limit
+    isCheckingLimit, batchLimitExceeded, clearBatchLimitExceeded,
   } = batch;
 
   const rollback = useRollback({
@@ -169,6 +185,18 @@ function App() {
   // ============================================================================
   // EFFECTS
   // ============================================================================
+
+  // Check authentication on mount
+  useEffect(() => {
+    async function checkAuth() {
+      const authStatus = await window.electronAPI.authCheckStatus();
+      setIsAuthenticated(authStatus.isAuthenticated);
+      setUser(authStatus.user);
+      setSubscription(authStatus.subscription);
+      setAuthLoading(false);
+    }
+    checkAuth();
+  }, []);
 
   // Load settings and check for interrupted progress on mount
   useEffect(() => {
@@ -359,6 +387,7 @@ function App() {
     // Reset batch execution state so stale data doesn't bleed into next run
     setExecutionResults(null);
     setProgress({ current: 0, total: 0 });
+    clearBatchLimitExceeded();
   };
 
   const handleResetWithRollbackClear = async () => {
@@ -368,35 +397,118 @@ function App() {
   };
 
   // ============================================================================
+  // AUTHENTICATION HANDLERS
+  // ============================================================================
+
+  // Handle successful login
+  const handleLoginSuccess = async () => {
+    setIsVerifyingAuth(true);
+    try {
+      const authStatus = await window.electronAPI.authCheckStatus();
+      setUser(authStatus.user);
+      setSubscription(authStatus.subscription);
+      setIsAuthenticated(true);
+    } finally {
+      setIsVerifyingAuth(false);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    await window.electronAPI.authLogout();
+    setIsAuthenticated(false);
+    setUser(null);
+    setSubscription(null);
+    // Reset app state when logging out
+    handleReset();
+  };
+
+  // Handle view profile (opens website dashboard)
+  const handleViewProfile = async () => {
+    await window.electronAPI.authOpenDashboard();
+  };
+
+  // Handle upgrade to Pro (opens website dashboard with upgrade parameter)
+  const handleUpgrade = async () => {
+    await window.electronAPI.authOpenDashboard();
+  };
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
   const isProcessing = appState === STATES.EXECUTING || appState === STATES.SCANNING;
 
+  // Show loading screen while checking authentication or verifying after login
+  if (authLoading || isVerifyingAuth) {
+    return (
+      <div className="app">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          gap: '16px',
+        }}>
+          <Loader2
+            size={36}
+            style={{
+              color: '#3b82f6',
+              animation: 'spin 1.2s linear infinite',
+            }}
+          />
+          <p style={{
+            color: '#a1a1aa',
+            fontSize: '15px',
+            fontWeight: 500,
+          }}>
+            {isVerifyingAuth ? 'Signing you in...' : 'Loading...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Main app (authenticated users only)
   return (
     <div className={`app ${isProcessing ? 'processing' : ''}`}>
       <header className="app-header">
         <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>
         <div className="header-actions">
-          {operationHistory.length > 0 && (
+          <ProfileDropdown
+            user={user}
+            subscription={subscription}
+            onLogout={handleLogout}
+            onViewProfile={handleViewProfile}
+            onUpgrade={handleUpgrade}
+          />
+          <div className="header-icons">
+            {operationHistory.length > 0 && (
+              <button
+                className={`header-btn ${isProcessing ? 'disabled' : ''}`}
+                onClick={() => setShowHistoryModal(true)}
+                title="Operation History"
+                disabled={isProcessing}
+              >
+                <History size={20} />
+              </button>
+            )}
             <button
               className={`header-btn ${isProcessing ? 'disabled' : ''}`}
-              onClick={() => setShowHistoryModal(true)}
-              title="Operation History"
+              onClick={toggleTheme}
+              title="Toggle theme"
               disabled={isProcessing}
             >
-              <History size={20} />
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-          )}
-          <button
-            className={`header-btn ${isProcessing ? 'disabled' : ''}`}
-            onClick={toggleTheme}
-            title="Toggle theme"
-            disabled={isProcessing}
-          >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+          </div>
         </div>
       </header>
 
@@ -413,27 +525,44 @@ function App() {
           />
         )}
         {appState === STATES.SCANNING && <ScanningCard />}
-        {appState === STATES.READY && (
-          <PreviewPanel
-            folderPath={folderPath}
-            scanResults={scanResults}
-            previewResults={previewResults}
-            isRefreshingPreview={isRefreshingPreview}
-            refreshingField={refreshingField}
-            settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity }}
-            validationError={validationError}
-            expandedBatch={expandedBatch}
-            selectedPresetName={selectedPresetName}
-            onPresetSelect={setSelectedPresetName}
-            blurDetection={blurDetection}
-            onSettingsChange={handleSettingsChange}
-            onOpenBlurModal={handleOpenBlurModal}
-            onToggleBatch={(batchNumber) =>
-              setExpandedBatch(expandedBatch === batchNumber ? null : batchNumber)
-            }
-            onSelectOutputFolder={handleSelectOutputFolder}
-            onProceed={handleProceedClick}
-            onReset={handleReset}
+        {appState === STATES.READY && !batchLimitExceeded && (
+          <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <PreviewPanel
+              folderPath={folderPath}
+              scanResults={scanResults}
+              previewResults={previewResults}
+              isRefreshingPreview={isRefreshingPreview}
+              refreshingField={refreshingField}
+              settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity }}
+              validationError={validationError}
+              expandedBatch={expandedBatch}
+              selectedPresetName={selectedPresetName}
+              onPresetSelect={setSelectedPresetName}
+              blurDetection={blurDetection}
+              onSettingsChange={handleSettingsChange}
+              onOpenBlurModal={handleOpenBlurModal}
+              onToggleBatch={(batchNumber) =>
+                setExpandedBatch(expandedBatch === batchNumber ? null : batchNumber)
+              }
+              onSelectOutputFolder={handleSelectOutputFolder}
+              onProceed={handleProceedClick}
+              onReset={handleReset}
+            />
+            {isCheckingLimit && (
+              <div className="checking-limit-overlay">
+                <BoxSpinner />
+                <p>Checking batch usage...</p>
+              </div>
+            )}
+          </div>
+        )}
+        {appState === STATES.READY && batchLimitExceeded && (
+          <BatchLimitCard
+            limitInfo={batchLimitExceeded}
+            onUpgrade={handleUpgrade}
+            onGoBack={() => {
+              clearBatchLimitExceeded();
+            }}
           />
         )}
         {appState === STATES.EXECUTING && (

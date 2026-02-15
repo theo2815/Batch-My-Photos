@@ -75,7 +75,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
             line_items: [
               {
                 currency: 'PHP',
-                amount: 50000, // ₱500.00 in centavos
+                amount: 24900, // ₱249.00 in centavos
                 name: 'BatchMyPhotos Pro',
                 description: 'Unlimited batches, watermarking, blur detection & more',
                 quantity: 1,
@@ -133,12 +133,22 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch subscription' })
     }
 
+    // Calculate REAL current month's usage (replaces hardcoded 0)
+    const currentMonth = new Date().toISOString().slice(0, 7) // "2026-02"
+    const { data: usageData, error: usageError } = await supabase
+      .from('batch_usage')
+      .select('batch_count')
+      .eq('user_id', user.id)
+      .eq('month_year', currentMonth)
+
+    const usedThisMonth = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
+
     // If no subscription row, return free plan defaults
     if (!data) {
       return res.json({
         plan: 'free',
         status: 'active',
-        usage: { used: 0, limit: 10 },
+        usage: { used: usedThisMonth, limit: 5 }, // ← REAL usage!
       })
     }
 
@@ -154,8 +164,8 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       currency: data.currency,
       paymongo_checkout_id: data.paymongo_checkout_id,
       usage: {
-        used: 0, // TODO: Replace with actual usage tracking
-        limit: isExpired ? 10 : (data.plan === 'pro' ? Infinity : 10),
+        used: usedThisMonth, // ← REAL usage!
+        limit: isExpired ? 5 : (data.plan === 'pro' ? Infinity : 5),
       },
     })
   } catch (err) {
@@ -185,6 +195,131 @@ router.get('/transactions', authenticateUser, async (req, res) => {
     res.json(data)
   } catch (err) {
     console.error('Transactions endpoint error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ── POST /api/check-batch-limit — Check if user can execute batch ────────────
+
+router.post('/check-batch-limit', authenticateUser, async (req, res) => {
+  try {
+    const user = req.user
+    const supabase = req.app.locals.supabaseAdmin
+    const currentMonth = new Date().toISOString().slice(0, 7)
+
+    // Get current usage
+    const { data: usageData } = await supabase
+      .from('batch_usage')
+      .select('batch_count')
+      .eq('user_id', user.id)
+      .eq('month_year', currentMonth)
+
+    const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
+
+    // Get subscription status
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('plan, status, expires_at')
+      .eq('user_id', user.id)
+      .single()
+
+    const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
+    const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
+    const freeLimit = 5
+
+    const canExecute = isPro || currentUsage < freeLimit
+    const remaining = isPro ? Infinity : Math.max(0, freeLimit - currentUsage)
+
+    res.json({
+      can_execute: canExecute,
+      is_pro: isPro,
+      usage: {
+        used: currentUsage,
+        limit: isPro ? Infinity : freeLimit,
+        remaining: remaining
+      },
+      subscription_expired: isExpired,
+      needs_renewal: isExpired && sub,
+    })
+  } catch (err) {
+    console.error('Check batch limit error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ── POST /api/track-batch — Track batch execution ─────────────────────────────
+
+router.post('/track-batch', authenticateUser, async (req, res) => {
+  try {
+    const user = req.user
+    const { batch_count = 1 } = req.body
+
+    // Validate batch_count
+    if (typeof batch_count !== 'number' || batch_count < 1 || batch_count > 1000) {
+      return res.status(400).json({ error: 'Invalid batch_count' })
+    }
+
+    const supabase = req.app.locals.supabaseAdmin
+    const currentMonth = new Date().toISOString().slice(0, 7)
+
+    // Check current usage
+    const { data: usageData } = await supabase
+      .from('batch_usage')
+      .select('batch_count')
+      .eq('user_id', user.id)
+      .eq('month_year', currentMonth)
+
+    const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
+
+    // Check subscription (prevent going over limit)
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('plan, status, expires_at')
+      .eq('user_id', user.id)
+      .single()
+
+    const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
+    const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
+    const freeLimit = 5
+
+    // Block if exceeded limit (free users only)
+    if (!isPro && currentUsage >= freeLimit) {
+      return res.status(403).json({
+        error: 'Monthly batch limit exceeded',
+        used: currentUsage,
+        limit: freeLimit,
+        upgrade_required: true
+      })
+    }
+
+    // Insert tracking record
+    const { error: insertError } = await supabase
+      .from('batch_usage')
+      .insert({
+        user_id: user.id,
+        batch_count: batch_count,
+        month_year: currentMonth,
+        executed_at: new Date().toISOString()
+      })
+
+    if (insertError) {
+      console.error('Batch tracking error:', insertError)
+      return res.status(500).json({ error: 'Failed to track batch usage' })
+    }
+
+    const newUsage = currentUsage + batch_count
+    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${newUsage}/${isPro ? '∞' : freeLimit})`)
+
+    res.json({
+      success: true,
+      usage: {
+        used: newUsage,
+        limit: isPro ? Infinity : freeLimit,
+        remaining: isPro ? Infinity : Math.max(0, freeLimit - newUsage)
+      }
+    })
+  } catch (err) {
+    console.error('Track batch error:', err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -248,7 +383,7 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
           status: 'active',
           paymongo_checkout_id: checkout_id,
           paymongo_payment_id: paymentId,
-          amount: 50000,
+          amount: 24900,
           currency: 'PHP',
           paid_at: paidAt.toISOString(),
           expires_at: expiresAt.toISOString(),
@@ -272,7 +407,7 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     if (!existingTx) {
       await supabase.from('transactions').insert({
         user_id: user.id,
-        amount: 50000,
+        amount: 24900,
         currency: 'PHP',
         status: 'paid',
         description: 'BatchMyPhotos Pro — Monthly Subscription',
@@ -403,7 +538,7 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
             status: 'active',
             paymongo_checkout_id: checkoutData?.id,
             paymongo_payment_id: paymentId,
-            amount: 50000,
+            amount: 24900,
             currency: 'PHP',
             paid_at: paidAt.toISOString(),
             expires_at: expiresAt.toISOString(),
@@ -427,7 +562,7 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       if (!existingTx && checkoutData?.id) {
         await supabase.from('transactions').insert({
           user_id: userId,
-          amount: 50000,
+          amount: 24900,
           currency: 'PHP',
           status: 'paid',
           description: 'BatchMyPhotos Pro — Monthly Subscription',

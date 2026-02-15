@@ -19,6 +19,10 @@
   "build": {
     "appId": "com.batchmyphotos.app",
     "productName": "Batch My Photos",
+    "protocols": {
+      "name": "BatchMyPhotos",
+      "schemes": ["batchmyphotos"]
+    },
     "directories": {
       "output": "release"
     },

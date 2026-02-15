@@ -17,6 +17,8 @@ const fsPromises = require('fs').promises;
 // Import logic modules
 const progressManager = require('./progressManager');
 const rollbackManager = require('./rollbackManager');
+const authService = require('./authService');
+const subscriptionService = require('./subscriptionService');
 const logger = require('../utils/logger');
 const config = require('./config');
 const { sanitizeError } = require('../utils/errorSanitizer');
@@ -46,10 +48,12 @@ const {
  * @param {Object} appState - App state object { batchCancelled, resetBatchCancellation }
  */
 function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState) {
-  
+
   // Initialize rollback manager with store reference for persistent history
   rollbackManager.init(storeInstance);
-  
+
+  registerAuthHandlers(ipcInstance);
+  registerSubscriptionHandlers(ipcInstance);
   registerFolderHandlers(ipcInstance, storeInstance, getMainWindow);
   registerCoreHandlers(ipcInstance, getMainWindow, appState);
   registerFileSystemHandlers(ipcInstance, getMainWindow);
@@ -58,6 +62,157 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
   registerRollbackHandlers(ipcInstance, getMainWindow, appState);
   registerHistoryHandlers(ipcInstance, getMainWindow, appState);
 
+}
+
+// ============================================================================
+// GROUP 0: AUTHENTICATION HANDLERS (5 handlers)
+// ============================================================================
+
+function registerAuthHandlers(ipcMain) {
+
+  /**
+   * Handler: Check authentication status
+   * Called on app startup to restore session and verify token validity
+   */
+  ipcMain.handle('auth-check-status', async () => {
+    try {
+      const authStatus = await authService.checkAuthStatus();
+      return authStatus;
+    } catch (error) {
+      logger.error('❌ [IPC] auth-check-status failed:', error);
+      return {
+        isAuthenticated: false,
+        user: null,
+        subscription: null,
+        error: sanitizeError(error, 'auth-check-status')
+      };
+    }
+  });
+
+  /**
+   * Handler: Open login page in browser
+   * Opens the website dashboard where users can authenticate
+   */
+  ipcMain.handle('auth-open-login', async () => {
+    try {
+      authService.openLoginPage();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] auth-open-login failed:', error);
+      return { success: false, error: sanitizeError(error, 'auth-open-login') };
+    }
+  });
+
+  /**
+   * Handler: Save session after login
+   * User pastes their session token from the website into the desktop app
+   * Verifies the token is valid before storing it
+   */
+  ipcMain.handle('auth-save-session', async (event, { sessionToken, userProfile }) => {
+    try {
+      // Verify token is valid before saving
+      const verification = await authService.verifySession(sessionToken);
+      if (!verification.valid) {
+        return { success: false, error: 'Invalid session token' };
+      }
+
+      authService.saveSession(sessionToken, userProfile);
+      return { success: true, subscription: verification.subscription };
+    } catch (error) {
+      logger.error('❌ [IPC] auth-save-session failed:', error);
+      return { success: false, error: sanitizeError(error, 'auth-save-session') };
+    }
+  });
+
+  /**
+   * Handler: Logout
+   * Clears stored session and user profile
+   */
+  ipcMain.handle('auth-logout', async () => {
+    try {
+      authService.clearSession();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] auth-logout failed:', error);
+      return { success: false, error: sanitizeError(error, 'auth-logout') };
+    }
+  });
+
+  /**
+   * Handler: Get current session token
+   * Used by the renderer process to make authenticated API calls
+   */
+  ipcMain.handle('auth-get-session', async () => {
+    try {
+      const sessionToken = authService.getStoredSession();
+      const userProfile = authService.getStoredUser();
+      return { sessionToken, user: userProfile };
+    } catch (error) {
+      logger.error('❌ [IPC] auth-get-session failed:', error);
+      return { sessionToken: null, user: null };
+    }
+  });
+
+  /**
+   * Handler: Open dashboard in browser
+   * Opens the website dashboard (for "View Profile" and "Upgrade to Pro" actions)
+   */
+  ipcMain.handle('auth-open-dashboard', async () => {
+    try {
+      authService.openDashboard();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] auth-open-dashboard failed:', error);
+      return { success: false, error: sanitizeError(error, 'auth-open-dashboard') };
+    }
+  });
+}
+
+// ============================================================================
+// GROUP 0.5: SUBSCRIPTION HANDLERS (3 handlers)
+// ============================================================================
+
+function registerSubscriptionHandlers(ipcMain) {
+
+  /**
+   * Handler: Check if user can execute a batch
+   * Verifies current usage against subscription limits
+   */
+  ipcMain.handle('subscription-check-batch-limit', async (event, sessionToken) => {
+    try {
+      return await subscriptionService.checkBatchLimit(sessionToken);
+    } catch (error) {
+      logger.error('❌ [IPC] subscription-check-batch-limit failed:', error);
+      // Fail-safe: allow offline usage
+      return { canExecute: true, offline: true };
+    }
+  });
+
+  /**
+   * Handler: Track batch execution
+   * Records usage in backend after successful batch completion
+   */
+  ipcMain.handle('subscription-track-batch', async (event, sessionToken, batchCount) => {
+    try {
+      return await subscriptionService.trackBatchExecution(sessionToken, batchCount);
+    } catch (error) {
+      logger.error('❌ [IPC] subscription-track-batch failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Handler: Refresh subscription status
+   * Fetches latest subscription info from backend
+   */
+  ipcMain.handle('subscription-refresh', async (event, sessionToken) => {
+    try {
+      return await subscriptionService.refreshSubscription(sessionToken);
+    } catch (error) {
+      logger.error('❌ [IPC] subscription-refresh failed:', error);
+      return { error: error.message };
+    }
+  });
 }
 
 // ============================================================================
@@ -485,8 +640,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
 
   /**
    * Handler: Analyze folder images for blur
-   * Runs asynchronously after scan completes, sending progress updates.
-   * Uses blurDetectionService which analyzes JPEG/PNG thumbnails via Laplacian variance.
+   * Routes to AI service (CNN-based) or legacy Laplacian depending on config.
+   * When AI mode is enabled, sends images to the Python FastAPI server.
+   * If the AI service is unavailable, returns an error (no fallback).
    */
   ipcMain.handle('analyze-blur', async (event, { folderPath, threshold = 'moderate' }) => {
     try {
@@ -496,7 +652,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         return { success: false, error: 'Access denied: folder not selected through dialog' };
       }
 
-      // Validate threshold value
+      // Validate threshold value (used by legacy mode; AI mode ignores it)
       const validThresholds = ['strict', 'moderate', 'lenient'];
       const safeThreshold = validThresholds.includes(threshold) ? threshold : 'moderate';
 
@@ -527,9 +683,14 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalGroups: Object.keys(blurResults).length,
       };
     } catch (error) {
+      // Check if this is an AI service unavailability error
+      const isAiError = error.message?.includes('AI service');
       return {
         success: false,
-        error: sanitizeError(error, 'analyze-blur'),
+        error: isAiError
+          ? error.message
+          : sanitizeError(error, 'analyze-blur'),
+        aiUnavailable: isAiError,
       };
     }
   });

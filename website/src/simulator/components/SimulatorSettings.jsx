@@ -212,11 +212,9 @@ const SimulatorSettings = ({ settings, updateSettings }) => {
                 <div className="setting-row">
                     <label>Max Photos Per Batch:</label>
                     <input
-                        type="number"
+                        type="text"
                         value={settings.maxPhotos}
-                        onChange={e => handleSettingChange('maxPhotos', e.target.value)}
-                        min={10}
-                        max={10000}
+                        onChange={e => handleSettingChange('maxPhotos', e.target.value.replace(/\D/g, ''))}
                     />
                 </div>
 
@@ -247,24 +245,26 @@ const SimulatorSettings = ({ settings, updateSettings }) => {
                     />
                 </div>
 
-                {/* ── Blur Detection ─────────────────────────────────────── */}
-                <div className="setting-row">
-                    <label><ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:</label>
-                    <ToggleSwitch
-                        checked={settings.blurEnabled}
-                        onChange={() => handleSettingChange('blurEnabled', !settings.blurEnabled)}
-                    />
-                </div>
-
-                {settings.blurEnabled && (
-                    <div className="setting-row blur-sensitivity-row">
-                        <label>Sensitivity:</label>
-                        <button className="change-sensitivity-btn" onClick={() => setShowSensitivityModal(true)}>
-                            <span style={{ textTransform: 'capitalize' }}>{settings.sensitivity}</span>
-                            <ChevronDown size={12} />
-                        </button>
+                {/* ── Blur Detection (Hidden) ─────────────────────────────────────── */}
+                <div style={{ display: 'none' }}>
+                    <div className="setting-row">
+                        <label><ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:</label>
+                        <ToggleSwitch
+                            checked={settings.blurEnabled}
+                            onChange={() => handleSettingChange('blurEnabled', !settings.blurEnabled)}
+                        />
                     </div>
-                )}
+
+                    {settings.blurEnabled && (
+                        <div className="setting-row blur-sensitivity-row">
+                            <label>Sensitivity:</label>
+                            <button className="change-sensitivity-btn" onClick={() => setShowSensitivityModal(true)}>
+                                <span style={{ textTransform: 'capitalize' }}>{settings.sensitivity}</span>
+                                <ChevronDown size={12} />
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 {/* ── Batch Mode ──────────────────────────────────────────── */}
                 <div className="setting-row">

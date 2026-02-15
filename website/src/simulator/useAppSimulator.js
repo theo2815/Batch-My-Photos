@@ -115,6 +115,121 @@ export const useAppSimulator = () => {
         setBatches(newBatches);
     }, [settings.maxPhotos, settings.folderName, settings.sortBy, settings.blurEnabled, settings.sensitivity, groups, state]);
 
+    const [history, setHistory] = useState([]);
+
+    // ─── Undo State (mirrors desktop useRollback pattern) ──────────────
+    const [pendingHistoryUndo, setPendingHistoryUndo] = useState(null);
+    const [showHistoryUndoConfirmation, setShowHistoryUndoConfirmation] = useState(false);
+    const [isRollingBack, setIsRollingBack] = useState(false);
+    const [undoCompleteResult, setUndoCompleteResult] = useState(null);
+
+    // ─── History Management ────────────────────────────────────────────
+    const addToHistory = useCallback((batchedResults) => {
+        if (settings.batchMode === 'copy') return; // Only track 'move' operations for history
+
+        const newEntry = {
+            operationId: Date.now().toString(),
+            createdAt: new Date().toISOString(),
+            sourceFolder: selectedFolder?.path || 'Demo Folder',
+            totalFiles: photos.length,
+            batchFolderCount: batchedResults.length,
+            batchResults: batchedResults.map(b => ({ folder: b.name, fileCount: b.count })),
+            maxFilesPerBatch: settings.maxPhotos,
+            outputPrefix: settings.folderName,
+            sortBy: settings.sortBy,
+        };
+
+        setHistory(prev => [newEntry, ...prev]);
+    }, [photos, selectedFolder, settings]);
+
+    const deleteHistory = useCallback((operationId) => {
+        setHistory(prev => prev.filter(h => h.operationId !== operationId));
+    }, []);
+
+    const clearHistory = useCallback(() => {
+        setHistory([]);
+    }, []);
+
+    // ─── Undo Flow (3-step: click → confirm → execute) ────────────────
+
+    /** Step 1: User clicks Undo on a history entry → show confirmation */
+    const handleHistoryUndoClick = useCallback((entry) => {
+        setPendingHistoryUndo(entry);
+        setShowHistoryUndoConfirmation(true);
+    }, []);
+
+    /** Step 2: User cancels the confirmation */
+    const cancelHistoryUndo = useCallback(() => {
+        setShowHistoryUndoConfirmation(false);
+        setPendingHistoryUndo(null);
+    }, []);
+
+    /** Step 3: User confirms → simulate rollback */
+    const confirmHistoryUndo = useCallback(() => {
+        const entry = pendingHistoryUndo;
+        if (!entry) return;
+
+        setShowHistoryUndoConfirmation(false);
+        setPendingHistoryUndo(null);
+        setIsRollingBack(true);
+        setState(SIMULATOR_STATE.PROCESSING);
+        setProgress(0);
+
+        // Simulate rollback progress over ~2 seconds
+        const startTime = performance.now();
+        const duration = 2000;
+
+        const tick = (now) => {
+            const elapsed = now - startTime;
+            const pct = Math.min((elapsed / duration) * 100, 100);
+            setProgress(pct);
+            setCurrentFile(`Restoring file ${Math.floor((pct / 100) * entry.totalFiles)} of ${entry.totalFiles}...`);
+
+            if (pct >= 100) {
+                // Remove entry from history
+                setHistory(prev => prev.filter(h => h.operationId !== entry.operationId));
+                setIsRollingBack(false);
+                setCurrentFile('');
+                setProgress(0);
+                // Show undo complete result
+                setUndoCompleteResult({
+                    restoredFiles: entry.totalFiles,
+                    totalFiles: entry.totalFiles,
+                    sourceFolder: entry.sourceFolder,
+                    deletedFolders: entry.batchFolderCount,
+                });
+                setState(SIMULATOR_STATE.COMPLETE);
+                return;
+            }
+
+            rafRef.current = requestAnimationFrame(tick);
+        };
+
+        rafRef.current = requestAnimationFrame(tick);
+    }, [pendingHistoryUndo]);
+
+    /** Clear undo complete result and return to idle */
+    const clearUndoComplete = useCallback(() => {
+        setUndoCompleteResult(null);
+    }, []);
+
+    /** Validate a history entry (simulated) */
+    const validateHistoryEntry = useCallback(async (operationId) => {
+        const entry = history.find(h => h.operationId === operationId);
+        if (!entry) return { valid: false, error: 'Entry not found' };
+
+        // Simulate async check
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve({
+                    valid: true,
+                    found: entry.totalFiles,
+                    checked: entry.totalFiles,
+                });
+            }, 1500);
+        });
+    }, [history]);
+
     // ─── Run the "batch creation" processing ───────────────────────────
     const runBatch = useCallback(() => {
         trackStepReached('processing');
@@ -129,8 +244,9 @@ export const useAppSimulator = () => {
         
         // Simulate processing with real file names
         const processingFiles = photos.slice(0, 500).map(p => p.name);
-        const duration = settings.batchMode === 'move' ? 4000 : 7000; // move is faster
-        
+        // const duration = settings.batchMode === 'move' ? 4000 : 7000; // move is faster - ORIGINAL
+        const duration = settings.batchMode === 'move' ? 2500 : 4500; // Speed up a bit for demo feel
+
         simulateProgress(duration, processingFiles, null, () => {
             clearInterval(timerRef.current);
             setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -141,9 +257,13 @@ export const useAppSimulator = () => {
                 blurry: stats?.blurryCount || 0,
                 folder: selectedFolder?.id,
             });
+            
+            // Add to history
+            addToHistory(batches);
+            
             setState(SIMULATOR_STATE.COMPLETE);
         });
-    }, [photos, batches, stats, selectedFolder, settings.batchMode, simulateProgress]);
+    }, [photos, batches, stats, selectedFolder, settings.batchMode, simulateProgress, addToHistory]);
 
     // ─── Cancel processing ─────────────────────────────────────────────
     const cancelProcessing = useCallback(() => {
@@ -203,8 +323,13 @@ export const useAppSimulator = () => {
 
     return {
         state, progress, currentFile, photos, groups, stats, batches,
-        settings, selectedFolder, elapsedTime,
+        settings, selectedFolder, elapsedTime, history,
         demoFolders: DEMO_FOLDERS,
         selectFolder, startImport, updateSettings, runBatch, cancelProcessing, reset,
+        deleteHistory, clearHistory, validateHistoryEntry,
+        // Undo flow
+        handleHistoryUndoClick, confirmHistoryUndo, cancelHistoryUndo,
+        pendingHistoryUndo, showHistoryUndoConfirmation,
+        isRollingBack, undoCompleteResult, clearUndoComplete,
     };
 };

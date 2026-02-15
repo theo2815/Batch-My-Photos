@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
     Folder, FolderOpen, ChevronRight, ArrowLeft, X,
-    AlertTriangle, Image as ImageIcon, Grid3x3, List,
+    Image as ImageIcon, Grid3x3, List,
 } from 'lucide-react';
 import ImagePreviewModal from './ImagePreviewModal';
 import { getThumbnailGradient } from '../../thumbnailUtils';
@@ -42,11 +42,7 @@ const Breadcrumb = ({ rootName, currentFolder, onNavigateRoot }) => (
             <>
                 <ChevronRight size={14} className="breadcrumb-sep" />
                 <span className="breadcrumb-segment active">
-                    {currentFolder.isBlurBatch ? (
-                        <AlertTriangle size={14} />
-                    ) : (
-                        <FolderOpen size={14} />
-                    )}
+                    <FolderOpen size={14} />
                     {currentFolder.name}
                 </span>
             </>
@@ -56,27 +52,19 @@ const Breadcrumb = ({ rootName, currentFolder, onNavigateRoot }) => (
 
 // ─── Folder Card (root view) ────────────────────────────────────────────
 
-const FolderCard = ({ batch, onClick }) => {
-    const isBlur = batch.isBlurBatch;
-
-    return (
-        <button className={`explorer-folder-card${isBlur ? ' blur-folder' : ''}`} onClick={onClick}>
-            <div className="explorer-folder-icon">
-                {isBlur ? (
-                    <AlertTriangle size={36} />
-                ) : (
-                    <Folder size={36} />
-                )}
-            </div>
-            <span className="explorer-folder-name" title={batch.name}>
-                {batch.name}
-            </span>
-            <span className="explorer-folder-meta">
-                {batch.count.toLocaleString()} photos
-            </span>
-        </button>
-    );
-};
+const FolderCard = ({ batch, onClick }) => (
+    <button className="explorer-folder-card" onClick={onClick}>
+        <div className="explorer-folder-icon">
+            <Folder size={36} />
+        </div>
+        <span className="explorer-folder-name" title={batch.name}>
+            {batch.name}
+        </span>
+        <span className="explorer-folder-meta">
+            {batch.count.toLocaleString()} photos
+        </span>
+    </button>
+);
 
 // ─── File Card (grid view inside a folder) ──────────────────────────────
 
@@ -85,13 +73,7 @@ const FileCard = ({ file, onClick }) => (
         <div
             className="explorer-file-thumb"
             style={{ background: getThumbnailGradient(file.name) }}
-        >
-            {file.isBlurry && (
-                <span className="explorer-file-blur-badge">
-                    <AlertTriangle size={10} />
-                </span>
-            )}
-        </div>
+        />
         <span className="explorer-file-name">{file.name}</span>
     </button>
 );
@@ -108,11 +90,6 @@ const FileRow = ({ file, onClick }) => (
         <span className="explorer-file-row-meta">{formatBytes(file.size)}</span>
         <span className="explorer-file-row-meta">{file.exif?.dimensions || '—'}</span>
         <span className="explorer-file-row-meta">{formatDate(file.date)}</span>
-        {file.isBlurry && (
-            <span className="explorer-file-row-blur">
-                <AlertTriangle size={12} /> Blurry
-            </span>
-        )}
     </button>
 );
 
@@ -127,13 +104,35 @@ const StatusBar = ({ itemCount, totalSize, isFolder }) => (
 
 // ─── Main FileExplorer ──────────────────────────────────────────────────
 
-const FileExplorer = ({ batches, selectedFolder, onClose }) => {
+const FileExplorer = ({ batches, selectedFolder, onClose, flatMode = false }) => {
     const [currentBatch, setCurrentBatch] = useState(null);
     const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
     const [filesShown, setFilesShown] = useState(FILES_PER_PAGE);
     const [previewImage, setPreviewImage] = useState(null);
 
     const rootName = selectedFolder?.name?.split('—')[0]?.trim() || 'Photos';
+
+    // In flatMode, merge all files from non-blur batches into one list (undo restores everything flat)
+    const allFiles = useMemo(() => {
+        if (!flatMode) return [];
+        const files = [];
+        for (const batch of batches) {
+            if (batch.isBlurBatch) continue; // blur detection hidden for now
+            if (batch.items) {
+                for (const file of batch.items) {
+                    files.push(file);
+                }
+            }
+        }
+        // Sort alphabetically like a real folder
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        return files;
+    }, [flatMode, batches]);
+
+    const allFilesTotalSize = useMemo(() => {
+        if (!flatMode) return 0;
+        return allFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+    }, [flatMode, allFiles]);
 
     // Navigate into a batch folder
     const openFolder = useCallback((batch) => {
@@ -149,16 +148,16 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
 
     // Image preview
     const handleFileClick = useCallback((file) => {
-        if (currentBatch) {
+        if (flatMode) {
+            setPreviewImage({ fileName: file.name, fileList: allFiles });
+        } else if (currentBatch) {
             setPreviewImage({ fileName: file.name, fileList: currentBatch.items });
         }
-    }, [currentBatch]);
+    }, [currentBatch, flatMode, allFiles]);
 
-    // Memoize sorted batches (normal first, then blur)
+    // Memoize sorted batches (exclude blur batches — blur detection hidden for now)
     const sortedBatches = useMemo(() => {
-        const normal = batches.filter(b => !b.isBlurBatch);
-        const blur = batches.filter(b => b.isBlurBatch);
-        return [...normal, ...blur];
+        return batches.filter(b => !b.isBlurBatch);
     }, [batches]);
 
     // Total size across all batches
@@ -166,9 +165,14 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
         batches.reduce((sum, b) => sum + b.totalSize, 0)
     , [batches]);
 
-    // Visible files for the current batch (paginated)
-    const visibleFiles = currentBatch ? currentBatch.items.slice(0, filesShown) : [];
-    const remainingFiles = currentBatch ? currentBatch.items.length - filesShown : 0;
+    // Visible files for the current batch or flat mode (paginated)
+    const visibleFiles = flatMode
+        ? allFiles.slice(0, filesShown)
+        : currentBatch ? currentBatch.items.slice(0, filesShown) : [];
+    const remainingFiles = flatMode
+        ? allFiles.length - filesShown
+        : currentBatch ? currentBatch.items.length - filesShown : 0;
+    const activeFileList = flatMode ? allFiles : currentBatch?.items || [];
 
     return (
         <div className="explorer-overlay">
@@ -179,7 +183,7 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
                     <div className="explorer-titlebar-left">
                         <Folder size={14} className="explorer-titlebar-icon" />
                         <span>
-                            {currentBatch ? currentBatch.name : rootName}
+                            {flatMode ? rootName : (currentBatch ? currentBatch.name : rootName)}
                         </span>
                     </div>
                     <button className="explorer-titlebar-close" onClick={onClose} title="Close">
@@ -192,17 +196,26 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
                     <button
                         className="explorer-toolbar-btn"
                         onClick={goToRoot}
-                        disabled={!currentBatch}
+                        disabled={flatMode || !currentBatch}
                         title="Back"
                     >
                         <ArrowLeft size={16} />
                     </button>
 
-                    <Breadcrumb
-                        rootName={rootName}
-                        currentFolder={currentBatch}
-                        onNavigateRoot={goToRoot}
-                    />
+                    {flatMode ? (
+                        <div className="explorer-breadcrumb">
+                            <span className="breadcrumb-segment active">
+                                <Folder size={14} />
+                                {rootName}
+                            </span>
+                        </div>
+                    ) : (
+                        <Breadcrumb
+                            rootName={rootName}
+                            currentFolder={currentBatch}
+                            onNavigateRoot={goToRoot}
+                        />
+                    )}
 
                     <div className="explorer-toolbar-right">
                         <button
@@ -224,7 +237,57 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
 
                 {/* ─── Content Area ───────────────────────── */}
                 <div className="explorer-content">
-                    {!currentBatch ? (
+                    {flatMode ? (
+                        /* Flat mode: all photos, no folders (after undo) */
+                        viewMode === 'grid' ? (
+                            <div className="explorer-file-grid">
+                                {visibleFiles.map(file => (
+                                    <FileCard
+                                        key={file.id}
+                                        file={file}
+                                        onClick={() => handleFileClick(file)}
+                                    />
+                                ))}
+                                {remainingFiles > 0 && (
+                                    <button
+                                        className="explorer-load-more"
+                                        onClick={() => setFilesShown(prev => prev + FILES_PER_PAGE)}
+                                    >
+                                        Load {Math.min(remainingFiles, FILES_PER_PAGE)} more
+                                        <span className="explorer-load-more-sub">
+                                            ({remainingFiles.toLocaleString()} remaining)
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="explorer-file-list">
+                                <div className="explorer-list-header">
+                                    <span className="col-thumb"></span>
+                                    <span className="col-name">Name</span>
+                                    <span className="col-meta">Size</span>
+                                    <span className="col-meta">Dimensions</span>
+                                    <span className="col-meta">Date</span>
+                                </div>
+                                {visibleFiles.map(file => (
+                                    <FileRow
+                                        key={file.id}
+                                        file={file}
+                                        onClick={() => handleFileClick(file)}
+                                    />
+                                ))}
+                                {remainingFiles > 0 && (
+                                    <button
+                                        className="explorer-load-more list-mode"
+                                        onClick={() => setFilesShown(prev => prev + FILES_PER_PAGE)}
+                                    >
+                                        Load {Math.min(remainingFiles, FILES_PER_PAGE)} more
+                                        ({remainingFiles.toLocaleString()} remaining)
+                                    </button>
+                                )}
+                            </div>
+                        )
+                    ) : !currentBatch ? (
                         /* Root: folder grid */
                         <div className="explorer-folder-grid">
                             {sortedBatches.map(batch => (
@@ -289,9 +352,9 @@ const FileExplorer = ({ batches, selectedFolder, onClose }) => {
 
                 {/* ─── Status Bar ─────────────────────────── */}
                 <StatusBar
-                    itemCount={currentBatch ? currentBatch.fileCount : sortedBatches.length}
-                    totalSize={currentBatch ? currentBatch.totalSize : totalRootSize}
-                    isFolder={!currentBatch}
+                    itemCount={flatMode ? allFiles.length : (currentBatch ? currentBatch.fileCount : sortedBatches.length)}
+                    totalSize={flatMode ? allFilesTotalSize : (currentBatch ? currentBatch.totalSize : totalRootSize)}
+                    isFolder={!flatMode && !currentBatch}
                 />
             </div>
 

@@ -54,6 +54,23 @@
     Roboto, Oxygen, Ubuntu, sans-serif;
   color: var(--text-primary);
   line-height: 1.6;
+  transition: background var(--transition-normal), color var(--transition-normal);
+}
+
+/* Light Theme — matches desktop [data-theme="light"] variables */
+.sim-app.light {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8ecf1;
+  --bg-glass: rgba(255, 255, 255, 0.9);
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8888a8;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
 }
 
 /* ============================================================================
@@ -2192,4 +2209,93 @@
 .btn.explorer-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================================
+   LIGHT THEME OVERRIDES
+   Swaps hardcoded rgba(255,255,255,...) borders/backgrounds → rgba(0,0,0,...)
+   so they remain visible and look correct on light backgrounds.
+   ============================================================================ */
+
+/* Header */
+.sim-app.light .sim-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Header buttons */
+.sim-app.light .header-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Footer */
+.sim-app.light .sim-footer {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Buttons — secondary/default borders */
+.sim-app.light .btn.secondary {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Cards & panels */
+.sim-app.light .batch-card,
+.sim-app.light .batch-settings-col,
+.sim-app.light .settings-panel,
+.sim-app.light .folder-stat {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Stat rows / dividers */
+.sim-app.light .batch-stat-row,
+.sim-app.light .setting-row {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+/* Batch mode toggle */
+.sim-app.light .batch-mode-toggle {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Drop zone */
+.sim-app.light .drop-zone {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Explorer status bar */
+.sim-app.light .explorer-status-bar {
+  background: var(--bg-tertiary);
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Explorer buttons */
+.sim-app.light .btn.explorer-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.sim-app.light .btn.explorer-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Scrollbar */
+.sim-app.light .sim-app-inner::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* Text that used rgba white */
+.sim-app.light .completed-time,
+.sim-app.light .completed-speed {
+  color: var(--text-secondary);
+}
+
+/* Progress bar track */
+.sim-app.light .progress-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* Settings input/select backgrounds */
+.sim-app.light input,
+.sim-app.light select {
+  border-color: rgba(0, 0, 0, 0.12);
 }

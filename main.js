@@ -20,6 +20,7 @@ process.env.UV_THREADPOOL_SIZE = UV_THREADPOOL_SIZE;
 console.log('🚀 [STARTUP] UV_THREADPOOL_SIZE set to:', process.env.UV_THREADPOOL_SIZE);
 
 const { app, ipcMain, protocol } = require('electron');
+const path = require('path');
 
 // Register custom protocol for local media access
 // Must be done before app.on('ready')
@@ -27,7 +28,16 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, standard: true } }
 ]);
 
-const path = require('path');
+// Register batchmyphotos:// as default protocol client (deep link auth)
+// In development, pass the script path so Electron handles the protocol
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('batchmyphotos', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('batchmyphotos');
+}
+
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
@@ -35,6 +45,7 @@ const Store = require('electron-store');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 const { isPathAllowedAsync } = require('./src/main/securityManager');
+const authService = require('./src/main/authService');
 const logger = require('./src/utils/logger');
 
 // ============================================================================
@@ -73,6 +84,92 @@ const appState = {
     this.batchCancelled = false;
   }
 };
+
+// ============================================================================
+// DEEP LINK AUTHENTICATION (batchmyphotos:// protocol)
+// ============================================================================
+
+/**
+ * Handle deep link URL from browser-based authentication.
+ * Expected format: batchmyphotos://auth/callback?token=XXX&email=YYY
+ */
+function handleDeepLink(url) {
+  logger.log('[DEEP-LINK] Received URL:', url);
+
+  try {
+    const parsed = new URL(url);
+
+    // Only handle auth callback path
+    if (parsed.hostname !== 'auth' || parsed.pathname !== '/callback') {
+      logger.warn('[DEEP-LINK] Ignoring unknown deep link path:', parsed.hostname, parsed.pathname);
+      return;
+    }
+
+    const token = parsed.searchParams.get('token');
+    const email = parsed.searchParams.get('email');
+    const name = parsed.searchParams.get('name');
+
+    if (!token || !email) {
+      logger.error('[DEEP-LINK] Missing token or email in callback URL');
+      const mainWindow = getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth-callback', { success: false, error: 'Invalid callback: missing token or email' });
+      }
+      return;
+    }
+
+    // Save session via authService
+    authService.saveSession(token, { email: decodeURIComponent(email), name: decodeURIComponent(name || '') });
+
+    // Notify the renderer process
+    const mainWindow = getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('auth-callback', {
+        success: true,
+        email: decodeURIComponent(email),
+        name: decodeURIComponent(name || ''),
+      });
+
+      // Focus the window so user sees the app is now authenticated
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+
+    logger.log('[DEEP-LINK] Auth callback processed successfully for:', email);
+  } catch (err) {
+    logger.error('[DEEP-LINK] Failed to parse deep link URL:', err.message);
+  }
+}
+
+// ============================================================================
+// SINGLE-INSTANCE LOCK (required for Windows deep link handling)
+// ============================================================================
+// When the OS opens a deep link, it launches a new app instance.
+// The single-instance lock ensures only one instance runs — the second
+// instance passes its argv (containing the deep link URL) to the first.
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running — quit this one
+  app.quit();
+} else {
+  // Handle when a second instance is launched (e.g., via deep link click)
+  app.on('second-instance', (_event, argv) => {
+    // On Windows, the deep link URL is in argv
+    const deepLinkUrl = argv.find(arg => arg.startsWith('batchmyphotos://'));
+    if (deepLinkUrl) {
+      handleDeepLink(deepLinkUrl);
+    }
+
+    // Focus existing window
+    const mainWindow = getMainWindow();
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
 
 // ============================================================================
 // APP LIFECYCLE
@@ -131,6 +228,13 @@ app.whenReady().then(() => {
   });
   
   createWindow();
+
+  // Handle cold-start deep link (app was launched by clicking a deep link)
+  const deepLinkUrl = process.argv.find(arg => arg.startsWith('batchmyphotos://'));
+  if (deepLinkUrl) {
+    // Small delay to ensure the window is ready to receive IPC messages
+    setTimeout(() => handleDeepLink(deepLinkUrl), 1000);
+  }
 });
 
 app.on('window-all-closed', () => {

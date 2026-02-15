@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Mail, Lock, Eye, EyeOff, User, ShieldCheck, ArrowRight, Loader2, Sparkles } from 'lucide-react'
@@ -9,6 +9,8 @@ import { getPasswordStrength } from '../utils/passwordStrength'
 
 export default function Register() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isDesktop = searchParams.get('desktop') === 'true'
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -47,7 +49,7 @@ export default function Register() {
     if (authError) {
       setError(authError.message)
     } else {
-      navigate('/dashboard')
+      navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
     }
     setLoading(false)
   }
@@ -81,7 +83,7 @@ export default function Register() {
 
           {/* Google Register */}
           <div className="mb-6">
-            <GoogleAuthButton text="Sign up with Google" />
+            <GoogleAuthButton text="Sign up with Google" isDesktop={isDesktop} />
           </div>
 
           {/* Divider */}

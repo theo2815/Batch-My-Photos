@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import PricingModal from '../components/PricingModal'
+import InfoModal from '../components/modals/InfoModal'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../hooks/useSubscription'
 import { useTheme } from '../context/ThemeContext'
@@ -9,93 +10,11 @@ import {
   Crown, Sparkles, Download, Settings, HelpCircle, CreditCard,
   ShieldCheck, User, Key, Monitor,
   ArrowRight, ExternalLink, Lock, Play,
-  Copy, Check, FileText, MessageCircle, X, Shield, AlertTriangle,
+  Copy, Check, FileText, MessageCircle, X, AlertTriangle,
 } from 'lucide-react'
 
-/* ─── Modal content (mirrors Footer modals) ──────────────────────────────── */
-const getDashModals = (isDark) => ({
-  documentation: {
-    title: 'Documentation',
-    icon: FileText,
-    color: 'text-cyan-400',
-    body: (
-      <div className="space-y-5">
-        <p className={`${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>Everything you need to know about using Batch My Photos effectively.</p>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Batch Settings</h4>
-          <ul className={`space-y-1.5 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Max Photos per Batch</strong> — Controls how many photos go into each folder. Default is 500.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Folder Naming</strong> — Name your output folders with a custom prefix (e.g., "Wedding — Batch 1").</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Sort Order</strong> — Sort by date (ascending/descending) or by filename.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Batch Mode</strong> — Choose between Move (relocate files) or Copy (keep originals).</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Blur Detection</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>When enabled, the app identifies blurry photos and separates them into a dedicated folder. Three sensitivity levels:</p>
-          <ul className={`space-y-1 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} mt-2`}>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Low</strong> — Only catches very blurry images</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Moderate</strong> — Balanced detection (recommended)</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Strict</strong> — Catches slightly soft images too</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Undo &amp; Recovery</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>Every batch operation is fully reversible. Click Undo to restore all files to their original locations. Your session state is saved automatically, so even after a crash or accidental close, you can resume right where you left off.</p>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Troubleshooting</h4>
-          <ul className={`space-y-1.5 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Photos not appearing?</strong> — Make sure you're dropping a folder, not individual files.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Batch counts look off?</strong> — Check your "Max Photos" setting and blur detection toggle.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>App closed unexpectedly?</strong> — Reopen the app — your last session is preserved.</li>
-          </ul>
-        </div>
-      </div>
-    ),
-  },
-  privacyPolicy: {
-    title: 'Privacy Policy',
-    icon: Shield,
-    color: 'text-emerald-400',
-    body: (
-      <div className="space-y-5">
-        <p className={`${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>Your privacy matters to us. Here's exactly how Batch My Photos handles your data.</p>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Your photos stay on your device</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party. Period.</p>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>What we collect</h4>
-          <ul className={`space-y-1.5 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Account info</strong> — If you create an account, we store your email and subscription status.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Usage analytics</strong> — We may collect anonymous, aggregated usage data to improve the app. This never includes file names, photo content, or personal data.</li>
-            <li>• <strong className={isDark ? 'text-slate-300' : 'text-gray-700'}>Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>What we don't collect</h4>
-          <ul className={`space-y-1 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            <li>• ❌ Photo content, metadata, or file names</li>
-            <li>• ❌ File system paths or folder structures</li>
-            <li>• ❌ Any data from your local machine</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Third-party services</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>We use Supabase for authentication and PayMongo for payment processing. Both handle only the minimum data required (email, payment info) and are compliant with applicable data privacy regulations.</p>
-        </div>
-        <div>
-          <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Your rights</h4>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} leading-relaxed`}>You can request deletion of your account and all associated data at any time by emailing <a href="mailto:batchmyphotos@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">batchmyphotos@gmail.com</a>.</p>
-        </div>
-        <div className={`pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-200'}`}>
-          <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Last updated: February 2026</p>
-        </div>
-      </div>
-    ),
-  },
-
+/* ─── Modal content (dashboard-specific modals) ──────────────────────────── */
+const getDashModals = () => ({
   managePlan: {
     title: 'Manage Your Plan',
     icon: CreditCard,
@@ -106,7 +25,7 @@ const getDashModals = (isDark) => ({
 
 function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
   const { isDark } = useTheme()
-  const content = getDashModals(isDark, { onUpgrade, checkoutLoading })[modalKey]
+  const content = getDashModals()[modalKey]
   useEffect(() => {
     if (!content) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -199,6 +118,23 @@ export default function Dashboard() {
       setTimeout(() => setPaymentMsg(null), 5000)
     }
   }, [searchParams, setSearchParams, refetchSub, verifyPayment])
+
+  // Check for expired subscription and show notification
+  useEffect(() => {
+    if (!subLoading && sub && sub.status === 'expired' && sub.expires_at) {
+      const daysExpired = Math.floor(
+        (new Date() - new Date(sub.expires_at)) / (1000 * 60 * 60 * 24)
+      )
+
+      // Show notification for first 7 days
+      if (daysExpired <= 7) {
+        setPaymentMsg({
+          type: 'warning',
+          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to continue using unlimited batches.`
+        })
+      }
+    }
+  }, [sub, subLoading])
 
   const handleUpgrade = async () => {
     try {
@@ -379,7 +315,7 @@ export default function Dashboard() {
               {/* Quick details row */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱500/mo' },
+                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱249/mo' },
                   { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
                   { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 10} batches`, full: true },
                 ].map(d => (
@@ -532,7 +468,10 @@ export default function Dashboard() {
       </div>
 
       {/* ── Modals ── */}
-      {activeModal && activeModal !== 'managePlan' && activeModal !== 'pricing' && (
+      {(activeModal === 'documentation' || activeModal === 'privacyPolicy') && (
+        <InfoModal modalKey={activeModal} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal && activeModal !== 'managePlan' && activeModal !== 'pricing' && activeModal !== 'documentation' && activeModal !== 'privacyPolicy' && (
         <DashModal modalKey={activeModal} onClose={() => setActiveModal(null)} onUpgrade={handleUpgrade} checkoutLoading={checkoutLoading} />
       )}
 
@@ -621,7 +560,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {sub?.plan === 'pro' ? '₱500' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
+                      {sub?.plan === 'pro' ? '₱249' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
                     </p>
                   </div>
 
@@ -631,7 +570,7 @@ export default function Dashboard() {
                       { label: 'Status', value: sub?.status === 'active' ? '✅ Active' : '⚠️ ' + (sub?.status || 'Unknown') },
                       { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
                       { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 10 used` },
+                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 5 used` },
                     ].map((item) => (
                       <div key={item.label} className={`flex items-center justify-between py-2.5 px-3 rounded-lg ${isDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
                         <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.label}</span>

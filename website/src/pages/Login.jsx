@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
@@ -8,6 +8,8 @@ import GoogleAuthButton from '../components/GoogleAuthButton'
 
 export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isDesktop = searchParams.get('desktop') === 'true'
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -28,7 +30,7 @@ export default function Login() {
     if (authError) {
       setError(authError.message)
     } else {
-      navigate('/dashboard')
+      navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
     }
     setLoading(false)
   }
@@ -60,7 +62,7 @@ export default function Login() {
 
           {/* Google Login */}
           <div className="mb-6">
-            <GoogleAuthButton />
+            <GoogleAuthButton isDesktop={isDesktop} />
           </div>
 
           {/* Divider */}

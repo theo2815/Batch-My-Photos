@@ -88,10 +88,114 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Cancel the current batch operation
    * Files already processed will remain, but no more will be moved/copied
-   * 
+   *
    * @returns {Promise<Object>} Result with success status
    */
   cancelBatch: () => ipcRenderer.invoke('cancel-batch'),
+
+  // ============================================================================
+  // AUTHENTICATION APIs
+  // ============================================================================
+
+  /**
+   * Check authentication status on app startup
+   * Verifies stored session token is still valid
+   *
+   * @returns {Promise<Object>} { isAuthenticated, user, subscription }
+   */
+  authCheckStatus: () => ipcRenderer.invoke('auth-check-status'),
+
+  /**
+   * Open login page in external browser
+   * User authenticates on website, then copies token back to desktop app
+   *
+   * @returns {Promise<Object>} { success }
+   */
+  authOpenLogin: () => ipcRenderer.invoke('auth-open-login'),
+
+  /**
+   * Save session after user logs in
+   * Verifies token validity before storing
+   *
+   * @param {string} sessionToken - JWT token from website
+   * @param {Object} userProfile - User profile data
+   * @returns {Promise<Object>} { success, subscription? }
+   */
+  authSaveSession: (sessionToken, userProfile) =>
+    ipcRenderer.invoke('auth-save-session', { sessionToken, userProfile }),
+
+  /**
+   * Logout and clear stored session
+   *
+   * @returns {Promise<Object>} { success }
+   */
+  authLogout: () => ipcRenderer.invoke('auth-logout'),
+
+  /**
+   * Get current session token and user profile
+   * Used for making authenticated API calls
+   *
+   * @returns {Promise<Object>} { sessionToken, user }
+   */
+  authGetSession: () => ipcRenderer.invoke('auth-get-session'),
+
+  /**
+   * Open website dashboard in browser
+   * Used for "View Profile" and "Upgrade to Pro" actions
+   *
+   * @returns {Promise<Object>} { success }
+   */
+  authOpenDashboard: () => ipcRenderer.invoke('auth-open-dashboard'),
+
+  /**
+   * Listen for authentication callback from deep link (batchmyphotos://auth/callback)
+   * Fired by main process when desktop app receives a deep link auth redirect
+   *
+   * @param {Function} callback - Called with { success, email } or { success: false, error }
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onAuthCallback: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('auth-callback', listener);
+    return () => {
+      ipcRenderer.removeListener('auth-callback', listener);
+    };
+  },
+
+  // ============================================================================
+  // SUBSCRIPTION APIs
+  // ============================================================================
+
+  /**
+   * Check if user can execute a batch operation
+   * Verifies current usage against subscription limits
+   *
+   * @param {string} sessionToken - User's session token
+   * @returns {Promise<Object>} { canExecute, usage, isPro, needsRenewal, offline?, error? }
+   */
+  subscriptionCheckBatchLimit: (sessionToken) =>
+    ipcRenderer.invoke('subscription-check-batch-limit', sessionToken),
+
+  /**
+   * Track batch execution after successful completion
+   * Records usage in backend database
+   *
+   * @param {string} sessionToken - User's session token
+   * @param {number} batchCount - Number of batches executed
+   * @returns {Promise<Object>} { success, usage?, offline?, error? }
+   */
+  subscriptionTrackBatch: (sessionToken, batchCount) =>
+    ipcRenderer.invoke('subscription-track-batch', sessionToken, batchCount),
+
+  /**
+   * Refresh subscription status from backend
+   * Used to update local subscription info after payment/renewal
+   *
+   * @param {string} sessionToken - User's session token
+   * @returns {Promise<Object>} { subscription?, error? }
+   */
+  subscriptionRefresh: (sessionToken) =>
+    ipcRenderer.invoke('subscription-refresh', sessionToken),
 
   // ============================================================================
   // BLUR DETECTION APIs

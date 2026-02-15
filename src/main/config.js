@@ -118,8 +118,25 @@ const features = {
    * Enable the blur detection feature.
    * When enabled, users can toggle blur analysis in the settings panel
    * to detect and separate blurry photos during batching.
+   *
+   * DISABLED FOR INITIAL RELEASE - Feature under development
    */
-  BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', true),
+  BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', false),
+
+  /**
+   * Enable the AI-powered blur detection service.
+   * When enabled, blur analysis is sent to the Python AI service (FastAPI)
+   * instead of using the local Laplacian-based algorithm.
+   * Set to false to disable blur detection entirely when AI service is down.
+   */
+  BLUR_AI_ENABLED: envBool('BATCH_BLUR_AI_ENABLED', false),
+
+  /**
+   * URL of the AI blur detection service.
+   * Defaults to local FastAPI server during development.
+   * Will be changed to production backend URL when deployed.
+   */
+  BLUR_AI_URL: process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
 };
 
 // ============================================================================

@@ -14,6 +14,7 @@ import DemoPage from './pages/DemoPage'
 import ForgotPassword from './pages/ForgotPassword'
 import UpdatePassword from './pages/UpdatePassword'
 import BillingHistory from './pages/BillingHistory'
+import DesktopCallback from './pages/DesktopCallback'
 
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from './components/PageTransition'
@@ -49,6 +50,7 @@ const AppContent = () => {
           <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
           <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+          <Route path="/auth/desktop-callback" element={<PageTransition><DesktopCallback /></PageTransition>} />
           <Route path="/dashboard" element={<PageTransition><ProtectedRoute><Dashboard /></ProtectedRoute></PageTransition>} />
           <Route path="/settings" element={<PageTransition><ProtectedRoute><Settings /></ProtectedRoute></PageTransition>} />
           <Route path="/billing" element={<PageTransition><ProtectedRoute><BillingHistory /></ProtectedRoute></PageTransition>} />

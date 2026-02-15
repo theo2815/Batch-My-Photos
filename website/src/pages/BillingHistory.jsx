@@ -112,7 +112,7 @@ export default function BillingHistory() {
                   }`}>{sub?.status === 'active' ? 'Active' : sub?.status || 'Inactive'}</span>
                 </div>
                 <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{isFree ? 'Free Plan' : 'Pro Plan'}</h3>
-                <p className={`text-sm ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>{isFree ? '₱0/month' : '₱500/month'}</p>
+                <p className={`text-sm ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>{isFree ? '₱0/month' : '₱249/month'}</p>
               </div>
             </div>
 

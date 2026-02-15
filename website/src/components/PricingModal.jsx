@@ -39,7 +39,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               <ul className="space-y-4 text-sm">
                 <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                  <span>10 batches / month</span>
+                  <span>5 batches / month</span>
                 </li>
                 <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
@@ -51,7 +51,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                 </li>
                 <li className={`flex items-center gap-3 ${isDark ? 'text-slate-500' : 'text-gray-400'} opacity-75`}>
                   <X className="w-4 h-4 shrink-0" />
-                  <span>Blur detection</span>
+                  <span>Blur detection (Coming Soon)</span>
                 </li>
               </ul>
             </div>
@@ -66,7 +66,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               </div>
               <div className="flex items-baseline gap-1 mb-2 relative z-10">
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Pro</h3>
-                <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱500/mo</span>
+                <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱249/mo</span>
               </div>
               <p className={`text-sm ${isDark ? 'text-indigo-200' : 'text-indigo-600'} mb-6 relative z-10`}>For power users</p>
               
@@ -74,8 +74,8 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                 {[
                   'Unlimited batches',
                   'Process offline',
-                  'Custom Watermarks',
-                  'Blur detection'
+                  'Custom Watermarks (Coming Soon)',
+                  'Blur detection (Coming Soon)'
                 ].map((input) => (
                   <li key={input} className={`flex items-center gap-3 ${isDark ? 'text-white' : 'text-gray-900'} font-medium`}>
                     <Check className="w-4 h-4 shrink-0 text-emerald-400" />

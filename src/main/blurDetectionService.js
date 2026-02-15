@@ -1,42 +1,39 @@
 /**
  * Blur Detection Service
  * 
- * Analyzes images for blur using a dual-metric approach via Sharp with
- * contrast normalization for lighting-independent scoring.
+ * Provides two blur detection backends:
  * 
- * Algorithm (per image):
- * 1. Resize to ~512px wide (good detail for Laplacian)
- * 2. Convert to grayscale
- * 3. Normalise contrast (histogram stretching to full 0-255 range)
- *    — This is the key step that makes scores independent of original
- *      image brightness/contrast, fixing false positives on dark scenes
- *      and false negatives on bright scenes.
- * 4. Apply Laplacian 3x3 convolution (edge-detection kernel)
- * 5. Compute two complementary metrics from the result:
- *    a) **Laplacian Variance** — overall edge energy. Low = blurry.
- *    b) **Edge Density** — ratio of pixels with significant edge response.
- *       Truly blurry images have almost no edge pixels.
- * 6. An image is flagged as blurry only when BOTH metrics fall below their
- *    respective thresholds. This dual-check greatly reduces false positives.
+ * 1. **AI Mode** (BLUR_AI_ENABLED=true) — Sends images to a local Python
+ *    FastAPI server running a fine-tuned MobileNetV3-Small CNN. Much more
+ *    accurate than the Laplacian approach, especially for shallow DOF,
+ *    motion blur, and textured vs. smooth subjects.
+ * 
+ * 2. **Legacy Laplacian Mode** (BLUR_AI_ENABLED=false) — Local analysis
+ *    using Sharp's Laplacian variance + edge density with contrast
+ *    normalization. Used as a reference / offline fallback.
+ * 
+ * The active backend is selected via config.features.BLUR_AI_ENABLED.
+ * When the AI service is unavailable, blur detection returns an error
+ * rather than falling back to inaccurate results.
  * 
  * For each file group, only the first JPEG/PNG is analyzed (faster than RAW).
  * Results are cached in memory (same pattern as exifService.js).
  */
 
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const sharp = require('sharp');
+const { net } = require('electron');
+const config = require('./config');
 const {
   BLUR_CONCURRENCY, BLUR_RESIZE_WIDTH, BLUR_THRESHOLDS, BLUR_EDGE_THRESHOLDS,
-  BLUR_EDGE_PIXEL_THRESHOLD,
+  BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_BATCH_SIZE, BLUR_AI_TIMEOUT_MS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
 // ---------------------------------------------------------------------------
 // Batch processing optimization: limit libvips to 1 thread per Sharp call.
-// We control parallelism ourselves through BLUR_CONCURRENCY concurrent workers.
-// Default Sharp uses ALL CPU cores per call, so N concurrent calls would spawn
-// N × cores threads fighting for resources — massive context-switch overhead.
 // ---------------------------------------------------------------------------
 sharp.concurrency(1);
 
@@ -219,40 +216,22 @@ async function runPool(items, concurrency, fn) {
 // ============================================================================
 
 /**
- * Analyze file groups for blur with pool-based concurrency and progress reporting.
- *
- * Every image is analyzed at full 512px resolution using the dual-metric
- * approach (Laplacian variance + edge density) with contrast normalization.
- * Pool-based concurrency ensures continuous throughput with no idle slots.
- *
- * Results are cached in memory — repeat calls with the same folder, groups,
- * and threshold return instantly.
- *
+ * Analyze file groups for blur using the AI service (Python FastAPI + CNN).
+ * 
+ * Reads analyzable images from each group, converts to base64, sends in
+ * batches to the AI service, and maps responses back to the expected shape.
+ * 
  * @param {Object} fileGroups - Map of baseName -> string[] (file names)
  * @param {string} folderPath - Absolute path to the folder
- * @param {string} [threshold='moderate'] - Sensitivity preset: 'strict' | 'moderate' | 'lenient'
  * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
- * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
+ * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile, confidence }
+ * @throws {Error} If the AI service is unavailable or returns an error
  */
-async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', onProgress = null) {
+async function analyzeBlurAI(fileGroups, folderPath, onProgress = null) {
   const groupNames = Object.keys(fileGroups);
-
-  // Check cache first
-  const cacheKey = buildCacheKey(folderPath, groupNames, threshold);
-  if (blurCache.cacheKey === cacheKey && blurCache.blurMap) {
-    logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results`);
-    return blurCache.blurMap;
-  }
-
   const blurMap = {};
-  const varianceThreshold = BLUR_THRESHOLDS[threshold] || BLUR_THRESHOLDS.moderate;
-  const edgeDensityThreshold = BLUR_EDGE_THRESHOLDS[threshold] || BLUR_EDGE_THRESHOLDS.moderate;
-  const totalGroups = groupNames.length;
 
-  logger.log(`🔍 [BLUR] Analyzing ${totalGroups} file groups (threshold: ${threshold}, ` +
-    `V<${varianceThreshold}, E<${edgeDensityThreshold})...`);
-
-  // Build the work list: only groups with an analyzable file
+  // Build work list: only groups with an analyzable file
   const workItems = [];
   for (const baseName of groupNames) {
     const files = fileGroups[baseName];
@@ -260,25 +239,136 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', onPro
     if (analyzableFile) {
       workItems.push({ baseName, analyzableFile });
     } else {
-      // RAW-only or video-only group — skip, mark as not blurry
+      blurMap[baseName] = { score: -1, isBlurry: false, analyzedFile: null, confidence: 0 };
+    }
+  }
+
+  logger.log(`🤖 [BLUR-AI] ${workItems.length} groups to analyze, ` +
+    `${groupNames.length - workItems.length} skipped (RAW/video only)`);
+
+  // Split into batches
+  const batches = [];
+  for (let i = 0; i < workItems.length; i += BLUR_AI_BATCH_SIZE) {
+    batches.push(workItems.slice(i, i + BLUR_AI_BATCH_SIZE));
+  }
+
+  const aiUrl = config.features.BLUR_AI_URL;
+  let totalProcessed = 0;
+
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
+
+    // Read images and convert to base64
+    const images = [];
+    for (const item of batch) {
+      try {
+        const filePath = path.join(folderPath, item.analyzableFile);
+        const buffer = fs.readFileSync(filePath);
+        const base64 = buffer.toString('base64');
+        images.push({ baseName: item.baseName, data: base64 });
+      } catch (err) {
+        logger.warn(`⚠️ [BLUR-AI] Failed to read ${item.analyzableFile}: ${err.message}`);
+        blurMap[item.baseName] = { score: -1, isBlurry: false, analyzedFile: item.analyzableFile, confidence: 0 };
+      }
+    }
+
+    if (images.length === 0) continue;
+
+    // POST to AI service
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_TIMEOUT_MS);
+
+      const response = await net.fetch(`${aiUrl}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`AI service returned ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Map results back to our expected shape
+      for (const item of batch) {
+        const result = data.results?.[item.baseName];
+        if (result) {
+          blurMap[item.baseName] = {
+            score: result.score,
+            isBlurry: result.isBlurry,
+            analyzedFile: item.analyzableFile,
+            confidence: result.confidence,
+          };
+        } else if (!blurMap[item.baseName]) {
+          blurMap[item.baseName] = { score: -1, isBlurry: false, analyzedFile: item.analyzableFile, confidence: 0 };
+        }
+      }
+    } catch (err) {
+      // If any batch fails, throw — blur detection should be disabled, not inaccurate
+      const isTimeout = err.name === 'AbortError';
+      const message = isTimeout
+        ? `AI service timed out after ${BLUR_AI_TIMEOUT_MS}ms`
+        : `AI service error: ${err.message}`;
+      logger.error(`❌ [BLUR-AI] ${message}`);
+      throw new Error(message);
+    }
+
+    totalProcessed += batch.length;
+    if (onProgress) {
+      onProgress({ current: totalProcessed, total: workItems.length });
+    }
+  }
+
+  const blurryCount = Object.values(blurMap).filter(r => r.isBlurry).length;
+  logger.log(`🤖 [BLUR-AI] Analysis complete. ${blurryCount} blurry groups found out of ${groupNames.length}.`);
+
+  return blurMap;
+}
+
+/**
+ * Analyze file groups for blur using the legacy Laplacian approach.
+ * Pool-based concurrency with Sharp — kept as reference implementation.
+ *
+ * @param {Object} fileGroups - Map of baseName -> string[] (file names)
+ * @param {string} folderPath - Absolute path to the folder
+ * @param {string} [threshold='moderate'] - Sensitivity preset
+ * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
+ * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
+ */
+async function analyzeBlurLegacy(fileGroups, folderPath, threshold = 'moderate', onProgress = null) {
+  const groupNames = Object.keys(fileGroups);
+
+  const blurMap = {};
+  const varianceThreshold = BLUR_THRESHOLDS[threshold] || BLUR_THRESHOLDS.moderate;
+  const edgeDensityThreshold = BLUR_EDGE_THRESHOLDS[threshold] || BLUR_EDGE_THRESHOLDS.moderate;
+  const totalGroups = groupNames.length;
+
+  logger.log(`🔍 [BLUR-LEGACY] Analyzing ${totalGroups} file groups (threshold: ${threshold}, ` +
+    `V<${varianceThreshold}, E<${edgeDensityThreshold})...`);
+
+  const workItems = [];
+  for (const baseName of groupNames) {
+    const files = fileGroups[baseName];
+    const analyzableFile = pickAnalyzableFile(files);
+    if (analyzableFile) {
+      workItems.push({ baseName, analyzableFile });
+    } else {
       blurMap[baseName] = { score: -1, isBlurry: false, analyzedFile: null };
     }
   }
 
-  logger.log(`🔍 [BLUR] ${workItems.length} groups have analyzable files, ` +
-    `${totalGroups - workItems.length} skipped (RAW/video only)`);
-
-  // ========================================================================
-  // FULL 512px ANALYSIS — pool-based concurrency for all images
-  // ========================================================================
   let processed = 0;
 
   await runPool(workItems, BLUR_CONCURRENCY, async (item) => {
     const filePath = path.join(folderPath, item.analyzableFile);
     const metrics = await computeBlurScore(filePath);
 
-    // Dual-metric check: flagged as blurry only when BOTH variance AND
-    // edge density fall below their thresholds.
     const isBlurry = metrics.variance >= 0 &&
       metrics.variance < varianceThreshold &&
       metrics.edgeDensity >= 0 &&
@@ -297,9 +387,52 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', onPro
     }
   });
 
-  // Count results
   const blurryCount = Object.values(blurMap).filter(r => r.isBlurry).length;
-  logger.log(`🔍 [BLUR] Analysis complete. ${blurryCount} blurry groups found out of ${totalGroups}.`);
+  logger.log(`🔍 [BLUR-LEGACY] Analysis complete. ${blurryCount} blurry groups found out of ${totalGroups}.`);
+
+  return blurMap;
+}
+
+/**
+ * Main entry point — routes to AI or legacy backend based on config.
+ *
+ * When AI mode is enabled:
+ *   - Sends images to the Python FastAPI service for CNN-based blur detection
+ *   - If the service is unavailable, throws an error (no fallback)
+ *   - The `threshold` parameter is ignored (CNN makes its own decision)
+ *
+ * When AI mode is disabled:
+ *   - Uses the local Laplacian variance + edge density approach
+ *   - The `threshold` parameter controls sensitivity
+ *
+ * Results are cached in memory — repeat calls with the same folder/groups
+ * return instantly.
+ *
+ * @param {Object} fileGroups - Map of baseName -> string[] (file names)
+ * @param {string} folderPath - Absolute path to the folder
+ * @param {string} [threshold='moderate'] - Sensitivity preset (legacy mode only)
+ * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
+ * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
+ */
+async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', onProgress = null) {
+  const groupNames = Object.keys(fileGroups);
+  const mode = config.features.BLUR_AI_ENABLED ? 'ai' : 'legacy';
+
+  // Check cache first
+  const cacheKey = buildCacheKey(folderPath, groupNames, mode === 'ai' ? 'ai' : threshold);
+  if (blurCache.cacheKey === cacheKey && blurCache.blurMap) {
+    logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results (${mode})`);
+    return blurCache.blurMap;
+  }
+
+  logger.log(`🔍 [BLUR] Starting analysis — mode: ${mode}, groups: ${groupNames.length}`);
+
+  let blurMap;
+  if (mode === 'ai') {
+    blurMap = await analyzeBlurAI(fileGroups, folderPath, onProgress);
+  } else {
+    blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
+  }
 
   // Store in cache
   blurCache = { cacheKey, blurMap };

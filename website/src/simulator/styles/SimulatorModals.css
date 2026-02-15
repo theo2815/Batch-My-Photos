@@ -1,0 +1,796 @@
+/**
+ * SimulatorModal Styles
+ * 
+ * Ported from desktop Modals.css for web simulation.
+ * Scoped to .sim-app where possible or used as global modal overlay.
+ */
+
+/* Modal Overlay - matches desktop exactly */
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: sim-fadeIn 0.15s ease;
+}
+
+/* Modal Content */
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: sim-slideUp 0.25s ease;
+  position: relative;
+  /* Default background if variables fail */
+  background-color: #2d2d2d; 
+  color: #fff;
+}
+
+@keyframes sim-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sim-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-md);
+  color: var(--accent-primary);
+  display: flex;
+  justify-content: center;
+}
+
+.modal-icon.warning {
+  color: var(--warning);
+}
+
+.modal-content h3 {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-sm);
+  color: var(--warning);
+}
+
+.modal-content p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   CONFIRMATION MODAL STYLES (Undo Confirmation)
+   ============================================================================ */
+
+.confirmation-modal {
+  max-width: 450px;
+}
+
+.confirmation-modal h3 {
+  color: var(--accent-primary);
+}
+
+.confirmation-details {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin: var(--space-lg) 0;
+  text-align: left;
+}
+
+.warning-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.params-list {
+  text-align: left;
+  list-style-type: disc;
+  padding-left: var(--space-xl);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: var(--space-lg);
+}
+
+.params-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.params-list strong {
+  color: var(--text-primary);
+}
+
+.note-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
+.modal-buttons .btn {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  padding: var(--space-sm) var(--space-md);
+  justify-content: center;
+}
+
+.text-warning {
+  color: var(--warning);
+}
+
+.icon-inline {
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+/* ============================================================================
+   HISTORY MODAL STYLES
+   ============================================================================ */
+
+/* Specific override for history modal — matches desktop Modals.css */
+.modal-content.history-modal {
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.history-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.history-modal-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.history-modal-title h3 {
+  color: var(--accent-primary);
+  margin: 0;
+}
+
+/* "Move Mode Only" indicator next to the title */
+.history-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.history-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+}
+
+.history-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.history-description {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-md);
+  line-height: 1.4;
+}
+
+/* History List */
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 400px;
+  padding-right: var(--space-xs);
+}
+
+.history-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+}
+
+/* History Entry */
+.history-entry {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  transition: background var(--transition-fast);
+}
+
+.history-entry:hover {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+/* Fixed-position path tooltip — escapes all scroll/overflow containers */
+.history-path-tooltip {
+  position: fixed;
+  z-index: 10002;
+  background: var(--accent-gradient);
+  color: white;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.5;
+  max-width: 360px;
+  word-break: break-all;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: tooltipFadeIn 0.15s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.history-entry-folder-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  overflow: hidden;
+  max-width: 65%;
+  cursor: default;
+}
+
+.history-entry-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.history-entry-folder svg {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+}
+
+/* Copy path button */
+.history-copy-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.history-entry:hover .history-copy-btn {
+  opacity: 1;
+}
+
+.history-copy-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.history-copy-btn.copied {
+  opacity: 1;
+  color: var(--success);
+}
+
+.history-entry-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.history-entry-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Mode badge */
+.history-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.history-mode-badge.move {
+  color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.history-entry-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.history-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.history-prefix {
+  font-family: monospace;
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+/* Expand button */
+.history-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  margin-left: auto;
+}
+
+.history-expand-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+/* Expanded details */
+.history-entry-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.history-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.history-detail-section + .history-detail-section {
+  padding-top: var(--space-sm);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.history-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.history-detail-count {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.history-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.history-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.history-detail-key {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.history-detail-value {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.history-detail-value.mono {
+  font-family: monospace;
+  color: var(--accent-primary);
+}
+
+/* Batch result list */
+.history-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.history-batch-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.history-batch-list::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+}
+
+.history-batch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px var(--space-xs);
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
+.history-batch-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.history-batch-name {
+  color: var(--text-secondary);
+  font-family: monospace;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-batch-count {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
+}
+
+.history-batch-item.more {
+  color: var(--text-muted);
+  font-style: italic;
+  justify-content: center;
+  padding-top: var(--space-xs);
+}
+
+/* Validation Status */
+.history-validation {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.75rem;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.history-validation.valid {
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.history-validation.invalid {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+/* Entry Actions */
+.history-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.history-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.history-action-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.history-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.history-action-btn.undo {
+  color: var(--accent-primary);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.history-action-btn.undo:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-primary);
+}
+
+.history-action-btn.delete {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.history-action-btn.delete:hover {
+  color: var(--error);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.history-action-btn.validate .spinner-icon {
+  animation: sim-spin 1s linear infinite;
+}
+
+@keyframes sim-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Delete confirmation inline */
+.history-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.history-delete-confirm .delete-yes {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.history-delete-confirm .delete-no {
+  color: var(--text-secondary);
+}
+
+/* History Footer */
+.history-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-text:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.btn-text.danger {
+  color: var(--text-muted);
+}
+
+.btn-text.danger:hover {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.history-clear-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Empty state */
+.history-empty-state {
+  text-align: center;
+  padding: var(--space-2xl) var(--space-lg);
+  color: var(--text-muted);
+}
+
+.history-empty-state svg {
+  margin-bottom: var(--space-md);
+  opacity: 0.3;
+}
+
+.history-empty-state p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.history-empty-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: left;
+  line-height: 1.4;
+}
+
+.history-empty-note svg {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+  margin-top: 1px;
+  opacity: 0.7;
+}
+
+/* ============================================================================
+   LIGHT THEME — Modal Overrides
+   ============================================================================ */
+
+.sim-app.light .modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.sim-app.light .modal-content {
+  background-color: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1a1a2e;
+}
+
+.sim-app.light .history-entry {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.sim-app.light .history-entry:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.sim-app.light .history-entry-details {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.sim-app.light .history-footer {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+.sim-app.light .history-action-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.sim-app.light .confirmation-details {
+  border-color: rgba(0, 0, 0, 0.06);
+}

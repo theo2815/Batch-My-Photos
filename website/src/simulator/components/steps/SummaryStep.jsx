@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle, Download, RotateCcw, FolderOpen } from 'lucide-react';
+import { CheckCircle, Download, RotateCcw, FolderOpen, Undo2, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { trackCTAClicked } from '../../analytics';
 import FileExplorer from '../common/FileExplorer';
@@ -11,9 +11,75 @@ import FileExplorer from '../common/FileExplorer';
  *   title  →  summary text  →  results-summary (top 5 folders)
  *   →  action buttons  →  download CTA
  *   ✓ "Open in Explorer" button → FileExplorer overlay
+ *   ✓ "History" button when history exists (matches desktop CompleteCard)
+ *   ✓ UndoCompleteCard when undo result exists (matches desktop UndoCompleteCard)
  */
-const SummaryStep = ({ batches, stats, elapsedTime, onReset, selectedFolder }) => {
+const SummaryStep = ({ batches, stats, elapsedTime, onReset, selectedFolder, hasHistory, onShowHistory, undoCompleteResult, onClearUndoComplete }) => {
     const [explorerOpen, setExplorerOpen] = useState(false);
+
+    // ─── Undo Complete View (matches desktop UndoCompleteCard) ─────────
+    if (undoCompleteResult) {
+        const folderName = undoCompleteResult.sourceFolder?.split(/[/\\]/).pop() || 'folder';
+
+        return (
+            <div className="status-card" style={{ maxWidth: 550 }}>
+                <div className="success-icon" style={{ color: 'var(--success)' }}>
+                    <Undo2 size={64} />
+                </div>
+
+                <h2>Undoing Batches Complete!</h2>
+                <p>All files have been restored to their original location.</p>
+
+                <div className="results-summary">
+                    <div className="result-row">
+                        <span className="folder-name">Files Restored</span>
+                        <span className="file-count">{undoCompleteResult.restoredFiles?.toLocaleString()}</span>
+                    </div>
+                    {undoCompleteResult.deletedFolders > 0 && (
+                        <div className="result-row">
+                            <span className="folder-name">Batch Folders Removed</span>
+                            <span className="file-count">{undoCompleteResult.deletedFolders}</span>
+                        </div>
+                    )}
+                    <div className="result-row">
+                        <span className="folder-name">Restored To</span>
+                        <span className="file-count">{folderName}</span>
+                    </div>
+                </div>
+
+                <div className="action-buttons">
+                    <button
+                        className="btn secondary"
+                        onClick={() => { trackCTAClicked('open_explorer_undo'); setExplorerOpen(true); }}
+                    >
+                        <FolderOpen size={16} /> Open in Explorer
+                    </button>
+
+                    <button
+                        className="btn primary"
+                        onClick={() => { trackCTAClicked('process_another_after_undo'); onReset(); }}
+                    >
+                        <RotateCcw size={16} /> Process Another Folder
+                    </button>
+                </div>
+
+                <div className="demo-cta" style={{ marginTop: 'var(--space-lg)' }}>
+                    <span>This was a simulated undo — no real files were moved.</span>
+                </div>
+
+                {explorerOpen && (
+                    <FileExplorer
+                        batches={batches}
+                        selectedFolder={selectedFolder}
+                        onClose={() => setExplorerOpen(false)}
+                        flatMode={true}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    // ─── Normal Completion View (matches desktop CompleteCard) ─────────
     const normalBatches = batches.filter(b => !b.isBlurBatch);
     const blurBatch     = batches.find(b => b.isBlurBatch);
 
@@ -56,6 +122,15 @@ const SummaryStep = ({ batches, stats, elapsedTime, onReset, selectedFolder }) =
 
             {/* Action Buttons */}
             <div className="action-buttons">
+                {hasHistory && (
+                    <button
+                        className="btn secondary"
+                        onClick={() => { trackCTAClicked('history_from_complete'); onShowHistory(); }}
+                    >
+                        <History size={16} /> History
+                    </button>
+                )}
+
                 <button
                     className="btn secondary"
                     onClick={() => { trackCTAClicked('open_explorer'); setExplorerOpen(true); }}

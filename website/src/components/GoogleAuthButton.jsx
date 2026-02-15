@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Loader2 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
-export default function GoogleAuthButton({ text = "Sign in with Google", className = "" }) {
+export default function GoogleAuthButton({ text = "Sign in with Google", className = "", isDesktop = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { isDark } = useTheme()
@@ -19,7 +19,9 @@ export default function GoogleAuthButton({ text = "Sign in with Google", classNa
             prompt: 'consent',
           },
           // redirectTo ensures we get back to the right place
-           redirectTo: `${window.location.origin}/dashboard`
+           redirectTo: isDesktop
+             ? `${window.location.origin}/auth/desktop-callback`
+             : `${window.location.origin}/dashboard`
         },
       })
       if (authError) throw authError

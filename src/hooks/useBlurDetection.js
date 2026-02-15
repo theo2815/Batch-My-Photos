@@ -26,6 +26,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   const [blurProgress, setBlurProgress] = useState(null);   // { current, total }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [unflaggedGroups, setUnflaggedGroups] = useState(new Set()); // User-unflagged base names
+  const [aiUnavailable, setAiUnavailable] = useState(false); // AI service down
 
   // Track the last analyzed folder + sensitivity to avoid redundant analyses
   const lastAnalysisRef = useRef({ folderPath: null, sensitivity: null });
@@ -92,6 +93,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     analysisInFlightRef.current = true;
     setIsAnalyzing(true);
     setBlurProgress(null);
+    setAiUnavailable(false);
     analysisStartTimeRef.current = Date.now();
 
     try {
@@ -100,6 +102,10 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
       if (result.success) {
         setBlurResults(result.blurResults);
         lastAnalysisRef.current = { folderPath, sensitivity: blurSensitivity };
+      } else if (result.aiUnavailable) {
+        console.error('[BLUR] AI service unavailable:', result.error);
+        setAiUnavailable(true);
+        setBlurResults(null);
       } else {
         console.error('[BLUR] Analysis failed:', result.error);
         setBlurResults(null);
@@ -139,6 +145,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     setBlurProgress(null);
     setIsAnalyzing(false);
     setUnflaggedGroups(new Set());
+    setAiUnavailable(false);
     lastAnalysisRef.current = { folderPath: null, sensitivity: null };
     analysisInFlightRef.current = false;
   }, []);
@@ -160,6 +167,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     blurryGroups,
     blurryCount,
     unflaggedGroups,
+    aiUnavailable,
     runBlurAnalysis,
     toggleBlurFlag,
     resetBlurState,

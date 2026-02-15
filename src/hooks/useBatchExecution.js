@@ -13,6 +13,10 @@ export function useBatchExecution({ setAppState, setError }) {
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [interruptedProgress, setInterruptedProgress] = useState(null);
 
+  // Batch limit check state
+  const [isCheckingLimit, setIsCheckingLimit] = useState(false);
+  const [batchLimitExceeded, setBatchLimitExceeded] = useState(null);
+
   // Safety check state
   const [safetyCheckResult, setSafetyCheckResult] = useState(null);
   const [showSafetyWarning, setShowSafetyWarning] = useState(false);
@@ -86,6 +90,26 @@ export function useBatchExecution({ setAppState, setError }) {
       } else if (results.success) {
         setExecutionResults(results);
         setAppState(STATES.COMPLETE);
+
+        // ============================================================================
+        // BATCH USAGE TRACKING (Phase 2: Record batch execution)
+        // ============================================================================
+
+        // Track successful batch execution in backend
+        const authSession = await window.electronAPI.authGetSession();
+        if (authSession.sessionToken) {
+          const batchCount = results.batchesCreated || 1;
+          const trackResult = await window.electronAPI.subscriptionTrackBatch(
+            authSession.sessionToken,
+            batchCount
+          );
+
+          if (trackResult.success) {
+            console.log(`✅ [SUBSCRIPTION] Tracked ${batchCount} batch(es) successfully`);
+          } else if (!trackResult.offline) {
+            console.warn('⚠️ [SUBSCRIPTION] Failed to track batch usage:', trackResult.error);
+          }
+        }
       } else {
         throw new Error(results.error);
       }
@@ -107,6 +131,54 @@ export function useBatchExecution({ setAppState, setError }) {
     setShowConfirmation(false);
     setSafetyCheckResult(null);
     setShowSafetyWarning(false);
+
+    // ============================================================================
+    // BATCH LIMIT CHECK (Phase 2: Subscription enforcement)
+    // ============================================================================
+
+    // Get user session token for subscription check
+    const authSession = await window.electronAPI.authGetSession();
+    if (!authSession.sessionToken) {
+      setError('Please log in to execute batches');
+      setAppState(STATES.ERROR);
+      return;
+    }
+
+    // Check subscription limits (5 batches/month for free, unlimited for Pro)
+    setIsCheckingLimit(true);
+    let limitCheck;
+    try {
+      limitCheck = await window.electronAPI.subscriptionCheckBatchLimit(authSession.sessionToken);
+    } catch (err) {
+      console.error('[SUBSCRIPTION] Limit check failed:', err);
+      // Fail-safe: allow execution if the check itself errors
+      limitCheck = { canExecute: true, offline: true };
+    } finally {
+      setIsCheckingLimit(false);
+    }
+
+    if (!limitCheck.canExecute && !limitCheck.offline) {
+      // User has exceeded their limit - show dedicated limit card
+      const message = limitCheck.subscriptionExpired
+        ? `Your Pro subscription has expired. Renew now to continue using unlimited batches.`
+        : `You've reached your monthly limit of ${limitCheck.usage?.limit || 5} batches. Upgrade to Pro for unlimited batches.`;
+
+      setBatchLimitExceeded({
+        message,
+        usage: limitCheck.usage || null,
+        isExpired: !!limitCheck.subscriptionExpired,
+      });
+      return;
+    }
+
+    // If offline, log warning but allow execution (fail-safe mode)
+    if (limitCheck.offline) {
+      console.warn('[SUBSCRIPTION] Operating in offline mode - batch limits not enforced');
+    }
+
+    // ============================================================================
+    // SAFETY VALIDATION
+    // ============================================================================
 
     // Run pre-execution validation
     if (window.electronAPI?.validateExecution) {
@@ -179,6 +251,10 @@ export function useBatchExecution({ setAppState, setError }) {
     setShowSafetyWarning(false);
     setSafetyCheckResult(null);
     pendingExecutionRef.current = null;
+  }, []);
+
+  const clearBatchLimitExceeded = useCallback(() => {
+    setBatchLimitExceeded(null);
   }, []);
 
   const handleCancelBatch = useCallback(() => {
@@ -260,5 +336,9 @@ export function useBatchExecution({ setAppState, setError }) {
     isValidating,
     handleOverrideSafetyCheck,
     handleDismissSafetyCheck,
+    // Batch limit
+    isCheckingLimit,
+    batchLimitExceeded,
+    clearBatchLimitExceeded,
   };
 }
