@@ -91,9 +91,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 app.locals.supabaseAdmin = supabaseAdmin
 
 // Routes
-app.get('/', (req, res) => {
-  res.send('BatchMyPhotos Backend is running!')
-})
+// (Root route removed to allow static website to serve index.html)
 
 // ── Health Check ─────────────────────────────────────────────────────────────
 // Used by Railway/Render/monitoring tools to verify the service is healthy
