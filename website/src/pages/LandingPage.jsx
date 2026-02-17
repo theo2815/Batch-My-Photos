@@ -617,7 +617,7 @@ export default function LandingPage() {
             {/* Headline */}
             <h1 className={`text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'} leading-[1.1]`}>
               Sort thousands of photos{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">in minutes.</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">in seconds.</span>
             </h1>
 
             {/* Sub-headline */}

@@ -2,7 +2,7 @@
 import { Check, X, CreditCard, Sparkles } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
-export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoading }) {
+export default function PricingModal({ isOpen, onClose }) {
   const { isDark } = useTheme()
 
   if (!isOpen) return null
@@ -69,17 +69,15 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                 ))}
               </ul>
 
-              <button
-                onClick={onUpgrade}
-                disabled={checkoutLoading}
-                className="w-full py-3 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer relative z-10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
-              >
-                {checkoutLoading ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
-                ) : (
-                  <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
-                )}
-              </button>
+              <div className="flex flex-col gap-2 mt-auto">
+                <button
+                  disabled
+                  className="w-full py-3 rounded-xl bg-indigo-600/50 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none flex items-center justify-center gap-2"
+                >
+                  Coming Soon
+                </button>
+                <span className={`text-[10px] ${isDark ? 'text-indigo-300/60' : 'text-indigo-400/80'} text-center italic`}>Under review by Microsoft Store</span>
+              </div>
             </div>
 
             {/* Pro+ Plan */}

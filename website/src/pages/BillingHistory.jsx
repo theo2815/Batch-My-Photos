@@ -4,16 +4,14 @@ import { ArrowLeft, CreditCard, Check, Clock, Sparkles } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useSubscription } from '../hooks/useSubscription'
 import { supabase } from '../lib/supabase'
-import PricingModal from '../components/PricingModal'
+
 
 export default function BillingHistory() {
   const navigate = useNavigate()
   const { isDark } = useTheme()
-  const { subscription: sub, loading, createCheckout } = useSubscription()
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const { subscription: sub, loading } = useSubscription()
   const [transactions, setTransactions] = useState([])
   const [txLoading, setTxLoading] = useState(true)
-  const [showPricing, setShowPricing] = useState(false)
 
   const isFree = !sub || sub.plan === 'free'
 
@@ -39,23 +37,6 @@ export default function BillingHistory() {
     }
     fetchTransactions()
   }, [])
-
-  const handleUpgradeClick = () => {
-    setShowPricing(true)
-  }
-
-  const processUpgrade = async () => {
-    try {
-      setCheckoutLoading(true)
-      const checkoutUrl = await createCheckout()
-      window.open(checkoutUrl, '_blank')
-      setShowPricing(false) // Close modal after redirecting
-    } catch (err) {
-      console.error('Checkout error:', err)
-    } finally {
-      setCheckoutLoading(false)
-    }
-  }
 
   if (loading) return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
@@ -138,12 +119,15 @@ export default function BillingHistory() {
             {/* Payment Info / Upgrade CTA */}
             <div className={`p-5 rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} flex flex-col justify-center`}>
               {isFree ? (
-                <button
-                  onClick={handleUpgradeClick}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 transition-all active:scale-[0.98] cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4" /> Upgrade to Pro
-                </button>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    disabled
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/50 px-4 py-2.5 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                  >
+                    Coming Soon
+                  </button>
+                  <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span>
+                </div>
               ) : (
                 <>
                   <p className={`text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-slate-500' : 'text-gray-400'} mb-1`}>Last Payment</p>
@@ -225,12 +209,7 @@ export default function BillingHistory() {
 
       </div>
 
-      <PricingModal
-        isOpen={showPricing}
-        onClose={() => setShowPricing(false)}
-        onUpgrade={processUpgrade}
-        checkoutLoading={checkoutLoading}
-      />
+
     </div>
   )
 }
