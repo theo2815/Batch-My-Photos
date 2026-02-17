@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import PricingModal from '../components/PricingModal'
 import InfoModal from '../components/modals/InfoModal'
@@ -75,6 +75,21 @@ export default function Dashboard() {
   const [paymentMsg, setPaymentMsg] = useState(null)
   const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription } = useSubscription()
   const isFree = !sub || sub.plan === 'free'
+  const timersRef = useRef([])
+
+  // Clear all pending timeouts on unmount to prevent state updates after navigation
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(clearTimeout)
+      timersRef.current = []
+    }
+  }, [])
+
+  const safeTimeout = (fn, ms) => {
+    const id = setTimeout(fn, ms)
+    timersRef.current.push(id)
+    return id
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,12 +106,13 @@ export default function Dashboard() {
     if (!sub?.licenseKey) return
     navigator.clipboard.writeText(sub.licenseKey)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    safeTimeout(() => setCopied(false), 2000)
   }
 
   // Handle payment redirect params (?payment=success or ?payment=cancelled)
   useEffect(() => {
     const paymentStatus = searchParams.get('payment')
+    // #region agent log
     if (paymentStatus === 'success') {
       setPaymentMsg({ type: 'success', text: '🎉 Verifying your payment…' })
       setSearchParams({}, { replace: true }) // Clean URL
@@ -110,12 +126,12 @@ export default function Dashboard() {
           refetchSub()
           setPaymentMsg({ type: 'success', text: '🎉 Payment successful! Refreshing your plan…' })
         }
-        setTimeout(() => setPaymentMsg(null), 6000)
+        safeTimeout(() => setPaymentMsg(null), 6000)
       })
     } else if (paymentStatus === 'cancelled') {
       setPaymentMsg({ type: 'info', text: 'Payment was cancelled. You can try again anytime.' })
       setSearchParams({}, { replace: true })
-      setTimeout(() => setPaymentMsg(null), 5000)
+      safeTimeout(() => setPaymentMsg(null), 5000)
     }
   }, [searchParams, setSearchParams, refetchSub, verifyPayment])
 
@@ -140,14 +156,14 @@ export default function Dashboard() {
     try {
       setCheckoutLoading(true)
       const checkoutUrl = await createCheckout()
-      // Open PayMongo checkout in a new tab
-      window.open(checkoutUrl, '_blank')
+      
+      // Navigate to PayMongo checkout in the same tab to preserve session consistency
+      window.location.href = checkoutUrl
     } catch (err) {
       console.error('Checkout error:', err)
-      setPaymentMsg({ type: 'error', text: err.message || 'Failed to start checkout. Please try again.' })
-      setTimeout(() => setPaymentMsg(null), 5000)
-    } finally {
       setCheckoutLoading(false)
+      setPaymentMsg({ type: 'error', text: err.message || 'Failed to start checkout. Please try again.' })
+      safeTimeout(() => setPaymentMsg(null), 5000)
     }
   }
 
@@ -255,10 +271,15 @@ export default function Dashboard() {
 
               {/* CTA */}
               <div className="shrink-0 flex flex-col gap-2.5">
-                <button className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer">
-                  <Download className="w-4 h-4" /> Download for Windows
+                <button
+                  disabled
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600/50 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                >
+                  <div className="flex flex-col items-center leading-none">
+                    <span>Coming Soon</span>
+                  </div>
                 </button>
-                <span className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} text-center`}>v1.0.0 · Windows 10+</span>
+                <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review by Microsoft Store</span>
               </div>
             </div>
 
@@ -289,11 +310,11 @@ export default function Dashboard() {
                   <h3 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Your Plan</h3>
                 </div>
                 <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full ${
-                  sub.status === 'active'  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-                : sub.status === 'past_due'? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20'
+                  sub?.status === 'active'  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
+                : sub?.status === 'past_due'? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20'
                 :                            'bg-slate-800 text-slate-500 ring-1 ring-slate-700'
                 }`}>
-                  {sub.status === 'active' ? 'Active' : sub.status === 'past_due' ? 'Past Due' : sub.status === 'trialing' ? 'Trial' : 'Canceled'}
+                  {sub?.status === 'active' ? 'Active' : sub?.status === 'past_due' ? 'Past Due' : sub?.status === 'trialing' ? 'Trial' : isFree ? 'Free' : 'Unknown'}
                 </span>
               </div>
 
@@ -317,7 +338,7 @@ export default function Dashboard() {
                 {[
                   { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱249/mo' },
                   { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
-                  { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 10} batches`, full: true },
+                  { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 2} batches`, full: true },
                 ].map(d => (
                   <div key={d.label} className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
                     <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-0.5`}>{d.label}</p>
@@ -327,7 +348,7 @@ export default function Dashboard() {
               </div>
 
               {/* License key (Pro only) */}
-              {sub.licenseKey && (
+              {sub?.licenseKey && (
                 <div className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3 mb-6`}>
                   <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-1.5 flex items-center gap-1.5`}>
                     <Key className="w-3 h-3" /> License Key
@@ -344,17 +365,15 @@ export default function Dashboard() {
               {/* Action buttons */}
               <div className="flex flex-wrap gap-3">
                 {isFree ? (
-                  <button
-                    onClick={() => setActiveModal('pricing')}
-                    disabled={checkoutLoading}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {checkoutLoading ? (
-                      <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
-                    ) : (
-                      <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
-                    )}
-                  </button>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/50 px-4 py-2.5 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                    >
+                      Coming Soon
+                    </button>
+                    <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span>
+                  </div>
                 ) : (
                   <button onClick={() => setActiveModal('managePlan')} className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
                     Manage Plan
@@ -485,7 +504,7 @@ export default function Dashboard() {
 
       {/* ── Manage Plan Modal ── */}
       {activeModal === 'managePlan' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setActiveModal(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => { setActiveModal(null); setConfirmCancel(false) }}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className={`relative w-full max-w-md max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
@@ -499,7 +518,7 @@ export default function Dashboard() {
                 </div>
                 <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Manage Your Plan</h3>
               </div>
-              <button onClick={() => setActiveModal(null)} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
+              <button onClick={() => { setActiveModal(null); setConfirmCancel(false) }} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -533,7 +552,7 @@ export default function Dashboard() {
                           setActiveModal(null)
                           setConfirmCancel(false)
                           setPaymentMsg({ type: 'info', text: 'Subscription cancelled. You are now on the Free plan.' })
-                          setTimeout(() => setPaymentMsg(null), 5000)
+                          safeTimeout(() => setPaymentMsg(null), 5000)
                         } catch (err) {
                           console.error(err)
                           setPaymentMsg({ type: 'error', text: 'Failed to cancel subscription' })
@@ -585,7 +604,6 @@ export default function Dashboard() {
                     <ul className="space-y-2.5 text-sm">
                       {[
                         { text: 'Unlimited batches', included: sub?.plan === 'pro' },
-                        { text: 'Offline processing', included: sub?.plan === 'pro' },
                         { text: 'Custom watermarks', included: sub?.plan === 'pro' },
                         { text: 'Blur detection', included: sub?.plan === 'pro' },
                       ].map((f) => (

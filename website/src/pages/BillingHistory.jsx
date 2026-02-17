@@ -23,12 +23,13 @@ export default function BillingHistory() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
 
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/transactions`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/transactions`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
         if (res.ok) {
-          const data = await res.json()
-          setTransactions(data)
+          const result = await res.json()
+          // API returns { data, total, limit, offset } with pagination
+          setTransactions(Array.isArray(result) ? result : result.data || [])
         }
       } catch (err) {
         console.error('Failed to fetch transactions:', err)

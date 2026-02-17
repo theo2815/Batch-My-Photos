@@ -10,6 +10,7 @@ Thumbs.db
 
 # Environment and secrets
 .env
+**/.env
 auth.json
 
 # Logs and debug output

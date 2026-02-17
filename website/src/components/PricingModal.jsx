@@ -11,7 +11,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className={`relative w-full max-w-3xl max-h-[90vh] rounded-3xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out] overflow-hidden`}
+        className={`relative w-full max-w-5xl max-h-[90vh] rounded-3xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out] overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`flex items-center justify-between px-8 py-6 border-b ${isDark ? 'border-white/[0.06]' : 'border-gray-200'} shrink-0`}>
@@ -27,10 +27,10 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
         </div>
         
         <div className="px-8 py-8 overflow-y-auto flex-1 custom-scrollbar">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
             {/* Free Plan */}
-            <div className={`relative p-6 rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gray-50'}`}>
+            <div className={`relative p-6 rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gray-50'} flex flex-col`}>
               <div className="flex items-baseline gap-1 mb-1">
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Free</h3>
               </div>
@@ -39,25 +39,13 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               <ul className="space-y-4 text-sm">
                 <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                  <span>5 batches / month</span>
-                </li>
-                <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                  <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                  <span>Requires internet</span>
-                </li>
-                <li className={`flex items-center gap-3 ${isDark ? 'text-slate-500' : 'text-gray-400'} opacity-75`}>
-                  <X className="w-4 h-4 shrink-0" />
-                  <span>Watermarking</span>
-                </li>
-                <li className={`flex items-center gap-3 ${isDark ? 'text-slate-500' : 'text-gray-400'} opacity-75`}>
-                  <X className="w-4 h-4 shrink-0" />
-                  <span>Blur detection (Coming Soon)</span>
+                  <span>2 batches / month</span>
                 </li>
               </ul>
             </div>
 
             {/* Pro Plan */}
-            <div className={`relative p-6 rounded-2xl border ${isDark ? 'border-indigo-500/30 bg-indigo-500/[0.04]' : 'border-indigo-200 bg-indigo-50/50'} overflow-hidden`}>
+            <div className={`relative p-6 rounded-2xl border ${isDark ? 'border-indigo-500/30 bg-indigo-500/[0.04]' : 'border-indigo-200 bg-indigo-50/50'} overflow-hidden flex flex-col`}>
               {/* Glow effect */}
               <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
               
@@ -73,9 +61,6 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               <ul className="space-y-4 text-sm relative z-10 mb-8">
                 {[
                   'Unlimited batches',
-                  'Process offline',
-                  'Custom Watermarks (Coming Soon)',
-                  'Blur detection (Coming Soon)'
                 ].map((input) => (
                   <li key={input} className={`flex items-center gap-3 ${isDark ? 'text-white' : 'text-gray-900'} font-medium`}>
                     <Check className="w-4 h-4 shrink-0 text-emerald-400" />
@@ -87,13 +72,48 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               <button
                 onClick={onUpgrade}
                 disabled={checkoutLoading}
-                className="w-full py-3 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer relative z-10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-500 hover:shadow-indigo-500/30 transition-all active:scale-[0.98] cursor-pointer relative z-10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
               >
                 {checkoutLoading ? (
                   <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
                 ) : (
                   <><Sparkles className="w-4 h-4" /> Upgrade to Pro</>
                 )}
+              </button>
+            </div>
+
+            {/* Pro+ Plan */}
+            <div className={`relative p-6 rounded-2xl border ${isDark ? 'border-purple-500/30 bg-purple-500/[0.04]' : 'border-purple-200 bg-purple-50/50'} overflow-hidden opacity-90 flex flex-col`}>
+              {/* Glow effect */}
+              <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              
+              <div className="flex items-center gap-2 mb-3 relative z-10">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500 text-white shadow-md shadow-amber-500/30">Coming Soon</span>
+              </div>
+              <div className="flex items-baseline gap-1 mb-2 relative z-10">
+                <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Pro+</h3>
+                <span className={`text-xl font-bold ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>— ₱499/mo</span>
+              </div>
+              <p className={`text-sm ${isDark ? 'text-purple-200' : 'text-purple-600'} mb-6 relative z-10`}>For professionals</p>
+              
+              <ul className="space-y-4 text-sm relative z-10 mb-8">
+                {[
+                  'Unlimited batches',
+                  'Custom Watermarks',
+                  'Blur detection'
+                ].map((input) => (
+                  <li key={input} className={`flex items-center gap-3 ${isDark ? 'text-white' : 'text-gray-900'} font-medium`}>
+                    <Check className="w-4 h-4 shrink-0 text-purple-400" />
+                    <span>{input}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                disabled
+                className="w-full py-3 rounded-xl bg-gray-400/20 text-sm font-semibold text-gray-400 cursor-not-allowed border border-gray-400/20 flex items-center justify-center gap-2 mt-auto"
+              >
+                Not Available Yet
               </button>
             </div>
           </div>

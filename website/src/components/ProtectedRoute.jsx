@@ -12,9 +12,17 @@ export default function ProtectedRoute({ children }) {
   const { isDark } = useTheme()
 
   useEffect(() => {
+    // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
     })
+
+    // React to auth state changes (logout, token expiry, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   // Still loading

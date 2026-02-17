@@ -64,15 +64,33 @@ logger.log('💾 [CACHE] Set cache path to:', cachePath);
 // ============================================================================
 // PERSISTENT STATE MANAGEMENT
 // ============================================================================
-// Initialize electron-store for persistent user preferences and session data
-const store = new Store({
-  projectName: 'BatchMyPhotos',
-  encryptionKey: 'BatchMyPhotos-v1-preferences',
-  defaults: {
-    theme: 'dark',
-    recentFolders: [],
-  },
-});
+// Initialize electron-store for persistent user preferences and session data.
+// No encryption key needed — preferences (theme, recent folders) are non-sensitive.
+//
+// Migration: Old versions used a hardcoded encryptionKey which produced binary
+// data in the JSON file. Without that key, electron-store fails to parse it.
+// Delete the old file if it exists so we start fresh with defaults.
+let store;
+try {
+  store = new Store({
+    projectName: 'BatchMyPhotos',
+    defaults: {
+      theme: 'dark',
+      recentFolders: [],
+    },
+  });
+} catch (_err) {
+  logger.warn('⚠️ [STORE] Old encrypted preferences store is unreadable — deleting and starting fresh');
+  const storeFile = path.join(app.getPath('userData'), 'config.json');
+  try { fs.unlinkSync(storeFile); } catch (_e) { /* file may not exist */ }
+  store = new Store({
+    projectName: 'BatchMyPhotos',
+    defaults: {
+      theme: 'dark',
+      recentFolders: [],
+    },
+  });
+}
 
 // ============================================================================
 // APPLICATION STATE
@@ -92,8 +110,11 @@ const appState = {
 /**
  * Handle deep link URL from browser-based authentication.
  * Expected format: batchmyphotos://auth/callback?token=XXX&email=YYY
+ *
+ * SECURITY: Verifies the token against the backend before saving the session
+ * to prevent forged deep links from injecting invalid tokens.
  */
-function handleDeepLink(url) {
+async function handleDeepLink(url) {
   logger.log('[DEEP-LINK] Received URL:', url);
 
   try {
@@ -118,7 +139,18 @@ function handleDeepLink(url) {
       return;
     }
 
-    // Save session via authService
+    // SECURITY: Verify the token is valid before trusting it
+    const verification = await authService.verifySession(token);
+    if (!verification.valid) {
+      logger.warn('[DEEP-LINK] Token verification failed — refusing to save session');
+      const mainWindow = getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth-callback', { success: false, error: 'Invalid or expired token' });
+      }
+      return;
+    }
+
+    // Token verified — save session
     authService.saveSession(token, { email: decodeURIComponent(email), name: decodeURIComponent(name || '') });
 
     // Notify the renderer process

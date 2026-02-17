@@ -86,11 +86,11 @@ export default function Navbar() {
             <Link to="/" className="flex items-center gap-2.5 group shrink-0">
               <img
                 src="/app_icon.png"
-                alt="Batch My Photos"
+                alt="BatchMyPhotos"
                 className="w-8 h-8 rounded-lg group-hover:scale-105 transition-transform"
               />
               <span className={`text-base font-bold tracking-tight transition-colors ${dark ? 'text-white' : 'text-slate-900'}`}>
-                Batch My Photos
+                BatchMyPhotos
               </span>
             </Link>
 

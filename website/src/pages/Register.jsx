@@ -19,6 +19,7 @@ export default function Register() {
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [confirmEmail, setConfirmEmail] = useState(false)
   const { isDark } = useTheme()
 
   const handleRegister = async (e) => {
@@ -38,7 +39,7 @@ export default function Register() {
       return
     }
 
-    const { error: authError } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -48,6 +49,9 @@ export default function Register() {
 
     if (authError) {
       setError(authError.message)
+    } else if (!data.session) {
+      // Email confirmation is required — user has no session yet
+      setConfirmEmail(true)
     } else {
       navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
     }
@@ -101,8 +105,22 @@ export default function Register() {
             </div>
           )}
 
+          {/* Email confirmation notice */}
+          {confirmEmail && (
+            <div className={`mb-6 rounded-xl px-5 py-4 text-center ${isDark ? 'bg-indigo-500/10 border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-200'}`}>
+              <Mail className={`w-8 h-8 mx-auto mb-3 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+              <h2 className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Check your email</h2>
+              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                We sent a confirmation link to <strong className={isDark ? 'text-white' : 'text-gray-900'}>{email}</strong>. Click the link to activate your account.
+              </p>
+              <Link to="/login" className={`inline-block mt-4 text-sm font-semibold ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'} transition-colors`}>
+                Go to Sign In
+              </Link>
+            </div>
+          )}
+
           {/* Form */}
-          <form onSubmit={handleRegister} className="space-y-5">
+          {!confirmEmail && <form onSubmit={handleRegister} className="space-y-5">
             {/* Name */}
             <div>
               <label htmlFor="name" className={`block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'} mb-2`}>
@@ -249,8 +267,9 @@ export default function Register() {
                 </>
               )}
             </button>
-          </form>
+          </form>}
 
+          {!confirmEmail && (<>
           {/* Trust chips */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {[
@@ -278,6 +297,7 @@ export default function Register() {
               Sign in
             </Link>
           </p>
+          </>)}
         </div>
 
         {/* Trust badge */}

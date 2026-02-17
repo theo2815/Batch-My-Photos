@@ -13,7 +13,7 @@ function BatchLimitCard({ limitInfo, onUpgrade, onGoBack }) {
   const { message, usage, isExpired } = limitInfo;
 
   const usedCount = usage?.used ?? 0;
-  const limitCount = usage?.limit ?? 5;
+  const limitCount = usage?.limit ?? 2;
   const usagePercent = limitCount > 0 ? Math.min((usedCount / limitCount) * 100, 100) : 100;
 
   return (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 /**
  * Custom hook to fetch and manage the current user's subscription status.
@@ -12,19 +12,20 @@ export function useSubscription() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchSubscription = useCallback(async () => {
+  const fetchSubscription = useCallback(async (signal) => {
     try {
       setLoading(true)
       setError(null)
 
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 10 } })
+        setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
         return
       }
 
       const res = await fetch(`${API_BASE}/api/subscription`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
+        signal,
       })
 
       if (!res.ok) {
@@ -32,19 +33,22 @@ export function useSubscription() {
       }
 
       const data = await res.json()
-      setSubscription(data)
+      setSubscription(data || { plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
     } catch (err) {
+      if (err.name === 'AbortError') return
       console.error('useSubscription error:', err)
       setError(err.message)
       // Fallback to free plan on error
-      setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 10 } })
+      setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchSubscription()
+    const controller = new AbortController()
+    fetchSubscription(controller.signal)
+    return () => controller.abort()
   }, [fetchSubscription])
 
   /**
@@ -61,6 +65,9 @@ export function useSubscription() {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        redirect_url: window.location.origin
+      })
     })
 
     if (!res.ok) {

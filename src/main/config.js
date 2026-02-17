@@ -169,6 +169,26 @@ const limits = {
 };
 
 // ============================================================================
+// URLS — Backend & frontend URLs for API calls and deep link auth
+// ============================================================================
+// In production (packaged app), defaults point to your deployed server.
+// Single deploy: backend and website run on the same server/URL.
+// In development (running from source), defaults point to localhost.
+// Always overridable via environment variables.
+
+const PROD_URL = 'https://batchmyphotos-api.up.railway.app'
+
+const urls = {
+  /** Backend API base URL (no trailing slash) */
+  BACKEND_URL: process.env.BATCH_BACKEND_API_URL
+    || (isProduction ? PROD_URL : 'http://localhost:3000'),
+
+  /** Website frontend URL (no trailing slash) — same server in production */
+  FRONTEND_URL: process.env.BATCH_FRONTEND_URL
+    || (isProduction ? PROD_URL : 'http://localhost:3000'),
+};
+
+// ============================================================================
 // EXPORT — Frozen to prevent accidental mutation
 // ============================================================================
 
@@ -177,6 +197,7 @@ const config = {
   isProduction,
   features: Object.freeze(features),
   limits: Object.freeze(limits),
+  urls: Object.freeze(urls),
 };
 
 module.exports = Object.freeze(config);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { CheckCircle2, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
@@ -17,6 +17,7 @@ export default function DesktopCallback() {
   const [status, setStatus] = useState('loading') // 'loading' | 'redirecting' | 'success' | 'error'
   const [error, setError] = useState(null)
   const [deepLinkUrl, setDeepLinkUrl] = useState(null)
+  const timerRef = useRef(null)
 
   useEffect(() => {
     async function handleCallback() {
@@ -44,7 +45,7 @@ export default function DesktopCallback() {
 
         // After a short delay, show success message
         // (the deep link redirect may or may not cause the browser tab to close)
-        setTimeout(() => {
+        timerRef.current = setTimeout(() => {
           setStatus('success')
         }, 2000)
       } catch (err) {
@@ -55,6 +56,7 @@ export default function DesktopCallback() {
     }
 
     handleCallback()
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [])
 
   const handleRetryDeepLink = () => {

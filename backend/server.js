@@ -1,22 +1,44 @@
 
 require('dotenv').config()
 const express = require('express')
+const path = require('path')
 const cors = require('cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
 const { createClient } = require('@supabase/supabase-js')
+const { authenticateUser } = require('./middleware/auth')
 const paymongoRoutes = require('./routes/paymongo')
 
 const app = express()
 const port = process.env.PORT || 3000
 
 // ── Security Middleware ──────────────────────────────────────────────────────
-app.use(helmet())
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: [
+        "'self'",
+        process.env.SUPABASE_URL,
+        "https://*.supabase.co",
+        "https://api.paymongo.com",
+        "http://127.0.0.1:7242",
+      ],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      upgradeInsecureRequests: null,
+    },
+  },
+}))
 
 // CORS — only allow listed origins (comma-separated in .env)
+// Same-origin requests (website served by this server) don't need CORS,
+// but the Electron desktop app makes cross-origin requests and needs it.
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173']
+  : ['http://localhost:5173', 'http://localhost:3000']
 
 app.use(cors({
   origin: allowedOrigins,
@@ -24,9 +46,10 @@ app.use(cors({
 }))
 
 // JSON body parser — skip webhook path (it needs raw body for HMAC verification)
+// Enforce 1 MB size limit to prevent denial-of-service via oversized payloads
 app.use((req, res, next) => {
   if (req.path === '/api/webhooks/paymongo') return next()
-  express.json()(req, res, next)
+  express.json({ limit: '1mb' })(req, res, next)
 })
 
 // Rate limiting for API routes (100 requests per 15 minutes per IP)
@@ -59,32 +82,47 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 app.locals.supabase = supabase
 
 // Admin client — for server-side DB writes (webhooks) that bypass RLS
-const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : supabase // Fallback to anon if no service key
-app.locals.supabaseAdmin = supabaseAdmin
-
-// Authentication Middleware
-const authenticateUser = async (req, res, next) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Missing Authorization header' })
-  }
-
-  const token = authHeader.split(' ')[1]
-  const { data: { user }, error } = await supabase.auth.getUser(token)
-
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid or expired token' })
-  }
-
-  req.user = user
-  next()
+if (!supabaseServiceKey) {
+  throw new Error(
+    'Missing SUPABASE_SERVICE_ROLE_KEY in .env — required for webhook processing and usage tracking.'
+  )
 }
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+app.locals.supabaseAdmin = supabaseAdmin
 
 // Routes
 app.get('/', (req, res) => {
   res.send('BatchMyPhotos Backend is running!')
+})
+
+// ── Health Check ─────────────────────────────────────────────────────────────
+// Used by Railway/Render/monitoring tools to verify the service is healthy
+app.get('/api/health', async (req, res) => {
+  try {
+    // Verify Supabase connectivity with a lightweight query.
+    // If the table doesn't exist yet (pre-migration), treat as degraded but not down.
+    const { error } = await supabaseAdmin
+      .from('subscriptions')
+      .select('user_id')
+      .limit(1)
+
+    const isTableMissing = error && error.code === '42P01'
+    const dbStatus = !error ? 'connected' : isTableMissing ? 'connected (pending migrations)' : 'unreachable'
+
+    res.json({
+      status: error && !isTableMissing ? 'degraded' : 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: dbStatus,
+    })
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: 'unreachable',
+    })
+  }
 })
 
 // Protected Route Example
@@ -102,6 +140,26 @@ app.get('/api/me', authenticateUser, (req, res) => {
 // ── PayMongo Routes ─────────────────────────────────────────────────────────
 // Mounted at /api — auth is handled per-route inside the router
 app.use('/api', paymongoRoutes)
+
+// ── Website Static Files ────────────────────────────────────────────────────
+// Serve the built React website from the same server.
+// In production, `npm run build` compiles website/ into website/dist/.
+// This must come AFTER all /api routes so API endpoints take priority.
+const websiteDistPath = path.join(__dirname, '../website/dist')
+app.use(express.static(websiteDistPath))
+
+// SPA fallback — any non-API route serves index.html so client-side
+// routing (react-router) handles it. This covers /dashboard, /login, etc.
+app.get(/.*/, (req, res, next) => {
+  // Don't intercept API routes (safety check)
+  if (req.path.startsWith('/api')) return next()
+  res.sendFile(path.join(websiteDistPath, 'index.html'), (err) => {
+    if (err) {
+      // Website not built yet — show a helpful message
+      res.status(503).send('Website not built. Run "npm run build" in the website/ directory first.')
+    }
+  })
+})
 
 app.listen(port, () => {
   console.log(`Backend server running on http://localhost:${port}`)

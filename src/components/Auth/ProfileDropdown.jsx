@@ -8,7 +8,7 @@ export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, o
 
   const isPro = subscription?.plan === 'pro' && subscription?.status === 'active'
   const usageText = subscription?.usage
-    ? `${subscription.usage.used} / ${subscription.usage.limit === Infinity ? '∞' : subscription.usage.limit} batches`
+    ? `${subscription.usage.used} / ${subscription.usage.limit == null ? '∞' : subscription.usage.limit} batches`
     : ''
 
   // Derive display name and initial

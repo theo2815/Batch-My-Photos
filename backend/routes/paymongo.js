@@ -1,16 +1,28 @@
 const express = require('express')
 const crypto = require('crypto')
+const { authenticateUser } = require('../middleware/auth')
 const router = express.Router()
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const PAYMONGO_API = 'https://api.paymongo.com/v1'
+
+/** Pro plan price in centavos (₱249.00). Single source of truth for all payment operations. */
+const PLAN_PRICE_CENTAVOS = 24900
+const PLAN_CURRENCY = 'PHP'
+const PLAN_DESCRIPTION = 'BatchMyPhotos Pro — Monthly Subscription'
+const FREE_LIMIT = 2
+
+/** Maximum age (in seconds) for webhook timestamps before they are rejected as replayed. */
+const WEBHOOK_MAX_AGE_SECONDS = 300 // 5 minutes
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Base64-encoded secret key for PayMongo Authorization header */
 const paymongoAuth = () =>
   'Basic ' + Buffer.from(process.env.PAYMONGO_SECRET_KEY + ':').toString('base64')
 
-/** Verify PayMongo webhook signature (HMAC-SHA256) */
+/** Verify PayMongo webhook signature (HMAC-SHA256) with replay protection. */
 function verifyWebhookSignature(rawBody, signatureHeader, secret) {
   const parts = {}
   signatureHeader.split(',').forEach(p => {
@@ -24,6 +36,13 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
 
   if (!timestamp || !expectedSig) return false
 
+  // SECURITY: Reject replayed webhooks — timestamp must be within tolerance window
+  const age = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10))
+  if (isNaN(age) || age > WEBHOOK_MAX_AGE_SECONDS) {
+    console.warn(`Webhook: Timestamp too old or invalid (age: ${Math.round(age)}s)`)
+    return false
+  }
+
   const payload = timestamp + '.' + rawBody
   const computed = crypto
     .createHmac('sha256', secret)
@@ -36,27 +55,19 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
   )
 }
 
-/** Auth middleware — verifies Supabase JWT, attaches req.user */
-async function authenticateUser(req, res, next) {
-  const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Missing Authorization header' })
-  }
-  const token = authHeader.split(' ')[1]
-  const supabase = req.app.locals.supabase
-  const { data: { user }, error } = await supabase.auth.getUser(token)
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid or expired token' })
-  }
-  req.user = user
-  next()
-}
-
 // ── POST /api/checkout — Create a Checkout Session ────────────────────────────
 
 router.post('/checkout', authenticateUser, async (req, res) => {
   try {
     const user = req.user // Set by authenticateUser middleware
+
+    const { redirect_url } = req.body
+    
+    // Use provided redirect_url (from client) or fallback to env var
+    // This ensures users on localhost:5173 get redirected back to localhost:5173 (preserving session)
+    const baseUrl = (redirect_url && typeof redirect_url === 'string') 
+      ? redirect_url.replace(/\/$/, '') // remove trailing slash
+      : process.env.FRONTEND_URL
 
     const response = await fetch(`${PAYMONGO_API}/checkout_sessions`, {
       method: 'POST',
@@ -71,19 +82,19 @@ router.post('/checkout', authenticateUser, async (req, res) => {
             send_email_receipt: true,
             show_description: true,
             show_line_items: true,
-            description: 'BatchMyPhotos Pro — Monthly Subscription',
+            description: PLAN_DESCRIPTION,
             line_items: [
               {
-                currency: 'PHP',
-                amount: 24900, // ₱249.00 in centavos
+                currency: PLAN_CURRENCY,
+                amount: PLAN_PRICE_CENTAVOS,
                 name: 'BatchMyPhotos Pro',
                 description: 'Unlimited batches, watermarking, blur detection & more',
                 quantity: 1,
               },
             ],
             payment_method_types: ['gcash', 'card'],
-            success_url: `${process.env.FRONTEND_URL}/dashboard?payment=success`,
-            cancel_url: `${process.env.FRONTEND_URL}/dashboard?payment=cancelled`,
+            success_url: `${baseUrl}/dashboard?payment=success`,
+            cancel_url: `${baseUrl}/dashboard?payment=cancelled`,
             reference_number: user.id,
             metadata: {
               user_id: user.id,
@@ -99,8 +110,8 @@ router.post('/checkout', authenticateUser, async (req, res) => {
 
     if (!response.ok) {
       console.error('PayMongo checkout error:', JSON.stringify(data, null, 2))
-      return res.status(response.status).json({
-        error: data.errors?.[0]?.detail || 'Failed to create checkout session',
+      return res.status(502).json({
+        error: 'Checkout failed. Please try again.',
       })
     }
 
@@ -141,6 +152,11 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       .eq('user_id', user.id)
       .eq('month_year', currentMonth)
 
+    if (usageError) {
+      console.error('Usage fetch error:', usageError)
+      return res.status(500).json({ error: 'Failed to fetch usage data' })
+    }
+
     const usedThisMonth = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
 
     // If no subscription row, return free plan defaults
@@ -148,15 +164,16 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       return res.json({
         plan: 'free',
         status: 'active',
-        usage: { used: usedThisMonth, limit: 5 }, // ← REAL usage!
+        usage: { used: usedThisMonth, limit: FREE_LIMIT },
       })
     }
 
     // Check if subscription has expired
     const isExpired = data.expires_at && new Date(data.expires_at) < new Date()
+    const effectivePlan = isExpired ? 'free' : data.plan
 
     res.json({
-      plan: isExpired ? 'free' : data.plan,
+      plan: effectivePlan,
       status: isExpired ? 'expired' : data.status,
       paid_at: data.paid_at,
       expires_at: data.expires_at,
@@ -164,8 +181,8 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       currency: data.currency,
       paymongo_checkout_id: data.paymongo_checkout_id,
       usage: {
-        used: usedThisMonth, // ← REAL usage!
-        limit: isExpired ? 5 : (data.plan === 'pro' ? Infinity : 5),
+        used: usedThisMonth,
+        limit: effectivePlan === 'pro' ? null : FREE_LIMIT, // null = unlimited
       },
     })
   } catch (err) {
@@ -181,18 +198,23 @@ router.get('/transactions', authenticateUser, async (req, res) => {
     const supabase = req.app.locals.supabaseAdmin
     const user = req.user
 
-    const { data, error } = await supabase
+    // Pagination: ?limit=50&offset=0 (defaults)
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100)
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0)
+
+    const { data, error, count } = await supabase
       .from('transactions')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       console.error('Transactions fetch error:', error)
       return res.status(500).json({ error: 'Failed to fetch transactions' })
     }
 
-    res.json(data)
+    res.json({ data, total: count, limit, offset })
   } catch (err) {
     console.error('Transactions endpoint error:', err)
     res.status(500).json({ error: 'Internal server error' })
@@ -225,21 +247,20 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
 
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
-    const freeLimit = 5
 
-    const canExecute = isPro || currentUsage < freeLimit
-    const remaining = isPro ? Infinity : Math.max(0, freeLimit - currentUsage)
+    const canExecute = isPro || currentUsage < FREE_LIMIT
+    const remaining = isPro ? null : Math.max(0, FREE_LIMIT - currentUsage)
 
     res.json({
       can_execute: canExecute,
       is_pro: isPro,
       usage: {
         used: currentUsage,
-        limit: isPro ? Infinity : freeLimit,
-        remaining: remaining
+        limit: isPro ? null : FREE_LIMIT, // null = unlimited
+        remaining: remaining              // null = unlimited
       },
-      subscription_expired: isExpired,
-      needs_renewal: isExpired && sub,
+      subscription_expired: !!isExpired,
+      needs_renewal: !!(isExpired && sub),
     })
   } catch (err) {
     console.error('Check batch limit error:', err)
@@ -254,22 +275,13 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
     const user = req.user
     const { batch_count = 1 } = req.body
 
-    // Validate batch_count
-    if (typeof batch_count !== 'number' || batch_count < 1 || batch_count > 1000) {
+    // Validate batch_count (must be a positive integer)
+    if (typeof batch_count !== 'number' || !Number.isInteger(batch_count) || batch_count < 1 || batch_count > 1000) {
       return res.status(400).json({ error: 'Invalid batch_count' })
     }
 
     const supabase = req.app.locals.supabaseAdmin
     const currentMonth = new Date().toISOString().slice(0, 7)
-
-    // Check current usage
-    const { data: usageData } = await supabase
-      .from('batch_usage')
-      .select('batch_count')
-      .eq('user_id', user.id)
-      .eq('month_year', currentMonth)
-
-    const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
 
     // Check subscription (prevent going over limit)
     const { data: sub } = await supabase
@@ -280,19 +292,8 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
 
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
-    const freeLimit = 5
 
-    // Block if exceeded limit (free users only)
-    if (!isPro && currentUsage >= freeLimit) {
-      return res.status(403).json({
-        error: 'Monthly batch limit exceeded',
-        used: currentUsage,
-        limit: freeLimit,
-        upgrade_required: true
-      })
-    }
-
-    // Insert tracking record
+    // Insert tracking record first (optimistic insert)
     const { error: insertError } = await supabase
       .from('batch_usage')
       .insert({
@@ -307,15 +308,53 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
       return res.status(500).json({ error: 'Failed to track batch usage' })
     }
 
-    const newUsage = currentUsage + batch_count
-    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${newUsage}/${isPro ? '∞' : freeLimit})`)
+    // SECURITY: Re-query usage AFTER insert to get the authoritative total.
+    // This closes the race window: even if two requests insert concurrently,
+    // the post-insert count reflects both, and we roll back if over limit.
+    const { data: usageData, error: usageError } = await supabase
+      .from('batch_usage')
+      .select('batch_count')
+      .eq('user_id', user.id)
+      .eq('month_year', currentMonth)
+
+    if (usageError) {
+      console.error('Usage re-query error:', usageError)
+      return res.status(500).json({ error: 'Failed to verify usage' })
+    }
+
+    const newUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
+
+    // If free user exceeded limit after insert, roll back by deleting the row
+    if (!isPro && newUsage > FREE_LIMIT) {
+      // Delete the most recent row we just inserted
+      const { data: rows } = await supabase
+        .from('batch_usage')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('month_year', currentMonth)
+        .order('executed_at', { ascending: false })
+        .limit(1)
+
+      if (rows && rows.length > 0) {
+        await supabase.from('batch_usage').delete().eq('id', rows[0].id)
+      }
+
+      return res.status(403).json({
+        error: 'Monthly batch limit exceeded',
+        used: newUsage - batch_count,
+        limit: FREE_LIMIT,
+        upgrade_required: true
+      })
+    }
+
+    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${newUsage}/${isPro ? '∞' : FREE_LIMIT})`)
 
     res.json({
       success: true,
       usage: {
         used: newUsage,
-        limit: isPro ? Infinity : freeLimit,
-        remaining: isPro ? Infinity : Math.max(0, freeLimit - newUsage)
+        limit: isPro ? null : FREE_LIMIT,
+        remaining: isPro ? null : Math.max(0, FREE_LIMIT - newUsage)
       }
     })
   } catch (err) {
@@ -335,6 +374,11 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Missing checkout_id' })
     }
 
+    // SECURITY: Validate checkout_id format to prevent URL manipulation
+    if (typeof checkout_id !== 'string' || !/^cs_[a-zA-Z0-9_-]+$/.test(checkout_id)) {
+      return res.status(400).json({ error: 'Invalid checkout_id format' })
+    }
+
     // Fetch the checkout session from PayMongo
     const response = await fetch(`${PAYMONGO_API}/checkout_sessions/${checkout_id}`, {
       headers: {
@@ -347,8 +391,9 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
 
     if (!response.ok) {
       console.error('PayMongo verify error:', JSON.stringify(data, null, 2))
-      return res.status(response.status).json({
-        error: data.errors?.[0]?.detail || 'Failed to verify payment',
+      return res.status(502).json({
+        error: 'Payment verification failed. Please try again.',
+        details: data.errors // Pass through PayMongo errors for debugging
       })
     }
 
@@ -383,8 +428,8 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
           status: 'active',
           paymongo_checkout_id: checkout_id,
           paymongo_payment_id: paymentId,
-          amount: 24900,
-          currency: 'PHP',
+          amount: PLAN_PRICE_CENTAVOS,
+          currency: PLAN_CURRENCY,
           paid_at: paidAt.toISOString(),
           expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
@@ -407,10 +452,10 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     if (!existingTx) {
       await supabase.from('transactions').insert({
         user_id: user.id,
-        amount: 24900,
-        currency: 'PHP',
+        amount: PLAN_PRICE_CENTAVOS,
+        currency: PLAN_CURRENCY,
         status: 'paid',
-        description: 'BatchMyPhotos Pro — Monthly Subscription',
+        description: PLAN_DESCRIPTION,
         paymongo_checkout_id: checkout_id,
         created_at: paidAt.toISOString()
       })
@@ -538,8 +583,8 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
             status: 'active',
             paymongo_checkout_id: checkoutData?.id,
             paymongo_payment_id: paymentId,
-            amount: 24900,
-            currency: 'PHP',
+            amount: PLAN_PRICE_CENTAVOS,
+            currency: PLAN_CURRENCY,
             paid_at: paidAt.toISOString(),
             expires_at: expiresAt.toISOString(),
             updated_at: new Date().toISOString(),
@@ -562,10 +607,10 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       if (!existingTx && checkoutData?.id) {
         await supabase.from('transactions').insert({
           user_id: userId,
-          amount: 24900,
-          currency: 'PHP',
+          amount: PLAN_PRICE_CENTAVOS,
+          currency: PLAN_CURRENCY,
           status: 'paid',
-          description: 'BatchMyPhotos Pro — Monthly Subscription',
+          description: PLAN_DESCRIPTION,
           paymongo_checkout_id: checkoutData.id,
           created_at: paidAt.toISOString()
         })

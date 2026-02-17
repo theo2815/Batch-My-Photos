@@ -11,5 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+// #endregion
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

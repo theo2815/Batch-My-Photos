@@ -9,6 +9,7 @@
     "electron": "electron .",
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build && electron-builder",
+    "dist:appx": "npm run build && electron-builder --win appx",
     "pack": "electron-builder --dir",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -36,8 +37,18 @@
       "src/images/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "appx"
+      ],
       "icon": "src/images/app_icon.png"
+    },
+    "appx": {
+      "identityName": "BatchMyPhotos",
+      "applicationId": "BatchMyPhotos",
+      "displayName": "Batch My Photos",
+      "publisherDisplayName": "BatchMyPhotos",
+      "languages": ["en-US"]
     },
     "mac": {
       "target": "dmg",

@@ -635,13 +635,16 @@ export default function LandingPage() {
               >
                 <Play className="w-5 h-5" /> Try the Live Demo
               </a>
-              <Link
-                to="/register"
-                className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-700 hover:border-indigo-500 text-slate-300' : 'border-gray-300 hover:border-indigo-500 text-gray-600'} hover:text-white text-base font-semibold transition-all`}
-              >
-                <Monitor className="w-4.5 h-4.5" /> Download for Free
-              </Link>
-            </div>
+                <button
+                  disabled
+                  className={`inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
+                >
+                  <div className="flex flex-col items-center leading-none gap-1">
+                    <span>Coming Soon</span>
+                    <span className="text-[10px] opacity-70 italic font-normal">Under review</span>
+                  </div>
+                </button>
+              </div>
 
             {/* Trust indicators */}
             <div className={`mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
@@ -713,12 +716,14 @@ export default function LandingPage() {
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
-            <Link
-              to="/register"
-              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-700 hover:border-indigo-500 text-slate-300 hover:text-white' : 'border-gray-300 hover:border-indigo-500 text-gray-600 hover:text-white'} text-base font-semibold transition-all`}
-            >
-              Download for Free
-            </Link>
+            <div className="flex flex-col items-center">
+              <button
+                disabled
+                className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
+              >
+                Coming Soon <span className="text-[10px] opacity-70 italic font-normal ml-1">Under review</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -972,12 +977,12 @@ export default function LandingPage() {
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
-            <Link
-              to="/register"
-              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-700 hover:border-indigo-500 text-slate-300 hover:text-white' : 'border-gray-300 hover:border-indigo-500 text-gray-600 hover:text-white'} text-base font-semibold transition-all`}
+            <button
+              disabled
+              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
             >
-              Get Full Access
-            </Link>
+              Coming Soon <span className="text-[10px] opacity-70 italic font-normal ml-1">Under review</span>
+            </button>
           </div>
 
           <p className={`mt-8 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Free to start · No credit card · Cancel anytime</p>
