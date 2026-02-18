@@ -10,6 +10,7 @@
 
 const express = require('express')
 const { authenticateUser } = require('../middleware/auth')
+const { sendNewDeviceAlert, sendDeviceRemovedAlert } = require('../services/emailService')
 const router = express.Router()
 
 // ============================================================================
@@ -65,6 +66,15 @@ router.post('/devices/bind', authenticateUser, async (req, res) => {
 
     // 3. Parse result and respond
     if (result.bound) {
+      // Send new-device alert email only for genuinely new bindings
+      if (!result.existing) {
+        sendNewDeviceAlert({
+          to: req.user.email,
+          deviceLabel,
+          boundAt: new Date().toISOString(),
+        }).catch(() => {})
+      }
+
       return res.json({
         bound: true,
         existing: result.existing || false,
@@ -339,6 +349,13 @@ router.delete('/devices/:id', authenticateUser, async (req, res) => {
         removed_hwid: deviceRow.hwid_hash,
         device_label: deviceRow.device_label,
       })
+
+    // Fire-and-forget device removed email
+    sendDeviceRemovedAlert({
+      to: req.user.email,
+      deviceLabel: deviceRow.device_label,
+      removedAt: new Date().toISOString(),
+    }).catch(() => {})
 
     // 7. Calculate response metrics
     const removalsUsed = (checkResult?.used ?? 0) + 1

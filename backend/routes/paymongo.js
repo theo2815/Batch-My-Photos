@@ -1,6 +1,7 @@
 const express = require('express')
 const crypto = require('crypto')
 const { authenticateUser } = require('../middleware/auth')
+const { sendPaymentConfirmation, sendSubscriptionCancelled } = require('../services/emailService')
 const router = express.Router()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -437,6 +438,15 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
 
     console.log(`✅ Payment verified & subscription activated for user ${user.id}`)
 
+    // Fire-and-forget payment confirmation email
+    sendPaymentConfirmation({
+      to: user.email,
+      amount: PLAN_PRICE_CENTAVOS,
+      currency: PLAN_CURRENCY,
+      plan: 'pro',
+      expiresAt: expiresAt.toISOString(),
+    }).catch(() => { /* logged inside sendPaymentConfirmation */ })
+
     res.json({
       verified: true,
       plan: 'pro',
@@ -488,6 +498,10 @@ router.post('/cancel-subscription', authenticateUser, async (req, res) => {
     }
 
     console.log(`User ${user.id} cancelled subscription immediately.`)
+
+    // Fire-and-forget cancellation email
+    sendSubscriptionCancelled({ to: user.email }).catch(() => {})
+
     res.json({ success: true, message: 'Subscription cancelled successfully' })
   } catch (err) {
     console.error('Cancel subscription error:', err)
@@ -594,6 +608,18 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       }
 
       console.log(`✅ Subscription activated for user ${userId} until ${expiresAt.toISOString()}`)
+
+      // Fire-and-forget payment confirmation email
+      const userEmail = metadata.user_email
+      if (userEmail) {
+        sendPaymentConfirmation({
+          to: userEmail,
+          amount: PLAN_PRICE_CENTAVOS,
+          currency: PLAN_CURRENCY,
+          plan: 'pro',
+          expiresAt: expiresAt.toISOString(),
+        }).catch(() => { /* logged inside sendPaymentConfirmation */ })
+      }
     }
 
     // Always respond 200 to acknowledge receipt

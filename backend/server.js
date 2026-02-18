@@ -9,6 +9,7 @@ const { createClient } = require('@supabase/supabase-js')
 const { authenticateUser } = require('./middleware/auth')
 const paymongoRoutes = require('./routes/paymongo')
 const devicesRoutes = require('./routes/devices')
+const { initCronJobs } = require('./services/cronService')
 
 const app = express()
 const port = process.env.PORT || 3000
@@ -172,4 +173,7 @@ app.get(/.*/, (req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Backend server running on http://localhost:${port}`)
+
+  // Start scheduled background jobs (expiry reminders, usage summaries)
+  initCronJobs(app.locals.supabaseAdmin)
 })
