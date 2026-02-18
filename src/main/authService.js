@@ -15,6 +15,7 @@ const path = require('path')
 const fs = require('fs')
 const logger = require('../utils/logger')
 const config = require('./config')
+const deviceService = require('./deviceService')
 
 // Store for auth data — session token is encrypted via safeStorage,
 // profile data (email, name) is non-sensitive and stored as plain JSON.
@@ -102,19 +103,32 @@ function clearSession() {
 // ============================================================================
 
 /**
- * Verify session is still valid with backend
+ * Verify session is still valid with backend.
+ *
+ * Returns:
+ *  - `{ valid: true, subscription }` — server confirmed the session
+ *  - `{ valid: false }` — server explicitly rejected (401/403)
+ *  - `{ valid: false, networkError: true }` — could not reach server
+ *
  * @param {string} sessionToken - JWT token to verify
- * @returns {Promise<{valid: boolean, subscription: object|null}>}
+ * @returns {Promise<{valid: boolean, subscription?: object, networkError?: boolean}>}
  */
 async function verifySession(sessionToken) {
   if (!sessionToken) return { valid: false }
 
   try {
+    const headers = {
+      'Authorization': `Bearer ${sessionToken}`,
+    }
+
+    // Include device ID for HWID binding enforcement
+    if (config.features.HWID_BINDING_ENABLED) {
+      headers['X-Device-ID'] = deviceService.getHwid()
+    }
+
     const response = await net.fetch(`${BACKEND_URL}/api/subscription`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-      },
+      headers,
     })
 
     if (!response.ok) {
@@ -125,8 +139,10 @@ async function verifySession(sessionToken) {
     const data = await response.json()
     return { valid: true, subscription: data }
   } catch (err) {
+    // Network errors (ERR_CONNECTION_REFUSED, ERR_CONNECTION_RESET, DNS failure, etc.)
+    // should NOT invalidate a locally-stored session — the server is just unreachable.
     logger.error('❌ [AUTH] Session verification error:', err.message)
-    return { valid: false }
+    return { valid: false, networkError: true }
   }
 }
 
@@ -148,9 +164,40 @@ async function checkAuthStatus() {
   const verification = await verifySession(sessionToken)
 
   if (!verification.valid) {
+    if (verification.networkError) {
+      // Server unreachable — trust the locally stored session (offline-resilient).
+      // Don't clear the session; the user can still work offline.
+      logger.warn('⚠️ [AUTH] Backend unreachable — keeping local session (offline mode)')
+      return {
+        isAuthenticated: true,
+        user: userProfile,
+        subscription: null,
+        offline: true,
+        deviceBlocked: false,
+      }
+    }
+    // Server explicitly rejected the session (401/403) — session is truly invalid
     logger.warn('⚠️ [AUTH] Stored session is invalid, clearing')
     clearSession()
     return { isAuthenticated: false, user: null, subscription: null }
+  }
+
+  // Bind this device to the user's subscription (HWID enforcement)
+  let deviceStatus = { bound: true }
+  if (config.features.HWID_BINDING_ENABLED) {
+    deviceStatus = await deviceService.bindDevice(sessionToken)
+    if (!deviceStatus.bound && deviceStatus.code === 'DEVICE_LIMIT_REACHED') {
+      logger.warn('⚠️ [AUTH] Device limit reached — blocking access')
+      return {
+        isAuthenticated: true,
+        user: userProfile,
+        subscription: verification.subscription,
+        deviceBlocked: true,
+        deviceError: deviceStatus.error,
+        deviceLimit: deviceStatus.limit,
+        deviceCount: deviceStatus.count,
+      }
+    }
   }
 
   logger.log(`✅ [AUTH] Session valid for user: ${userProfile.email}`)
@@ -158,6 +205,7 @@ async function checkAuthStatus() {
     isAuthenticated: true,
     user: userProfile,
     subscription: verification.subscription,
+    deviceBlocked: false,
   }
 }
 

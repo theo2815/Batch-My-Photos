@@ -19,6 +19,7 @@ const progressManager = require('./progressManager');
 const rollbackManager = require('./rollbackManager');
 const authService = require('./authService');
 const subscriptionService = require('./subscriptionService');
+const deviceService = require('./deviceService');
 const logger = require('../utils/logger');
 const config = require('./config');
 const { sanitizeError } = require('../utils/errorSanitizer');
@@ -54,6 +55,7 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
 
   registerAuthHandlers(ipcInstance);
   registerSubscriptionHandlers(ipcInstance);
+  registerDeviceHandlers(ipcInstance);
   registerFolderHandlers(ipcInstance, storeInstance, getMainWindow);
   registerCoreHandlers(ipcInstance, getMainWindow, appState);
   registerFileSystemHandlers(ipcInstance, getMainWindow);
@@ -112,12 +114,12 @@ function registerAuthHandlers(ipcMain) {
     try {
       // Verify token is valid before saving
       const verification = await authService.verifySession(sessionToken);
-      if (!verification.valid) {
+      if (!verification.valid && !verification.networkError) {
         return { success: false, error: 'Invalid session token' };
       }
 
       authService.saveSession(sessionToken, userProfile);
-      return { success: true, subscription: verification.subscription };
+      return { success: true, subscription: verification.subscription || null };
     } catch (error) {
       logger.error('❌ [IPC] auth-save-session failed:', error);
       return { success: false, error: sanitizeError(error, 'auth-save-session') };
@@ -130,6 +132,7 @@ function registerAuthHandlers(ipcMain) {
    */
   ipcMain.handle('auth-logout', async () => {
     try {
+      deviceService.stopHeartbeat();
       authService.clearSession();
       return { success: true };
     } catch (error) {
@@ -211,6 +214,84 @@ function registerSubscriptionHandlers(ipcMain) {
     } catch (error) {
       logger.error('❌ [IPC] subscription-refresh failed:', error);
       return { error: error.message };
+    }
+  });
+}
+
+// ============================================================================
+// GROUP 0.75: DEVICE MANAGEMENT HANDLERS (5 handlers)
+// ============================================================================
+
+function registerDeviceHandlers(ipcMain) {
+
+  /**
+   * Handler: Get this machine's Hardware ID (HWID)
+   */
+  ipcMain.handle('device-get-hwid', async () => {
+    try {
+      return { hwid: deviceService.getHwid(), label: deviceService.getDeviceLabel() };
+    } catch (error) {
+      logger.error('❌ [IPC] device-get-hwid failed:', error);
+      return { hwid: null, error: sanitizeError(error, 'device-get-hwid') };
+    }
+  });
+
+  /**
+   * Handler: Check if this device is authorized
+   */
+  ipcMain.handle('device-check-authorized', async () => {
+    try {
+      return { authorized: deviceService.isDeviceAuthorized() };
+    } catch (error) {
+      logger.error('❌ [IPC] device-check-authorized failed:', error);
+      return { authorized: true }; // Fail-open to avoid blocking users on error
+    }
+  });
+
+  /**
+   * Handler: List all devices bound to the user's subscription
+   */
+  ipcMain.handle('device-get-list', async (event, sessionToken) => {
+    try {
+      return await deviceService.listDevices(sessionToken);
+    } catch (error) {
+      logger.error('❌ [IPC] device-get-list failed:', error);
+      return { error: sanitizeError(error, 'device-get-list') };
+    }
+  });
+
+  /**
+   * Handler: De-authorize (remove) a device binding
+   */
+  ipcMain.handle('device-deauthorize', async (event, sessionToken, deviceId) => {
+    try {
+      return await deviceService.deauthorizeDevice(sessionToken, deviceId);
+    } catch (error) {
+      logger.error('❌ [IPC] device-deauthorize failed:', error);
+      return { success: false, error: sanitizeError(error, 'device-deauthorize') };
+    }
+  });
+
+  /**
+   * Handler: Start/stop heartbeat lifecycle
+   */
+  ipcMain.handle('device-start-heartbeat', async () => {
+    try {
+      deviceService.startHeartbeat(() => authService.getStoredSession());
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] device-start-heartbeat failed:', error);
+      return { success: false };
+    }
+  });
+
+  ipcMain.handle('device-stop-heartbeat', async () => {
+    try {
+      deviceService.stopHeartbeat();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] device-stop-heartbeat failed:', error);
+      return { success: false };
     }
   });
 }
@@ -348,6 +429,20 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
   ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
     logger.time('TOTAL_BATCH_EXECUTION');
     try {
+      // DEVICE GUARD: Live-verify this device is still registered on the server
+      if (config.features.HWID_BINDING_ENABLED) {
+        const sessionToken = authService.getStoredSession();
+        const deviceCheck = await deviceService.verifyDeviceLive(sessionToken);
+        if (!deviceCheck.authorized) {
+          logger.warn('🔒 [DEVICE] Blocked execute-batch — device not authorized:', deviceCheck.reason);
+          return {
+            success: false,
+            error: deviceCheck.reason || 'This device is not authorized for your subscription. Please manage your devices in Settings or re-login.',
+            code: 'DEVICE_NOT_AUTHORIZED',
+          };
+        }
+      }
+
       // SECURITY: Validate paths are allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
         logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered path:', folderPath);

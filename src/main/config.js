@@ -132,6 +132,15 @@ const features = {
   BLUR_AI_ENABLED: envBool('BATCH_BLUR_AI_ENABLED', false),
 
   /**
+   * Enable Hardware ID (HWID) device binding.
+   * When enabled, the app generates a stable machine fingerprint and
+   * registers it against the user's subscription. Devices exceeding
+   * the plan's device_limit are blocked from executing batches.
+   * Disable for development/testing to bypass device checks.
+   */
+  HWID_BINDING_ENABLED: envBool('BATCH_HWID_BINDING_ENABLED', true),
+
+  /**
    * URL of the AI blur detection service.
    * Defaults to local FastAPI server during development.
    * Will be changed to production backend URL when deployed.

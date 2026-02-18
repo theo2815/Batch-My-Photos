@@ -5,12 +5,13 @@ import PricingModal from '../components/PricingModal'
 import InfoModal from '../components/modals/InfoModal'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../hooks/useSubscription'
+import { useDevices } from '../hooks/useDevices'
 import { useTheme } from '../context/ThemeContext'
 import {
   Crown, Sparkles, Download, Settings, HelpCircle, CreditCard,
-  ShieldCheck, User, Key, Monitor,
+  ShieldCheck, User, Key, Monitor, Smartphone, Trash2, RefreshCw,
   ArrowRight, ExternalLink, Lock, Play,
-  Copy, Check, FileText, MessageCircle, X, AlertTriangle,
+  Copy, Check, FileText, MessageCircle, X, AlertTriangle, Timer,
 } from 'lucide-react'
 
 /* ─── Modal content (dashboard-specific modals) ──────────────────────────── */
@@ -74,6 +75,12 @@ export default function Dashboard() {
   const [confirmCancel, setConfirmCancel]   = useState(false)
   const [paymentMsg, setPaymentMsg] = useState(null)
   const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription } = useSubscription()
+  const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt, removalsResetAt } = useDevices()
+  const [removingDeviceId, setRemovingDeviceId] = useState(null)
+  const [confirmRemoveDevice, setConfirmRemoveDevice] = useState(null) // { id, label }
+  const [removeError, setRemoveError] = useState(null)
+  const [cooldownText, setCooldownText] = useState('')
+  const cooldownRef = useRef(null)
   const isFree = !sub || sub.plan === 'free'
   const timersRef = useRef([])
 
@@ -101,6 +108,48 @@ export default function Dashboard() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Fetch devices when user has a Pro subscription
+  useEffect(() => {
+    if (!isFree && !subLoading && user) {
+      fetchDevices()
+    }
+  }, [isFree, subLoading, user, fetchDevices])
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    const tick = () => {
+      if (!cooldownEndsAt) { setCooldownText(''); return }
+      const ms = new Date(cooldownEndsAt).getTime() - Date.now()
+      if (ms <= 0) { setCooldownText(''); return }
+      const h = Math.floor(ms / 3_600_000)
+      const m = Math.ceil((ms % 3_600_000) / 60_000)
+      setCooldownText(h > 0 ? `${h}h ${m}m` : `${m}m`)
+    }
+    tick()
+    cooldownRef.current = setInterval(tick, 30_000)
+    return () => clearInterval(cooldownRef.current)
+  }, [cooldownEndsAt])
+
+  const atRemovalLimit = removalsUsed >= removalsLimit
+  const hasCooldown = Boolean(cooldownText)
+
+  const promptRemoveDevice = (deviceId, deviceLabel) => {
+    setRemoveError(null)
+    setConfirmRemoveDevice({ id: deviceId, label: deviceLabel || 'Unknown device' })
+  }
+
+  const executeRemoveDevice = async () => {
+    if (!confirmRemoveDevice) return
+    setRemovingDeviceId(confirmRemoveDevice.id)
+    setConfirmRemoveDevice(null)
+    setRemoveError(null)
+    const result = await removeDevice(confirmRemoveDevice.id)
+    setRemovingDeviceId(null)
+    if (!result.success) {
+      setRemoveError(result.error || 'Failed to remove device')
+    }
+  }
 
   const copyKey = () => {
     if (!sub?.licenseKey) return
@@ -470,7 +519,173 @@ export default function Dashboard() {
           </section>
 
           {/* ────────── Help & Resources  (full width) ────────── */}
-          <section className="lg:col-span-12 auth-card-in" style={{ animationDelay: '0.2s' }}>
+          {!isFree && (
+          <section className="lg:col-span-12 auth-card-in" style={{ animationDelay: '0.18s' }}>
+            <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6`}>
+
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                    <Monitor className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <h3 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Authorized Devices</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{devices.length} / {deviceLimit} used</span>
+                  <button onClick={fetchDevices} className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/[0.05] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} transition-colors cursor-pointer`} title="Refresh">
+                    <RefreshCw className={`w-4 h-4 ${devicesLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Usage bar */}
+              <div className={`w-full h-2 rounded-full ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'} mb-4 overflow-hidden`}>
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
+                  style={{ width: `${Math.min((devices.length / Math.max(deviceLimit, 1)) * 100, 100)}%` }}
+                />
+              </div>
+
+              {/* Removal limits info */}
+              <div className={`flex items-center justify-between mb-4 text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                <span className={`flex items-center gap-1 ${atRemovalLimit ? (isDark ? 'text-red-400' : 'text-red-500') : ''}`}>
+                  <Trash2 className="w-3 h-3" />
+                  {removalsUsed} / {removalsLimit} removals used this month
+                </span>
+                {hasCooldown && (
+                  <span className={`flex items-center gap-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                    <Timer className="w-3 h-3" />
+                    Cooldown: {cooldownText}
+                  </span>
+                )}
+              </div>
+
+              {/* Cooldown warning banner */}
+              {hasCooldown && (
+                <div className={`mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed ${isDark ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
+                  <Timer className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>A device was recently removed. New devices cannot be added for another <strong>{cooldownText}</strong>. Re-adding a previously used device is not affected.</span>
+                </div>
+              )}
+
+              {/* At removal limit banner */}
+              {atRemovalLimit && (
+                <div className={`mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>You&apos;ve used all {removalsLimit} device removals for this billing period. Removals will reset next month.</span>
+                </div>
+              )}
+
+              {/* Error */}
+              {(devicesError || removeError) && (
+                <div className={`mb-4 rounded-xl px-4 py-3 text-sm ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                  {devicesError || removeError}
+                </div>
+              )}
+
+              {/* In-card confirmation dialog */}
+              {confirmRemoveDevice && (
+                <div className={`mb-4 rounded-xl p-4 ${isDark ? 'bg-amber-500/5 border border-amber-500/15' : 'bg-amber-50 border border-amber-200'}`}>
+                  <div className="flex items-start gap-2.5 mb-3">
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                    <div className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                      <p className="font-semibold mb-1">Remove &ldquo;{confirmRemoveDevice.label}&rdquo;?</p>
+                      <ul className={`list-disc pl-4 space-y-0.5 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                        <li>A <strong>24-hour cooldown</strong> will start &mdash; no new devices can be added.</li>
+                        <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left this month.</li>
+                        <li>Re-adding the same device later will bypass the cooldown.</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setConfirmRemoveDevice(null)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${isDark ? 'text-slate-400 hover:bg-white/[0.05] border border-white/[0.08]' : 'text-gray-500 hover:bg-gray-100 border border-gray-200'} transition-colors cursor-pointer`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={executeRemoveDevice}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'} transition-colors cursor-pointer`}
+                    >
+                      Remove Device
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading state */}
+              {devicesLoading && devices.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="relative w-8 h-8">
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20" />
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  </div>
+                </div>
+              ) : devices.length === 0 ? (
+                <div className={`text-center py-8 text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                  <Smartphone className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  No devices registered yet. Open the desktop app to bind this device.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {devices.map((device) => {
+                    const isActive = device.last_seen_at && (Date.now() - new Date(device.last_seen_at).getTime()) < 10 * 60 * 1000
+                    const canRemove = !atRemovalLimit && removingDeviceId !== device.id
+                    return (
+                      <div key={device.id} className={`flex items-center justify-between rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative shrink-0">
+                            <Monitor className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                            {isActive && (
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-inherit" style={{ borderColor: isDark ? '#0f172a' : '#f9fafb' }} />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'} truncate`}>
+                              {device.device_label || 'Unknown device'}
+                            </p>
+                            <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} font-mono truncate`}>
+                              {device.hwid_hash ? `${device.hwid_hash.substring(0, 8)}…${device.hwid_hash.substring(device.hwid_hash.length - 4)}` : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className={`text-[11px] ${isActive ? 'text-emerald-400' : isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                            {isActive ? 'Active now' : device.last_seen_at ? `Last seen ${new Date(device.last_seen_at).toLocaleDateString()}` : 'Never seen'}
+                          </span>
+                          <button
+                            onClick={() => promptRemoveDevice(device.id, device.device_label)}
+                            disabled={!canRemove}
+                            className={`p-2 rounded-lg ${isDark ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
+                            title={atRemovalLimit ? 'Monthly removal limit reached' : removingDeviceId === device.id ? 'Removing…' : 'Remove device'}
+                          >
+                            {removingDeviceId === device.id ? (
+                              <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Footer note */}
+              <div className={`mt-4 pt-4 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-100'}`}>
+                <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} leading-relaxed`}>
+                  Your Pro plan allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per billing month.
+                </p>
+              </div>
+            </div>
+          </section>
+          )}
+
+          {/* ────────── Help & Resources  (full width, original) ────────── */}
+          <section className="lg:col-span-12 auth-card-in" style={{ animationDelay: '0.25s' }}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { icon: HelpCircle, label: 'FAQ',              desc: 'Common questions answered',    href: '/#faq' },

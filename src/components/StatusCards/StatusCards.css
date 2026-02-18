@@ -35,6 +35,9 @@
 /* Success/Error Icons */
 .success-icon,
 .error-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   font-size: 4rem;
 }
 

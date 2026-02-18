@@ -46,6 +46,7 @@ const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 const { isPathAllowedAsync } = require('./src/main/securityManager');
 const authService = require('./src/main/authService');
+const deviceService = require('./src/main/deviceService');
 const logger = require('./src/utils/logger');
 
 // ============================================================================
@@ -141,7 +142,8 @@ async function handleDeepLink(url) {
 
     // SECURITY: Verify the token is valid before trusting it
     const verification = await authService.verifySession(token);
-    if (!verification.valid) {
+    if (!verification.valid && !verification.networkError) {
+      // Server explicitly rejected the token (401/403) — do not save
       logger.warn('[DEEP-LINK] Token verification failed — refusing to save session');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -149,9 +151,16 @@ async function handleDeepLink(url) {
       }
       return;
     }
+    // If networkError: token just came from the browser auth flow — safe to save
+    if (verification.networkError) {
+      logger.warn('[DEEP-LINK] Backend unreachable — saving session anyway (token from live auth flow)');
+    }
 
     // Token verified — save session
     authService.saveSession(token, { email: decodeURIComponent(email), name: decodeURIComponent(name || '') });
+
+    // Start device heartbeat after successful authentication
+    deviceService.startHeartbeat(() => authService.getStoredSession());
 
     // Notify the renderer process
     const mainWindow = getMainWindow();
@@ -261,6 +270,13 @@ app.whenReady().then(() => {
   
   createWindow();
 
+  // Start device heartbeat if user is already authenticated
+  const storedSession = authService.getStoredSession();
+  if (storedSession) {
+    logger.log('💓 [STARTUP] Starting device heartbeat for existing session');
+    deviceService.startHeartbeat(() => authService.getStoredSession());
+  }
+
   // Handle cold-start deep link (app was launched by clicking a deep link)
   const deepLinkUrl = process.argv.find(arg => arg.startsWith('batchmyphotos://'));
   if (deepLinkUrl) {
@@ -270,6 +286,8 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Stop heartbeat when all windows close
+  deviceService.stopHeartbeat();
   if (process.platform !== 'darwin') {
     app.quit();
   }

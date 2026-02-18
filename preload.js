@@ -198,6 +198,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('subscription-refresh', sessionToken),
 
   // ============================================================================
+  // DEVICE MANAGEMENT APIs
+  // ============================================================================
+
+  /**
+   * Get this machine's Hardware ID (HWID) and label
+   * @returns {Promise<Object>} { hwid, label }
+   */
+  deviceGetHwid: () => ipcRenderer.invoke('device-get-hwid'),
+
+  /**
+   * Check if this device is authorized to run batch operations
+   * @returns {Promise<Object>} { authorized }
+   */
+  deviceCheckAuthorized: () => ipcRenderer.invoke('device-check-authorized'),
+
+  /**
+   * List all devices bound to the user's subscription
+   * @param {string} sessionToken - User's session token
+   * @returns {Promise<Object>} { devices, currentHwid, device_limit, device_count }
+   */
+  deviceGetList: (sessionToken) =>
+    ipcRenderer.invoke('device-get-list', sessionToken),
+
+  /**
+   * De-authorize (remove) a device binding
+   * @param {string} sessionToken - User's session token
+   * @param {string} deviceId - UUID of the device_bindings row to remove
+   * @returns {Promise<Object>} { success, error? }
+   */
+  deviceDeauthorize: (sessionToken, deviceId) =>
+    ipcRenderer.invoke('device-deauthorize', sessionToken, deviceId),
+
+  /**
+   * Start the heartbeat loop (call after successful authentication)
+   * @returns {Promise<Object>} { success }
+   */
+  deviceStartHeartbeat: () => ipcRenderer.invoke('device-start-heartbeat'),
+
+  /**
+   * Stop the heartbeat loop (call on logout)
+   * @returns {Promise<Object>} { success }
+   */
+  deviceStopHeartbeat: () => ipcRenderer.invoke('device-stop-heartbeat'),
+
+  // ============================================================================
   // BLUR DETECTION APIs
   // ============================================================================
 

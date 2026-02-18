@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit')
 const { createClient } = require('@supabase/supabase-js')
 const { authenticateUser } = require('./middleware/auth')
 const paymongoRoutes = require('./routes/paymongo')
+const devicesRoutes = require('./routes/devices')
 
 const app = express()
 const port = process.env.PORT || 3000
@@ -144,6 +145,10 @@ app.get('/api/me', authenticateUser, (req, res) => {
 // ── PayMongo Routes ─────────────────────────────────────────────────────────
 // Mounted at /api — auth is handled per-route inside the router
 app.use('/api', paymongoRoutes)
+
+// ── Device Management Routes ────────────────────────────────────────────────
+// HWID binding, heartbeat, device CRUD — auth handled per-route
+app.use('/api', devicesRoutes)
 
 // ── Website Static Files ────────────────────────────────────────────────────
 // Serve the built React website from the same server.

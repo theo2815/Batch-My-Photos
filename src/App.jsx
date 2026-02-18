@@ -29,7 +29,7 @@ import { LoginScreen } from './components/Auth/LoginScreen';
 import { ProfileDropdown } from './components/Auth/ProfileDropdown';
 
 // Components
-import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal } from './components/Modals';
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal, DeviceManagerModal } from './components/Modals';
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
@@ -90,6 +90,9 @@ function App() {
   // Blur sensitivity modal state
   const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
+
+  // Device manager modal state
+  const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
 
   const batch = useBatchExecution({ setAppState, setError });
   const {
@@ -488,6 +491,7 @@ function App() {
             onLogout={handleLogout}
             onViewProfile={handleViewProfile}
             onUpgrade={handleUpgrade}
+            onManageDevices={() => setShowDeviceManagerModal(true)}
           />
           <div className="header-icons">
             {operationHistory.length > 0 && (
@@ -686,6 +690,11 @@ function App() {
         currentSensitivity={blurSensitivity}
         onStart={handleConfirmBlurAnalysis}
         onCancel={handleDismissBlurModal}
+      />
+
+      <DeviceManagerModal
+        isOpen={showDeviceManagerModal}
+        onClose={() => setShowDeviceManagerModal(false)}
       />
     </div>
   );

@@ -14,6 +14,7 @@ const { net } = require('electron')
 const Store = require('electron-store')
 const logger = require('../utils/logger')
 const config = require('./config')
+const deviceService = require('./deviceService')
 
 const API_BASE = config.urls.BACKEND_URL
 
@@ -110,12 +111,19 @@ async function checkBatchLimit(sessionToken) {
   try {
     logger.log('🔍 [SUBSCRIPTION] Checking batch limit...')
 
+    const headers = {
+      'Authorization': `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+    }
+
+    // Include device ID for HWID enforcement
+    if (config.features.HWID_BINDING_ENABLED) {
+      headers['X-Device-ID'] = deviceService.getHwid()
+    }
+
     const response = await net.fetch(`${API_BASE}/api/check-batch-limit`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
     })
 
     if (!response.ok) {
@@ -171,12 +179,19 @@ async function trackBatchExecution(sessionToken, batchCount = 1) {
   try {
     logger.log(`📊 [SUBSCRIPTION] Tracking ${batchCount} batch(es)...`)
 
+    const headers = {
+      'Authorization': `Bearer ${sessionToken}`,
+      'Content-Type': 'application/json',
+    }
+
+    // Include device ID for HWID enforcement
+    if (config.features.HWID_BINDING_ENABLED) {
+      headers['X-Device-ID'] = deviceService.getHwid()
+    }
+
     const response = await net.fetch(`${API_BASE}/api/track-batch`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ batch_count: batchCount }),
     })
 
@@ -224,11 +239,18 @@ async function refreshSubscription(sessionToken) {
   try {
     logger.log('🔄 [SUBSCRIPTION] Refreshing subscription status...')
 
+    const headers = {
+      'Authorization': `Bearer ${sessionToken}`,
+    }
+
+    // Include device ID for HWID enforcement
+    if (config.features.HWID_BINDING_ENABLED) {
+      headers['X-Device-ID'] = deviceService.getHwid()
+    }
+
     const response = await net.fetch(`${API_BASE}/api/subscription`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-      },
+      headers,
     })
 
     if (!response.ok) {

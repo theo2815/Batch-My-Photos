@@ -30,6 +30,10 @@ async function authenticateUser(req, res, next) {
 
   req.user = user
   req.supabase = userSupabase // Attached for use in routes
+
+  // Extract device ID from header (if present) for HWID enforcement
+  req.deviceId = req.headers['x-device-id'] || null
+
   next()
 }
 
