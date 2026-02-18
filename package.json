@@ -1,6 +1,6 @@
 {
   "name": "batchmyphotos",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop utility for photographers to batch-split image folders",
   "main": "main.js",
   "scripts": {
@@ -20,9 +20,18 @@
   "build": {
     "appId": "com.batchmyphotos.app",
     "productName": "Batch My Photos",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "theo2815",
+        "repo": "Batch-My-Photos"
+      }
+    ],
     "protocols": {
       "name": "BatchMyPhotos",
-      "schemes": ["batchmyphotos"]
+      "schemes": [
+        "batchmyphotos"
+      ]
     },
     "directories": {
       "output": "release"
@@ -44,11 +53,14 @@
       "icon": "src/images/app_icon.png"
     },
     "appx": {
-      "identityName": "BatchMyPhotos",
+      "identityName": "TheoCedricChan.BatchMyPhotos",
+      "publisher": "CN=1FE7A803-DE64-49ED-9374-F2C23A3510D5",
       "applicationId": "BatchMyPhotos",
       "displayName": "Batch My Photos",
-      "publisherDisplayName": "BatchMyPhotos",
-      "languages": ["en-US"]
+      "publisherDisplayName": "Theo Cedric Chan",
+      "languages": [
+        "en-US"
+      ]
     },
     "mac": {
       "target": "dmg",
@@ -66,10 +78,12 @@
     "batch",
     "utility"
   ],
-  "author": "",
+  "author": "Theo Cedric Chan",
   "license": "MIT",
   "dependencies": {
+    "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.7.3",
     "exifr": "^7.1.3",
     "lucide-react": "^0.562.0",
     "react": "^18.2.0",

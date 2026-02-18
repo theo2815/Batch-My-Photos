@@ -121,12 +121,11 @@ export default function BillingHistory() {
               {isFree ? (
                 <div className="flex flex-col gap-1.5">
                   <button
-                    disabled
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/50 px-4 py-2.5 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                    onClick={() => navigate('/dashboard?modal=pricing')}
+                    className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all cursor-pointer`}
                   >
-                    Coming Soon
+                    <Sparkles className="w-4 h-4 text-indigo-100" /> Upgrade to Pro
                   </button>
-                  <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span>
                 </div>
               ) : (
                 <>

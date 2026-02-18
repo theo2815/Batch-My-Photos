@@ -176,7 +176,7 @@ const limits = {
 // In development (running from source), defaults point to localhost.
 // Always overridable via environment variables.
 
-const PROD_URL = 'https://batchmyphotos-api.up.railway.app'
+const PROD_URL = 'https://www.batchmyphotos.com'
 
 const urls = {
   /** Backend API base URL (no trailing slash) */

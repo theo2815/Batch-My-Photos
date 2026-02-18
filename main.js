@@ -282,6 +282,16 @@ app.on('activate', () => {
 });
 
 // ============================================================================
+// AUTO UPDATER (Hybrid Strategy: Disabled for Store, Enabled for Direct)
+// ============================================================================
+const { initAutoUpdater } = require('./src/main/updateManager');
+
+app.whenReady().then(() => {
+  // Initialize auto-updater (it will check process.windowsStore internally)
+  initAutoUpdater(getMainWindow);
+});
+
+// ============================================================================
 // IPC HANDLERS REGISTRATION
 // ============================================================================
 

@@ -13,6 +13,8 @@ const app = express()
 const port = process.env.PORT || 3000
 
 // ── Security Middleware ──────────────────────────────────────────────────────
+const isDev = process.env.NODE_ENV !== 'production'
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -24,7 +26,11 @@ app.use(helmet({
         "https://api.paymongo.com",
         "http://127.0.0.1:7242",
       ],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        ...(isDev ? ["'unsafe-eval'"] : []),
+      ],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       fontSrc: ["'self'", "https:", "data:"],

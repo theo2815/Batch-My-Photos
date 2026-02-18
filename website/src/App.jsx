@@ -18,6 +18,7 @@ import DesktopCallback from './pages/DesktopCallback'
 
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from './components/PageTransition'
+import UpdateNotification from './components/UpdateNotification'
 
 const AppContent = () => {
   const location = useLocation();
@@ -44,6 +45,7 @@ const AppContent = () => {
 
   return (
     <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <UpdateNotification />
       {!isDemo && <Navbar />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>

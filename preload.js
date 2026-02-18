@@ -435,6 +435,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Result with success status and entries cleared count
    */
   clearOperationHistory: () => ipcRenderer.invoke('clear-operation-history'),
+  // ============================================================================
+  // AUTO-UPDATE APIs
+  // ============================================================================
+
+  /**
+   * Check for updates manually
+   * @returns {Promise<Object>} Status object
+   */
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+
+  /**
+   * Start downloading the available update
+   */
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+
+  /**
+   * Install the downloaded update (restarts app)
+   */
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+
+  /**
+   * Listen for update status changes
+   * @param {Function} callback - Called with status object
+   * @returns {Function} Cleanup function
+   */
+  onUpdateStatus: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('update-status', listener);
+    return () => {
+      ipcRenderer.removeListener('update-status', listener);
+    };
+  },
 });
 
 // Log when preload script is loaded (helpful for debugging)

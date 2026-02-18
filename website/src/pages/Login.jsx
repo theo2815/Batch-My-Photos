@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
 import GoogleAuthButton from '../components/GoogleAuthButton'
+import InfoModal from '../components/modals/InfoModal'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -15,6 +16,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [activeModal, setActiveModal] = useState(null)
   const { isDark } = useTheme()
 
   const handleLogin = async (e) => {
@@ -179,11 +181,20 @@ export default function Login() {
         </div>
 
         {/* Trust badge */}
-        <div className={`mt-6 flex items-center justify-center gap-2 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Your photos are safe — everything stays on your device</span>
+        <div className={`mt-6 flex flex-col items-center gap-4 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Your photos are safe — everything stays on your device</span>
+          </div>
+          <div className="flex gap-4">
+            <button onClick={(e) => { e.preventDefault(); setActiveModal('privacyPolicy') }} className="hover:underline cursor-pointer">Privacy Policy</button>
+            <span>&bull;</span>
+            <button onClick={(e) => { e.preventDefault(); setActiveModal('termsOfService') }} className="hover:underline cursor-pointer">Terms of Service</button>
+          </div>
         </div>
       </div>
+      {activeModal && <InfoModal modalKey={activeModal} onClose={() => setActiveModal(null)} />}
+
     </div>
   )
 }

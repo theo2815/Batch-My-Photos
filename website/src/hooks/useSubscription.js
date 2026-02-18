@@ -46,9 +46,49 @@ export function useSubscription() {
   }, [])
 
   useEffect(() => {
+    let mounted = true
+    let realtimeChannel = null
     const controller = new AbortController()
+
+    // Wrapper to safely call fetchSubscription only if mounted
+    const safeFetch = () => {
+      if (mounted) fetchSubscription()
+    }
+
+    // Initial fetch
     fetchSubscription(controller.signal)
-    return () => controller.abort()
+
+    const setupRealtime = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!mounted || !session) return
+
+      realtimeChannel = supabase
+        .channel('public:subscriptions')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'subscriptions',
+            filter: `user_id=eq.${session.user.id}`,
+          },
+          (payload) => {
+            console.log('Realtime update received:', payload)
+            safeFetch()
+          }
+        )
+        .subscribe()
+    }
+
+    setupRealtime()
+
+    return () => {
+      mounted = false
+      controller.abort()
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel)
+      }
+    }
   }, [fetchSubscription])
 
   /**
@@ -81,7 +121,8 @@ export function useSubscription() {
     if (checkout_id) {
       localStorage.setItem('pending_checkout_id', checkout_id)
     }
-
+    
+    console.log('Checkout session created:', { checkout_id, checkout_url })
     return checkout_url
   }, [])
 
@@ -92,9 +133,13 @@ export function useSubscription() {
    */
   const verifyPayment = useCallback(async () => {
     const checkoutId = localStorage.getItem('pending_checkout_id')
-    if (!checkoutId) return null
+    if (!checkoutId) {
+        console.log('No pending checkout ID found in localStorage')
+        return null
+    }
 
     try {
+      console.log('Verifying payment for checkout ID:', checkoutId)
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return null
 
@@ -109,11 +154,12 @@ export function useSubscription() {
 
       if (!res.ok) {
         const errData = await res.json()
-        console.error('Verify payment error:', errData)
+        console.error('Verify payment error response:', errData)
         return null
       }
 
       const result = await res.json()
+      console.log('Verify payment response:', result)
 
       if (result.verified) {
         // Payment confirmed — clean up and refresh subscription

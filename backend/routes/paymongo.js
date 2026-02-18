@@ -92,7 +92,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
                 quantity: 1,
               },
             ],
-            payment_method_types: ['gcash', 'card'],
+            payment_method_types: ['gcash', 'card', 'qrph', 'paymaya', 'grab_pay', 'dob', 'billease'],
             success_url: `${baseUrl}/dashboard?payment=success`,
             cancel_url: `${baseUrl}/dashboard?payment=cancelled`,
             reference_number: user.id,
@@ -129,7 +129,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
 
 router.get('/subscription', authenticateUser, async (req, res) => {
   try {
-    const supabase = req.app.locals.supabaseAdmin // Use admin client to bypass RLS
+    const supabase = req.supabase // Use RLS-enabled client
     const user = req.user
 
     const { data, error } = await supabase
@@ -195,7 +195,7 @@ router.get('/subscription', authenticateUser, async (req, res) => {
 
 router.get('/transactions', authenticateUser, async (req, res) => {
   try {
-    const supabase = req.app.locals.supabaseAdmin
+    const supabase = req.supabase // Use RLS-enabled client
     const user = req.user
 
     // Pagination: ?limit=50&offset=0 (defaults)
@@ -226,7 +226,7 @@ router.get('/transactions', authenticateUser, async (req, res) => {
 router.post('/check-batch-limit', authenticateUser, async (req, res) => {
   try {
     const user = req.user
-    const supabase = req.app.locals.supabaseAdmin
+    const supabase = req.supabase // Use RLS-enabled client
     const currentMonth = new Date().toISOString().slice(0, 7)
 
     // Get current usage
@@ -283,7 +283,7 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
     const supabase = req.app.locals.supabaseAdmin
     const currentMonth = new Date().toISOString().slice(0, 7)
 
-    // Check subscription (prevent going over limit)
+    // Check subscription (to determine limit)
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('plan, status, expires_at')
@@ -293,68 +293,39 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
 
-    // Insert tracking record first (optimistic insert)
-    const { error: insertError } = await supabase
-      .from('batch_usage')
-      .insert({
-        user_id: user.id,
-        batch_count: batch_count,
-        month_year: currentMonth,
-        executed_at: new Date().toISOString()
-      })
+    // Limit is FREE_LIMIT for free users, null (unlimited) for Pro
+    const limit = isPro ? null : FREE_LIMIT
 
-    if (insertError) {
-      console.error('Batch tracking error:', insertError)
+    // Call the RPC to atomically check and insert
+    const { data: result, error: rpcError } = await supabase.rpc('track_batch_usage', {
+      p_user_id: user.id,
+      p_month_year: currentMonth,
+      p_count: batch_count,
+      p_limit: limit
+    })
+
+    if (rpcError) {
+      console.error('Track batch RPC error:', rpcError)
       return res.status(500).json({ error: 'Failed to track batch usage' })
     }
 
-    // SECURITY: Re-query usage AFTER insert to get the authoritative total.
-    // This closes the race window: even if two requests insert concurrently,
-    // the post-insert count reflects both, and we roll back if over limit.
-    const { data: usageData, error: usageError } = await supabase
-      .from('batch_usage')
-      .select('batch_count')
-      .eq('user_id', user.id)
-      .eq('month_year', currentMonth)
-
-    if (usageError) {
-      console.error('Usage re-query error:', usageError)
-      return res.status(500).json({ error: 'Failed to verify usage' })
-    }
-
-    const newUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
-
-    // If free user exceeded limit after insert, roll back by deleting the row
-    if (!isPro && newUsage > FREE_LIMIT) {
-      // Delete the most recent row we just inserted
-      const { data: rows } = await supabase
-        .from('batch_usage')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('month_year', currentMonth)
-        .order('executed_at', { ascending: false })
-        .limit(1)
-
-      if (rows && rows.length > 0) {
-        await supabase.from('batch_usage').delete().eq('id', rows[0].id)
-      }
-
+    if (!result.success) {
       return res.status(403).json({
-        error: 'Monthly batch limit exceeded',
-        used: newUsage - batch_count,
-        limit: FREE_LIMIT,
+        error: result.error,
+        used: result.used,
+        limit: result.limit,
         upgrade_required: true
       })
     }
 
-    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${newUsage}/${isPro ? '∞' : FREE_LIMIT})`)
+    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${result.used}/${isPro ? '∞' : FREE_LIMIT})`)
 
     res.json({
       success: true,
       usage: {
-        used: newUsage,
-        limit: isPro ? null : FREE_LIMIT,
-        remaining: isPro ? null : Math.max(0, FREE_LIMIT - newUsage)
+        used: result.used,
+        limit: result.limit,
+        remaining: result.remaining
       }
     })
   } catch (err) {

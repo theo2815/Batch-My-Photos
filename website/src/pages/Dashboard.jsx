@@ -109,16 +109,33 @@ export default function Dashboard() {
     safeTimeout(() => setCopied(false), 2000)
   }
 
-  // Handle payment redirect params (?payment=success or ?payment=cancelled)
+  // Handle payment redirect params (?payment=success, ?payment=cancelled) or ?modal=pricing
   useEffect(() => {
     const paymentStatus = searchParams.get('payment')
+    const modalParam = searchParams.get('modal')
+
+    if (modalParam === 'pricing') {
+      setActiveModal('pricing')
+      // Optional: Clear the param so refreshing doesn't re-open it, 
+      // but keeping it might be better for preserving state. 
+      // Let's clear it to keep URL clean after opening.
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('modal')
+      setSearchParams(newParams, { replace: true })
+    }
+
     // #region agent log
     if (paymentStatus === 'success') {
       setPaymentMsg({ type: 'success', text: '🎉 Verifying your payment…' })
-      setSearchParams({}, { replace: true }) // Clean URL
+      
+      // Clean URL immediately to prevent re-triggering this effect
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('payment')
+      setSearchParams(nextParams, { replace: true })
 
       // Verify payment directly with PayMongo (webhook fallback)
       verifyPayment().then((result) => {
+        console.log('Payment verification result:', result)
         if (result?.verified) {
           setPaymentMsg({ type: 'success', text: '🎉 Payment confirmed! Your Pro plan is now active.' })
         } else {
@@ -130,10 +147,14 @@ export default function Dashboard() {
       })
     } else if (paymentStatus === 'cancelled') {
       setPaymentMsg({ type: 'info', text: 'Payment was cancelled. You can try again anytime.' })
-      setSearchParams({}, { replace: true })
+      
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('payment')
+      setSearchParams(nextParams, { replace: true })
+      
       safeTimeout(() => setPaymentMsg(null), 5000)
     }
-  }, [searchParams, setSearchParams, refetchSub, verifyPayment])
+  }, [searchParams])
 
   // Check for expired subscription and show notification
   useEffect(() => {
@@ -155,10 +176,18 @@ export default function Dashboard() {
   const handleUpgrade = async () => {
     try {
       setCheckoutLoading(true)
+      console.log('Initiating checkout process...')
+      
       const checkoutUrl = await createCheckout()
       
       // Navigate to PayMongo checkout in the same tab to preserve session consistency
-      window.location.href = checkoutUrl
+      if (checkoutUrl) {
+        console.log('Redirecting to checkout:', checkoutUrl)
+        // Force hard navigation, bypassing React router/hydration issues for external links
+        window.location.href = checkoutUrl
+      } else {
+        throw new Error('No checkout URL returned')
+      }
     } catch (err) {
       console.error('Checkout error:', err)
       setCheckoutLoading(false)
@@ -168,7 +197,9 @@ export default function Dashboard() {
   }
 
   /* ── Loading state ── */
-  if (loading || subLoading) return (
+  // Only show full loading screen on initial load. 
+  // If subLoading is true but we have old data (sub exists), keep showing the dashboard (optimistic/stale UI)
+  if (loading || (subLoading && !sub)) return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
@@ -367,12 +398,12 @@ export default function Dashboard() {
                 {isFree ? (
                   <div className="flex flex-col gap-1.5">
                     <button
-                      disabled
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600/50 px-4 py-2.5 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                      onClick={() => setActiveModal('pricing')}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all cursor-pointer`}
                     >
-                      Coming Soon
+                      <Sparkles className="w-4 h-4 text-indigo-100" /> Upgrade to Pro
                     </button>
-                    <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span>
+                    {/* <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span> */}
                   </div>
                 ) : (
                   <button onClick={() => setActiveModal('managePlan')} className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>

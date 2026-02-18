@@ -1,7 +1,4 @@
-/**
- * Shared authentication middleware.
- * Verifies Supabase JWT from the Authorization header and attaches req.user.
- */
+const { createClient } = require('@supabase/supabase-js')
 
 async function authenticateUser(req, res, next) {
   const authHeader = req.headers.authorization
@@ -14,14 +11,25 @@ async function authenticateUser(req, res, next) {
     return res.status(401).json({ error: 'Missing token' })
   }
 
-  const supabase = req.app.locals.supabase
-  const { data: { user }, error } = await supabase.auth.getUser(token)
+  // Create a client scoped to this user's token (RLS enabled)
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_ANON_KEY
+  
+  const userSupabase = createClient(supabaseUrl, supabaseKey, {
+    global: {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  })
+
+  // Verify token by fetching user
+  const { data: { user }, error } = await userSupabase.auth.getUser()
 
   if (error || !user) {
     return res.status(401).json({ error: 'Invalid or expired token' })
   }
 
   req.user = user
+  req.supabase = userSupabase // Attached for use in routes
   next()
 }
 
