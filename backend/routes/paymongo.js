@@ -17,6 +17,16 @@ const FREE_LIMIT = 2
 /** Maximum age (in seconds) for webhook timestamps before they are rejected as replayed. */
 const WEBHOOK_MAX_AGE_SECONDS = 300 // 5 minutes
 
+// ── Coupon Codes ──────────────────────────────────────────────────────────────
+
+const COUPONS = {
+  EARLY149: {
+    discountedPriceCentavos: 14900, // ₱149.00
+    description: 'Early Bird Discount — ₱149 for first month',
+    expiresAt: new Date('2026-03-31T23:59:59+08:00'), // March 31, 2026 PHT
+  },
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Base64-encoded secret key for PayMongo Authorization header */
@@ -56,13 +66,118 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
   return crypto.timingSafeEqual(computedBuf, expectedBuf)
 }
 
+// ── POST /api/validate-coupon — Validate a coupon code ────────────────────────
+
+router.post('/validate-coupon', authenticateUser, async (req, res) => {
+  try {
+    const { code } = req.body
+    const user = req.user
+
+    if (!code || typeof code !== 'string') {
+      return res.json({ valid: false, reason: 'Please enter a coupon code.' })
+    }
+
+    const coupon = COUPONS[code.toUpperCase().trim()]
+    if (!coupon) {
+      return res.json({ valid: false, reason: 'Invalid coupon code.' })
+    }
+
+    // Check expiry
+    if (new Date() > coupon.expiresAt) {
+      return res.json({ valid: false, reason: 'This coupon has expired.' })
+    }
+
+    // Check if user already used any coupon (check transactions for coupon_code in metadata)
+    const supabase = req.app.locals.supabaseAdmin
+    const { data: prevTx } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('user_id', user.id)
+      .not('coupon_code', 'is', null)
+      .limit(1)
+
+    if (prevTx && prevTx.length > 0) {
+      return res.json({ valid: false, reason: 'You have already used a coupon code.' })
+    }
+
+    // SECURITY: Reject coupon if user already has active Pro subscription
+    const { data: activeSub } = await supabase
+      .from('subscriptions')
+      .select('plan, status, expires_at')
+      .eq('user_id', user.id)
+      .eq('plan', 'pro')
+      .eq('status', 'active')
+      .single()
+
+    if (activeSub && activeSub.expires_at && new Date(activeSub.expires_at) > new Date()) {
+      return res.json({ valid: false, reason: 'Coupons cannot be applied to existing subscriptions.' })
+    }
+
+    res.json({
+      valid: true,
+      code: code.toUpperCase().trim(),
+      originalPrice: PLAN_PRICE_CENTAVOS,
+      discountedPrice: coupon.discountedPriceCentavos,
+      description: coupon.description,
+    })
+  } catch (err) {
+    console.error('Validate coupon error:', err)
+    res.status(500).json({ valid: false, reason: 'Internal server error' })
+  }
+})
+
 // ── POST /api/checkout — Create a Checkout Session ────────────────────────────
 
 router.post('/checkout', authenticateUser, async (req, res) => {
   try {
     const user = req.user // Set by authenticateUser middleware
 
-    const { redirect_url } = req.body
+    const { redirect_url, coupon_code } = req.body
+
+    // ── Coupon validation (server-side, never trust the client price) ──────────
+    let finalAmount = PLAN_PRICE_CENTAVOS
+    let finalDescription = PLAN_DESCRIPTION
+    let validatedCoupon = null
+
+    if (coupon_code && typeof coupon_code === 'string') {
+      const coupon = COUPONS[coupon_code.toUpperCase().trim()]
+      if (coupon && new Date() <= coupon.expiresAt) {
+        // Check one-time usage per user (transactions + active subscription with coupon)
+        const supabaseAdmin = req.app.locals.supabaseAdmin
+        const { data: prevTx } = await supabaseAdmin
+          .from('transactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .not('coupon_code', 'is', null)
+          .limit(1)
+
+        // SECURITY: Also check if user already has an active pro subscription to prevent
+        // race condition where two concurrent checkout calls both pass the transactions check
+        const { data: activeSub } = await supabaseAdmin
+          .from('subscriptions')
+          .select('plan, status, expires_at')
+          .eq('user_id', user.id)
+          .eq('plan', 'pro')
+          .eq('status', 'active')
+          .single()
+
+        const hasActivePro = activeSub && activeSub.expires_at && new Date(activeSub.expires_at) > new Date()
+
+        if (hasActivePro) {
+          console.log(`Coupon rejected for user ${user.id}: already has active Pro subscription`)
+          // Still allow checkout at full price (renewal), just ignore the coupon
+        } else if (!prevTx || prevTx.length === 0) {
+          finalAmount = coupon.discountedPriceCentavos
+          finalDescription = `${PLAN_DESCRIPTION} (${coupon.description})`
+          validatedCoupon = coupon_code.toUpperCase().trim()
+          console.log(`Coupon ${validatedCoupon} applied for user ${user.id}: ₱${finalAmount / 100}`)
+        } else {
+          console.log(`Coupon rejected for user ${user.id}: already used a coupon`)
+        }
+      } else {
+        console.log(`Coupon rejected: invalid or expired code "${coupon_code}"`)
+      }
+    }
     
     // Use provided redirect_url (from client) or fallback to env var
     // This ensures users on localhost:5173 get redirected back to localhost:5173 (preserving session)
@@ -95,13 +210,15 @@ router.post('/checkout', authenticateUser, async (req, res) => {
             send_email_receipt: true,
             show_description: true,
             show_line_items: true,
-            description: PLAN_DESCRIPTION,
+            description: finalDescription,
             line_items: [
               {
                 currency: PLAN_CURRENCY,
-                amount: PLAN_PRICE_CENTAVOS,
-                name: 'BatchMyPhotos Pro',
-                description: 'Unlimited batches, watermarking, blur detection & more',
+                amount: finalAmount,
+                name: validatedCoupon ? `BatchMyPhotos Pro (${validatedCoupon})` : 'BatchMyPhotos Pro',
+                description: validatedCoupon
+                  ? `First month discounted — ₱${finalAmount / 100} (regular ₱${PLAN_PRICE_CENTAVOS / 100}/mo)`
+                  : 'Unlimited batches & more',
                 quantity: 1,
               },
             ],
@@ -113,6 +230,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
               user_id: user.id,
               user_email: user.email,
               plan: 'pro',
+              ...(validatedCoupon && { coupon_code: validatedCoupon }),
             },
           },
         },
@@ -415,6 +533,12 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     const supabase = req.app.locals.supabaseAdmin
     const paymentId = attrs?.payments?.[0]?.id
 
+    // Determine actual amount paid (may be discounted via coupon)
+    const verifyMeta = attrs?.metadata || {}
+    const verifyCouponCode = verifyMeta.coupon_code || null
+    const verifyCouponDef = verifyCouponCode ? COUPONS[verifyCouponCode] : null
+    const verifyAmount = verifyCouponDef ? verifyCouponDef.discountedPriceCentavos : PLAN_PRICE_CENTAVOS
+
     const { error: upsertError } = await supabase
       .from('subscriptions')
       .upsert(
@@ -427,7 +551,7 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
           device_removals_reset_at: expiresAt.toISOString(),
           paymongo_checkout_id: checkout_id,
           paymongo_payment_id: paymentId,
-          amount: PLAN_PRICE_CENTAVOS,
+          amount: verifyAmount,
           currency: PLAN_CURRENCY,
           paid_at: paidAt.toISOString(),
           expires_at: expiresAt.toISOString(),
@@ -451,21 +575,22 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     if (!existingTx) {
       await supabase.from('transactions').insert({
         user_id: user.id,
-        amount: PLAN_PRICE_CENTAVOS,
+        amount: verifyAmount,
         currency: PLAN_CURRENCY,
         status: 'paid',
-        description: PLAN_DESCRIPTION,
+        description: verifyCouponCode ? `${PLAN_DESCRIPTION} (${verifyCouponCode})` : PLAN_DESCRIPTION,
         paymongo_checkout_id: checkout_id,
+        coupon_code: verifyCouponCode,
         created_at: paidAt.toISOString()
       })
     }
 
-    console.log(`✅ Payment verified & subscription activated for user ${user.id}`)
+    console.log(`✅ Payment verified & subscription activated for user ${user.id}${verifyCouponCode ? ` (coupon: ${verifyCouponCode})` : ''}`)
 
     // Fire-and-forget payment confirmation email
     sendPaymentConfirmation({
       to: user.email,
-      amount: PLAN_PRICE_CENTAVOS,
+      amount: verifyAmount,
       currency: PLAN_CURRENCY,
       plan: 'pro',
       expiresAt: expiresAt.toISOString(),
@@ -586,6 +711,11 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
 
       const supabase = req.app.locals.supabaseAdmin // Use admin client (service role) for webhook writes
 
+      // Determine actual amount paid (may be discounted via coupon)
+      const couponCode = metadata.coupon_code || null
+      const couponDef = couponCode ? COUPONS[couponCode] : null
+      const actualAmount = couponDef ? couponDef.discountedPriceCentavos : PLAN_PRICE_CENTAVOS
+
       const { error: upsertError } = await supabase
         .from('subscriptions')
         .upsert(
@@ -598,7 +728,7 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
             device_removals_reset_at: expiresAt.toISOString(),
             paymongo_checkout_id: checkoutData?.id,
             paymongo_payment_id: paymentId,
-            amount: PLAN_PRICE_CENTAVOS,
+            amount: actualAmount,
             currency: PLAN_CURRENCY,
             paid_at: paidAt.toISOString(),
             expires_at: expiresAt.toISOString(),
@@ -622,23 +752,24 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       if (!existingTx && checkoutData?.id) {
         await supabase.from('transactions').insert({
           user_id: userId,
-          amount: PLAN_PRICE_CENTAVOS,
+          amount: actualAmount,
           currency: PLAN_CURRENCY,
           status: 'paid',
-          description: PLAN_DESCRIPTION,
+          description: couponCode ? `${PLAN_DESCRIPTION} (${couponCode})` : PLAN_DESCRIPTION,
           paymongo_checkout_id: checkoutData.id,
+          coupon_code: couponCode,
           created_at: paidAt.toISOString()
         })
       }
 
-      console.log(`✅ Subscription activated for user ${userId} until ${expiresAt.toISOString()}`)
+      console.log(`✅ Subscription activated for user ${userId} until ${expiresAt.toISOString()}${couponCode ? ` (coupon: ${couponCode})` : ''}`)
 
       // Fire-and-forget payment confirmation email
       const userEmail = metadata.user_email
       if (userEmail) {
         sendPaymentConfirmation({
           to: userEmail,
-          amount: PLAN_PRICE_CENTAVOS,
+          amount: actualAmount,
           currency: PLAN_CURRENCY,
           plan: 'pro',
           expiresAt: expiresAt.toISOString(),

@@ -87,6 +87,7 @@ const sensitiveApiLimiter = rateLimit({
 app.use('/api/checkout', sensitiveApiLimiter)
 app.use('/api/verify-payment', sensitiveApiLimiter)
 app.use('/api/cancel-subscription', sensitiveApiLimiter)
+app.use('/api/validate-coupon', sensitiveApiLimiter)
 
 // Webhook rate limiter (higher threshold, protects against flood)
 const webhookLimiter = rateLimit({
