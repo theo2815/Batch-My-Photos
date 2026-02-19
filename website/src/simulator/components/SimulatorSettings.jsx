@@ -24,8 +24,8 @@ const SENSITIVITY_OPTIONS = [
 
 const BUILT_IN_PRESETS = {
     'Default':       { maxPhotos: 500,  folderName: 'Batch Folder', sortBy: 'date-asc',  blurEnabled: false, sensitivity: 'moderate', batchMode: 'move' },
-    'Wedding Pro':   { maxPhotos: 300,  folderName: 'Wedding',      sortBy: 'date-asc',  blurEnabled: true,  sensitivity: 'moderate', batchMode: 'copy' },
-    'Sports Burst':  { maxPhotos: 1000, folderName: 'Sports',       sortBy: 'date-asc',  blurEnabled: true,  sensitivity: 'strict',   batchMode: 'move' },
+    'Wedding Pro':   { maxPhotos: 300,  folderName: 'Wedding',      sortBy: 'date-asc',  blurEnabled: false, sensitivity: 'moderate', batchMode: 'copy' },
+    'Sports Burst':  { maxPhotos: 1000, folderName: 'Sports',       sortBy: 'date-asc',  blurEnabled: false, sensitivity: 'strict',   batchMode: 'move' },
     'Archive':       { maxPhotos: 500,  folderName: 'Archive',      sortBy: 'date-asc',  blurEnabled: false, sensitivity: 'lenient',  batchMode: 'move' },
 };
 

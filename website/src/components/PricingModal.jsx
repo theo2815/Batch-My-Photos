@@ -41,6 +41,14 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                   <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
                   <span>2 batches / month</span>
                 </li>
+                <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                  <span>Internet connection required</span>
+                </li>
+                <li className={`flex items-center gap-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  <Check className={`w-4 h-4 shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                  <span>1 device</span>
+                </li>
               </ul>
             </div>
 
@@ -61,6 +69,8 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               <ul className="space-y-4 text-sm relative z-10 mb-8">
                 {[
                   'Unlimited batches',
+                  'Offline batching',
+                  'Up to 2 devices',
                 ].map((input) => (
                   <li key={input} className={`flex items-center gap-3 ${isDark ? 'text-white' : 'text-gray-900'} font-medium`}>
                     <Check className="w-4 h-4 shrink-0 text-emerald-400" />
@@ -103,15 +113,17 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               </div>
               <div className="flex items-baseline gap-1 mb-2 relative z-10">
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Pro+</h3>
-                <span className={`text-xl font-bold ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>— ₱499/mo</span>
+                <span className={`text-xl font-bold ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>— ₱₱₱/mo</span>
               </div>
               <p className={`text-sm ${isDark ? 'text-purple-200' : 'text-purple-600'} mb-6 relative z-10`}>For professionals</p>
               
               <ul className="space-y-4 text-sm relative z-10 mb-8">
                 {[
                   'Unlimited batches',
+                  'Offline batching',
+                  'Up to 3 devices',
                   'Custom Watermarks',
-                  'Blur detection'
+                  'Blur detection',
                 ].map((input) => (
                   <li key={input} className={`flex items-center gap-3 ${isDark ? 'text-white' : 'text-gray-900'} font-medium`}>
                     <Check className="w-4 h-4 shrink-0 text-purple-400" />
