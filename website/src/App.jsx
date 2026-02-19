@@ -15,10 +15,11 @@ import ForgotPassword from './pages/ForgotPassword'
 import UpdatePassword from './pages/UpdatePassword'
 import BillingHistory from './pages/BillingHistory'
 import DesktopCallback from './pages/DesktopCallback'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfService from './pages/TermsOfService'
 
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from './components/PageTransition'
-
 const AppContent = () => {
   const location = useLocation();
   const isDemo = location.pathname === '/demo';
@@ -55,6 +56,8 @@ const AppContent = () => {
           <Route path="/settings" element={<PageTransition><ProtectedRoute><Settings /></ProtectedRoute></PageTransition>} />
           <Route path="/billing" element={<PageTransition><ProtectedRoute><BillingHistory /></ProtectedRoute></PageTransition>} />
           <Route path="/demo" element={<PageTransition><DemoPage /></PageTransition>} />
+          <Route path="/privacy" element={<PageTransition><PrivacyPolicy /></PageTransition>} />
+          <Route path="/terms" element={<PageTransition><TermsOfService /></PageTransition>} />
           <Route path="/forgot-password" element={<PageTransition><ForgotPassword /></PageTransition>} />
           <Route path="/update-password" element={<PageTransition><ProtectedRoute><UpdatePassword /></ProtectedRoute></PageTransition>} />
           <Route path="*" element={

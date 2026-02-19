@@ -68,6 +68,65 @@
   justify-content: center;
 }
 
+/* ============================================================================
+   DEVICE MANAGER MODAL — full-bleed layout (header / body / footer)
+   ============================================================================ */
+
+/* Override base .modal-content padding when this modal is used */
+.modal-content:has(.modal-header) {
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+}
+
+/* Header bar */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+/* Close button */
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* Scrollable body */
+.modal-body {
+  overflow-y: auto;
+}
+
+/* Footer bar */
+.modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 /* Confirmation Modal Specific Styles */
 .confirmation-modal {
   max-width: 450px;
@@ -879,6 +938,13 @@
   margin-top: var(--space-md);
   padding-top: var(--space-md);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-footer-left,
+.history-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .history-count {

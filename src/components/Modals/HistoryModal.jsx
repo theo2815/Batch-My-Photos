@@ -14,7 +14,8 @@ import {
   History, Undo2, Trash2, FolderOpen, Clock,
   FileStack, AlertTriangle, CheckCircle, XCircle,
   Loader, X, Zap, ChevronDown, ChevronUp,
-  Settings2, Package, ArrowUpDown, Info, Copy, Check
+  Settings2, Package, ArrowUpDown, Info, Copy, Check,
+  Download
 } from 'lucide-react';
 import { STRINGS } from '../../constants/strings';
 import './Modals.css';
@@ -366,11 +367,29 @@ function HistoryEntry({ entry, onUndo, onDelete, onValidate }) {
  */
 function HistoryModal({ isOpen, history, onUndo, onDelete, onClearAll, onValidate, onClose }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [exportStatus, setExportStatus] = useState(null); // null | 'exporting' | 'done'
 
   const handleClearAll = useCallback(async () => {
     setShowClearConfirm(false);
     await onClearAll();
   }, [onClearAll]);
+
+  const handleExportHistory = useCallback(async () => {
+    setExportStatus('exporting');
+    try {
+      if (window.electronAPI?.exportHistoryReport) {
+        const result = await window.electronAPI.exportHistoryReport();
+        if (result?.success) {
+          setExportStatus('done');
+          setTimeout(() => setExportStatus(null), 2500);
+        } else {
+          setExportStatus(null);
+        }
+      }
+    } catch {
+      setExportStatus(null);
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -412,23 +431,36 @@ function HistoryModal({ isOpen, history, onUndo, onDelete, onClearAll, onValidat
             </div>
 
             <div className="history-footer">
-              {showClearConfirm ? (
-                <div className="history-clear-confirm">
-                  <span>{STRINGS.HISTORY_CLEAR_CONFIRM}</span>
-                  <button className="btn-text danger" onClick={handleClearAll}>Yes, clear all</button>
-                  <button className="btn-text" onClick={() => setShowClearConfirm(false)}>Cancel</button>
-                </div>
-              ) : (
+              <div className="history-footer-left">
+                {showClearConfirm ? (
+                  <div className="history-clear-confirm">
+                    <span>{STRINGS.HISTORY_CLEAR_CONFIRM}</span>
+                    <button className="btn-text danger" onClick={handleClearAll}>Yes, clear all</button>
+                    <button className="btn-text" onClick={() => setShowClearConfirm(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    className="btn-text danger"
+                    onClick={() => setShowClearConfirm(true)}
+                  >
+                    <Trash2 size={13} /> {STRINGS.HISTORY_CLEAR_ALL}
+                  </button>
+                )}
+              </div>
+              <div className="history-footer-right">
                 <button
-                  className="btn-text danger"
-                  onClick={() => setShowClearConfirm(true)}
+                  className="btn-text"
+                  onClick={handleExportHistory}
+                  disabled={exportStatus === 'exporting'}
+                  title="Export all history as CSV"
                 >
-                  <Trash2 size={13} /> {STRINGS.HISTORY_CLEAR_ALL}
+                  <Download size={13} />
+                  {exportStatus === 'exporting' ? 'Exporting...' : exportStatus === 'done' ? 'Exported!' : 'Export CSV'}
                 </button>
-              )}
-              <span className="history-count">
-                {history.length} operation{history.length !== 1 ? 's' : ''}
-              </span>
+                <span className="history-count">
+                  {history.length} operation{history.length !== 1 ? 's' : ''}
+                </span>
+              </div>
             </div>
           </>
         )}

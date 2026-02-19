@@ -4,8 +4,8 @@
  * Displays the success screen after batch completion (or cancellation)
  */
 
-import React from 'react';
-import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2, History } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2, History, Download } from 'lucide-react';
 import './StatusCards.css';
 
 /**
@@ -23,12 +23,50 @@ import './StatusCards.css';
  * @param {() => void} props.onReset - Callback to reset and start over
  * @param {() => void} props.onUndo - Callback to undo the batch operation
  * @param {() => void} props.onShowHistory - Callback to open operation history modal
+ * @param {() => void} props.onExportReport - Callback to export batch report as CSV
  */
-function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenFolder, onReset, onUndo, onShowHistory }) {
+function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenFolder, onReset, onUndo, onShowHistory, onExportReport }) {
   const wasCancelled = executionResults?.wasCancelled || executionResults?.cancelled;
+  const [exportStatus, setExportStatus] = useState(null); // null | 'exporting' | 'done'
+  
+  const handleExport = async () => {
+    setExportStatus('exporting');
+    try {
+      await onExportReport();
+      setExportStatus('done');
+      setTimeout(() => setExportStatus(null), 2500);
+    } catch {
+      setExportStatus(null);
+    }
+  };
   
   return (
     <div className={`status-card complete ${wasCancelled ? 'cancelled' : ''}`}>
+      {/* Compact toolbar — top-right utility actions */}
+      <div className="complete-toolbar">
+        {rollbackAvailable && (
+          <button className="toolbar-btn" onClick={onUndo} title="Undo batch">
+            <Undo2 size={14} /> Undo
+          </button>
+        )}
+        {hasHistory && (
+          <button className="toolbar-btn" onClick={onShowHistory} title="View history">
+            <History size={14} /> History
+          </button>
+        )}
+        {onExportReport && (
+          <button
+            className="toolbar-btn"
+            onClick={handleExport}
+            disabled={exportStatus === 'exporting'}
+            title="Export batch report as CSV"
+          >
+            <Download size={14} />
+            {exportStatus === 'exporting' ? 'Exporting...' : exportStatus === 'done' ? 'Exported!' : 'Export'}
+          </button>
+        )}
+      </div>
+
       <div className="success-icon">
         {wasCancelled ? (
           <AlertCircle size={64} color="var(--warning)" />
@@ -64,17 +102,7 @@ function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenF
           Files already moved/copied will remain in their new location.
         </p>
       )}
-      <div className="action-buttons">
-        {rollbackAvailable && (
-          <button className="btn secondary" onClick={onUndo}>
-            <Undo2 size={16} /> Undo
-          </button>
-        )}
-        {hasHistory && (
-          <button className="btn secondary" onClick={onShowHistory}>
-            <History size={16} /> History
-          </button>
-        )}
+      <div className="complete-actions">
         <button className="btn secondary" onClick={onOpenFolder}>
           <FolderOpen size={16} /> Open in Explorer
         </button>

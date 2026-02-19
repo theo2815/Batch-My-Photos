@@ -198,6 +198,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('subscription-refresh', sessionToken),
 
   // ============================================================================
+  // DEVICE MANAGEMENT APIs
+  // ============================================================================
+
+  /**
+   * Get this machine's Hardware ID (HWID) and label
+   * @returns {Promise<Object>} { hwid, label }
+   */
+  deviceGetHwid: () => ipcRenderer.invoke('device-get-hwid'),
+
+  /**
+   * Check if this device is authorized to run batch operations
+   * @returns {Promise<Object>} { authorized }
+   */
+  deviceCheckAuthorized: () => ipcRenderer.invoke('device-check-authorized'),
+
+  /**
+   * List all devices bound to the user's subscription
+   * @param {string} sessionToken - User's session token
+   * @returns {Promise<Object>} { devices, currentHwid, device_limit, device_count }
+   */
+  deviceGetList: (sessionToken) =>
+    ipcRenderer.invoke('device-get-list', sessionToken),
+
+  /**
+   * De-authorize (remove) a device binding
+   * @param {string} sessionToken - User's session token
+   * @param {string} deviceId - UUID of the device_bindings row to remove
+   * @returns {Promise<Object>} { success, error? }
+   */
+  deviceDeauthorize: (sessionToken, deviceId) =>
+    ipcRenderer.invoke('device-deauthorize', sessionToken, deviceId),
+
+  /**
+   * Start the heartbeat loop (call after successful authentication)
+   * @returns {Promise<Object>} { success }
+   */
+  deviceStartHeartbeat: () => ipcRenderer.invoke('device-start-heartbeat'),
+
+  /**
+   * Stop the heartbeat loop (call on logout)
+   * @returns {Promise<Object>} { success }
+   */
+  deviceStopHeartbeat: () => ipcRenderer.invoke('device-stop-heartbeat'),
+
+  // ============================================================================
   // BLUR DETECTION APIs
   // ============================================================================
 
@@ -333,18 +378,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // STORAGE & MAINTENANCE APIs
   // ============================================================================
 
-  /**
-   * Get information about the application cache
-   * @returns {Promise<Object>} { sizeBytes, sizeStr, path }
-   */
-  getCacheInfo: () => ipcRenderer.invoke('get-cache-info'),
-
-  /**
-   * Clear the application cache
-   * @returns {Promise<Object>} Success status
-   */
-  clearCache: () => ipcRenderer.invoke('clear-cache'),
-
   // ============================================================================
   // UNDO/ROLLBACK APIs
   // ============================================================================
@@ -435,6 +468,74 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Result with success status and entries cleared count
    */
   clearOperationHistory: () => ipcRenderer.invoke('clear-operation-history'),
+  // ============================================================================
+  // AUTO-UPDATE APIs
+  // ============================================================================
+
+  /**
+   * Check for updates manually
+   * @returns {Promise<Object>} Status object
+   */
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+
+  /**
+   * Start downloading the available update
+   */
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+
+  /**
+   * Install the downloaded update (restarts app)
+   */
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+
+  /**
+   * Listen for update status changes
+   * @param {Function} callback - Called with status object
+   * @returns {Function} Cleanup function
+   */
+  onUpdateStatus: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('update-status', listener);
+    return () => {
+      ipcRenderer.removeListener('update-status', listener);
+    };
+  },
+
+  // ============================================================================
+  // VERSION CHECK API
+  // ============================================================================
+
+  /**
+   * Check if a newer app version is available by pinging the backend.
+   * Returns { updateAvailable, currentVersion, latestVersion, downloadUrl, releaseDate }
+   */
+  checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
+
+  /**
+   * Open a URL in the user's default browser (HTTPS only)
+   * @param {string} url - The URL to open
+   * @returns {Promise<Object>} { success }
+   */
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+
+  // ============================================================================
+  // EXPORT REPORT APIs
+  // ============================================================================
+
+  /**
+   * Export a single batch operation as a detailed CSV file.
+   * Opens a save dialog for the user to choose the save location.
+   * @param {Object} data - Execution results with operations array
+   * @returns {Promise<Object>} { success, filePath } or { success: false, cancelled: true }
+   */
+  exportBatchReport: (data) => ipcRenderer.invoke('export-batch-report', data),
+
+  /**
+   * Export all operation history as a CSV summary.
+   * Opens a save dialog for the user to choose the save location.
+   * @returns {Promise<Object>} { success, filePath } or { success: false, cancelled: true }
+   */
+  exportHistoryReport: () => ipcRenderer.invoke('export-history-report'),
 });
 
 // Log when preload script is loaded (helpful for debugging)

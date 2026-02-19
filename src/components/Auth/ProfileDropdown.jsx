@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { User, LogOut, Crown, ExternalLink } from 'lucide-react'
+import { User, LogOut, Crown, ExternalLink, Monitor } from 'lucide-react'
 import './ProfileDropdown.css'
 
-export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, onUpgrade }) {
+export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, onUpgrade, onManageDevices }) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -73,6 +73,19 @@ export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, o
               View Profile
               <ExternalLink className="item-icon-right" />
             </button>
+
+            {isPro && onManageDevices && (
+              <button
+                onClick={() => {
+                  onManageDevices()
+                  setIsOpen(false)
+                }}
+                className="dropdown-item"
+              >
+                <Monitor className="item-icon" />
+                Manage Devices
+              </button>
+            )}
 
             {!isPro && (
               <button

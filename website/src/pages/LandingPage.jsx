@@ -1032,7 +1032,7 @@ const content = [
   {
     title: "4. Creating Batches",
     description:
-      "Sit back and watch the magic. We process thousands of files in minutes, moving them instantly to their new folders.",
+      "Sit back and watch the magic. We process thousands of files in seconds, moving them instantly to their new folders.",
     content: (
         <div className="w-full h-full bg-[#2d2d2d] rounded-xl flex items-center justify-center font-sans">
              <div className="text-center w-3/4">

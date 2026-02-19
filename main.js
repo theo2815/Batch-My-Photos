@@ -41,11 +41,12 @@ if (process.defaultApp) {
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
-const Store = require('electron-store');
+const SecureStore = require('./src/main/secureStore');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 const { isPathAllowedAsync } = require('./src/main/securityManager');
 const authService = require('./src/main/authService');
+const deviceService = require('./src/main/deviceService');
 const logger = require('./src/utils/logger');
 
 // ============================================================================
@@ -64,27 +65,27 @@ logger.log('💾 [CACHE] Set cache path to:', cachePath);
 // ============================================================================
 // PERSISTENT STATE MANAGEMENT
 // ============================================================================
-// Initialize electron-store for persistent user preferences and session data.
-// No encryption key needed — preferences (theme, recent folders) are non-sensitive.
+// Initialize SecureStore for persistent user preferences and session data.
+// All data is encrypted via OS keychain (safeStorage / Windows DPAPI) so
+// technical users cannot edit the JSON file to bypass limits.
 //
-// Migration: Old versions used a hardcoded encryptionKey which produced binary
-// data in the JSON file. Without that key, electron-store fails to parse it.
-// Delete the old file if it exists so we start fresh with defaults.
+// Migration: SecureStore automatically migrates existing plain-text JSON
+// into an encrypted blob on first access after this upgrade.
 let store;
 try {
-  store = new Store({
-    projectName: 'BatchMyPhotos',
+  store = new SecureStore({
+    name: 'config',
     defaults: {
       theme: 'dark',
       recentFolders: [],
     },
   });
 } catch (_err) {
-  logger.warn('⚠️ [STORE] Old encrypted preferences store is unreadable — deleting and starting fresh');
+  logger.warn('⚠️ [STORE] Preferences store unreadable — deleting and starting fresh');
   const storeFile = path.join(app.getPath('userData'), 'config.json');
   try { fs.unlinkSync(storeFile); } catch (_e) { /* file may not exist */ }
-  store = new Store({
-    projectName: 'BatchMyPhotos',
+  store = new SecureStore({
+    name: 'config',
     defaults: {
       theme: 'dark',
       recentFolders: [],
@@ -141,7 +142,8 @@ async function handleDeepLink(url) {
 
     // SECURITY: Verify the token is valid before trusting it
     const verification = await authService.verifySession(token);
-    if (!verification.valid) {
+    if (!verification.valid && !verification.networkError) {
+      // Server explicitly rejected the token (401/403) — do not save
       logger.warn('[DEEP-LINK] Token verification failed — refusing to save session');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -149,9 +151,21 @@ async function handleDeepLink(url) {
       }
       return;
     }
+    // If networkError: token just came from the browser auth flow — safe to save
+    // but mark as unverified so it gets re-checked when online
+    if (verification.networkError) {
+      logger.warn('[DEEP-LINK] Backend unreachable — saving session as unverified (token from live auth flow)');
+    }
 
-    // Token verified — save session
-    authService.saveSession(token, { email: decodeURIComponent(email), name: decodeURIComponent(name || '') });
+    // Token verified (or unverified due to network error) — save session
+    authService.saveSession(token, {
+      email: decodeURIComponent(email),
+      name: decodeURIComponent(name || ''),
+      ...(verification.networkError ? { unverified: true } : {}),
+    });
+
+    // Start device heartbeat after successful authentication
+    deviceService.startHeartbeat(() => authService.getStoredSession());
 
     // Notify the renderer process
     const mainWindow = getMainWindow();
@@ -261,6 +275,33 @@ app.whenReady().then(() => {
   
   createWindow();
 
+  // Start device heartbeat if user is already authenticated
+  const storedSession = authService.getStoredSession();
+  if (storedSession) {
+    logger.log('💓 [STARTUP] Starting device heartbeat for existing session');
+    deviceService.startHeartbeat(() => authService.getStoredSession());
+
+    // Re-verify unverified tokens (saved during network outage) now that we're online
+    const profile = authService.getStoredUser?.();
+    if (profile?.unverified) {
+      logger.log('🔄 [STARTUP] Re-verifying unverified session token...');
+      authService.verifySession(storedSession).then(result => {
+        if (result.valid) {
+          // Token is valid — clear the unverified flag
+          logger.log('✅ [STARTUP] Unverified session re-verified successfully');
+          const cleanProfile = { ...profile };
+          delete cleanProfile.unverified;
+          authService.saveSession(storedSession, cleanProfile);
+        } else if (!result.networkError) {
+          // Token is invalid and server is reachable — clear session
+          logger.warn('⚠️ [STARTUP] Unverified session token is invalid — clearing session');
+          authService.clearSession();
+        }
+        // If still networkError, keep waiting until next launch
+      }).catch(() => {});
+    }
+  }
+
   // Handle cold-start deep link (app was launched by clicking a deep link)
   const deepLinkUrl = process.argv.find(arg => arg.startsWith('batchmyphotos://'));
   if (deepLinkUrl) {
@@ -270,6 +311,8 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Stop heartbeat when all windows close
+  deviceService.stopHeartbeat();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -279,6 +322,16 @@ app.on('activate', () => {
   if (getMainWindow() === null) {
     createWindow();
   }
+});
+
+// ============================================================================
+// AUTO UPDATER (Hybrid Strategy: Disabled for Store, Enabled for Direct)
+// ============================================================================
+const { initAutoUpdater } = require('./src/main/updateManager');
+
+app.whenReady().then(() => {
+  // Initialize auto-updater (it will check process.windowsStore internally)
+  initAutoUpdater(getMainWindow);
 });
 
 // ============================================================================

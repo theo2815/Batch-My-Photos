@@ -22,4 +22,9 @@ simple_log.txt
 # Python virtual environments
 backend/venv/
 .venv/
+<<<<<<< HEAD
+=======
+
+# backend
+>>>>>>> 92b7788f096fde9cb0081daffe965d71ac011481
 backend/migrations/

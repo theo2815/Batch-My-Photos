@@ -1,0 +1,72 @@
+import { Link } from 'react-router-dom'
+import { Shield, ArrowLeft } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
+
+const PrivacyPolicy = () => {
+  const { isDark } = useTheme()
+
+  return (
+    <div className="min-h-screen py-20 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-indigo-400 transition-colors mb-6"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to home
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <Shield className="w-6 h-6 text-emerald-400" />
+            </div>
+            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Privacy Policy
+            </h1>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className={`rounded-xl border p-6 sm:p-8 ${isDark ? 'bg-slate-900/50 border-white/6' : 'bg-white border-gray-200'}`}>
+          <div className="space-y-5">
+            <p className="text-slate-400 leading-relaxed">Your privacy matters to us. Here's exactly how Batch My Photos handles your data.</p>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Your photos stay on your device</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party. Period.</p>
+            </div>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>What we collect</h4>
+              <ul className="space-y-1.5 text-sm text-slate-400">
+                <li>• <strong className="text-slate-300">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
+                <li>• <strong className="text-slate-300">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity) to improve the app. This never includes file names, photo content, or personal data.</li>
+                <li>• <strong className="text-slate-300">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>What we don't collect</h4>
+              <ul className="space-y-1 text-sm text-slate-400">
+                <li>• ❌ Photo content, metadata, or file names</li>
+                <li>• ❌ File system paths or folder structures</li>
+                <li>• ❌ Any data from your local machine</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Third-party services</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">We use Supabase for authentication and Paymongo for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
+            </div>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Your rights</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">You can request deletion of your account and all associated data at any time by emailing <a href="mailto:batchmyphotos@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">batchmyphotos@gmail.com</a>.</p>
+            </div>
+            <div className="pt-3 border-t border-white/6">
+              <p className="text-xs text-slate-600">Last updated: February 2026</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default PrivacyPolicy

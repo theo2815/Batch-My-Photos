@@ -8,11 +8,15 @@ const rateLimit = require('express-rate-limit')
 const { createClient } = require('@supabase/supabase-js')
 const { authenticateUser } = require('./middleware/auth')
 const paymongoRoutes = require('./routes/paymongo')
+const devicesRoutes = require('./routes/devices')
+const { initCronJobs } = require('./services/cronService')
 
 const app = express()
 const port = process.env.PORT || 3000
 
 // ── Security Middleware ──────────────────────────────────────────────────────
+const isDev = process.env.NODE_ENV !== 'production'
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -21,16 +25,21 @@ app.use(helmet({
         "'self'",
         process.env.SUPABASE_URL,
         "https://*.supabase.co",
+        "wss://*.supabase.co",
         "https://api.paymongo.com",
-        "http://127.0.0.1:7242",
+        ...(isDev ? ["http://127.0.0.1:7242"] : []),
       ],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: [
+        "'self'",
+        ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : []),
+      ],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       fontSrc: ["'self'", "https:", "data:"],
-      upgradeInsecureRequests: null,
+      upgradeInsecureRequests: isDev ? null : [],
     },
   },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }))
 
 // CORS — only allow listed origins (comma-separated in .env)
@@ -39,6 +48,11 @@ app.use(helmet({
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:3000']
+
+// SECURITY: In production, ALLOWED_ORIGINS must be explicitly configured
+if (!isDev && !process.env.ALLOWED_ORIGINS) {
+  throw new Error('Missing ALLOWED_ORIGINS in .env — required in production to restrict CORS.')
+}
 
 app.use(cors({
   origin: allowedOrigins,
@@ -62,6 +76,28 @@ const apiLimiter = rateLimit({
 })
 app.use('/api/', apiLimiter)
 
+// Stricter rate limiter for sensitive endpoints (10 requests per 15 minutes)
+const sensitiveApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+})
+app.use('/api/checkout', sensitiveApiLimiter)
+app.use('/api/verify-payment', sensitiveApiLimiter)
+app.use('/api/cancel-subscription', sensitiveApiLimiter)
+
+// Webhook rate limiter (higher threshold, protects against flood)
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+})
+app.use('/api/webhooks', webhookLimiter)
+
 // Supabase Clients
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -75,6 +111,10 @@ if (!supabaseUrl || !supabaseKey) {
 
 if (!process.env.PAYMONGO_SECRET_KEY) {
   throw new Error('Missing PAYMONGO_SECRET_KEY in .env — required for payment processing.')
+}
+
+if (!process.env.PAYMONGO_WEBHOOK_SECRET) {
+  console.warn('⚠️  Missing PAYMONGO_WEBHOOK_SECRET — webhook signature verification will reject all incoming webhooks.')
 }
 
 // Anon client — for auth token verification
@@ -93,6 +133,17 @@ app.locals.supabaseAdmin = supabaseAdmin
 // Routes
 // (Root route removed to allow static website to serve index.html)
 
+// ── App Version Check ────────────────────────────────────────────────────────
+// The desktop app pings this on launch to check if a newer version is available.
+// Update LATEST_APP_VERSION env var (or the default below) when you release.
+app.get('/api/version', (req, res) => {
+  res.json({
+    latestVersion: process.env.LATEST_APP_VERSION || '1.0.1',
+    downloadUrl: process.env.APP_DOWNLOAD_URL || 'https://www.batchmyphotos.com/#pricing',
+    releaseDate: process.env.APP_RELEASE_DATE || '2026-02-18',
+  })
+})
+
 // ── Health Check ─────────────────────────────────────────────────────────────
 // Used by Railway/Render/monitoring tools to verify the service is healthy
 app.get('/api/health', async (req, res) => {
@@ -105,19 +156,16 @@ app.get('/api/health', async (req, res) => {
       .limit(1)
 
     const isTableMissing = error && error.code === '42P01'
-    const dbStatus = !error ? 'connected' : isTableMissing ? 'connected (pending migrations)' : 'unreachable'
 
     res.json({
       status: error && !isTableMissing ? 'degraded' : 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: dbStatus,
+      database: !error ? 'ok' : isTableMissing ? 'ok' : 'unreachable',
     })
   } catch (err) {
     res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
       database: 'unreachable',
     })
   }
@@ -138,6 +186,10 @@ app.get('/api/me', authenticateUser, (req, res) => {
 // ── PayMongo Routes ─────────────────────────────────────────────────────────
 // Mounted at /api — auth is handled per-route inside the router
 app.use('/api', paymongoRoutes)
+
+// ── Device Management Routes ────────────────────────────────────────────────
+// HWID binding, heartbeat, device CRUD — auth handled per-route
+app.use('/api', devicesRoutes)
 
 // ── Website Static Files ────────────────────────────────────────────────────
 // Serve the built React website from the same server.
@@ -161,4 +213,7 @@ app.get(/.*/, (req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Backend server running on http://localhost:${port}`)
+
+  // Start scheduled background jobs (expiry reminders, usage summaries)
+  initCronJobs(app.locals.supabaseAdmin)
 })

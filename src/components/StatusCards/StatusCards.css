@@ -13,6 +13,60 @@
   box-shadow: var(--shadow-lg);
   max-width: 500px;
   width: 100%;
+  position: relative;
+}
+
+/* ---- CompleteCard Toolbar (top-right utility buttons) ---- */
+.complete-toolbar {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.toolbar-btn:active {
+  transform: scale(0.96);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- CompleteCard main action buttons ---- */
+.complete-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.complete-actions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .status-card h2 {
@@ -35,6 +89,9 @@
 /* Success/Error Icons */
 .success-icon,
 .error-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   font-size: 4rem;
 }
 

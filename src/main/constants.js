@@ -192,6 +192,28 @@ const BLUR_EDGE_THRESHOLDS = {
 const BLUR_EDGE_PIXEL_THRESHOLD = 15;
 
 // ============================================================================
+// DEVICE BINDING
+// ============================================================================
+
+/**
+ * Default device limit for Pro subscribers.
+ * Pro plan allows 2 simultaneous devices.
+ */
+const DEVICE_LIMIT_PRO = 2;
+
+/**
+ * Device limit for Pro+ subscribers.
+ * Pro+ plan allows 5 simultaneous devices.
+ */
+const DEVICE_LIMIT_PRO_PLUS = 5;
+
+/**
+ * Heartbeat interval in milliseconds (5 minutes).
+ * The Electron app pings the server at this interval while active.
+ */
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
+// ============================================================================
 // AI BLUR DETECTION
 // ============================================================================
 
@@ -229,4 +251,7 @@ module.exports = {
   BLUR_EDGE_PIXEL_THRESHOLD,
   BLUR_AI_BATCH_SIZE,
   BLUR_AI_TIMEOUT_MS,
+  DEVICE_LIMIT_PRO,
+  DEVICE_LIMIT_PRO_PLUS,
+  HEARTBEAT_INTERVAL_MS,
 };
