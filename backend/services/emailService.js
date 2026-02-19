@@ -20,6 +20,7 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'BatchMyPhotos <notifications@batchmyphotos.com>'
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || 'batchmyphotos@gmail.com'
 
 // ── Core Send Function ──────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ async function sendEmail({ to, subject, html }) {
   try {
     const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
+      reply_to: [EMAIL_REPLY_TO],
       to,
       subject,
       html,
@@ -163,6 +165,10 @@ function wrapTemplate(headerTitle, headerSub, bodyHtml) {
         <!-- Footer -->
         <tr>
           <td style="padding: 24px 32px; text-align: center;">
+            <p style="margin: 0 0 12px; color: ${COLORS.textMuted}; font-size: 12px;">
+              This is an automated email. If you have any questions, contact us at
+              <a href="mailto:batchmyphotos@gmail.com" style="color: ${COLORS.textSec}; text-decoration: underline;">batchmyphotos@gmail.com</a>.
+            </p>
             <p style="margin: 0 0 8px; color: ${COLORS.textMuted}; font-size: 12px;">
               &copy; ${year} BatchMyPhotos. All rights reserved.
             </p>
