@@ -74,7 +74,7 @@ export default function Dashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [confirmCancel, setConfirmCancel]   = useState(false)
   const [paymentMsg, setPaymentMsg] = useState(null)
-  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription } = useSubscription()
+  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription, validateCoupon } = useSubscription()
   const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt, removalsResetAt } = useDevices()
   const [removingDeviceId, setRemovingDeviceId] = useState(null)
   const [confirmRemoveDevice, setConfirmRemoveDevice] = useState(null) // { id, label }
@@ -222,12 +222,12 @@ export default function Dashboard() {
     }
   }, [sub, subLoading])
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = async (couponCode = null) => {
     try {
       setCheckoutLoading(true)
-      console.log('Initiating checkout process...')
+      console.log('Initiating checkout process...', couponCode ? `with coupon: ${couponCode}` : '')
       
-      const checkoutUrl = await createCheckout()
+      const checkoutUrl = await createCheckout(couponCode)
       
       // Navigate to PayMongo checkout in the same tab to preserve session consistency
       if (checkoutUrl) {
@@ -240,8 +240,8 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Checkout error:', err)
       setCheckoutLoading(false)
-      setPaymentMsg({ type: 'error', text: err.message || 'Failed to start checkout. Please try again.' })
-      safeTimeout(() => setPaymentMsg(null), 5000)
+      // Re-throw so PricingModal can display the error inline
+      throw err
     }
   }
 
@@ -746,6 +746,7 @@ export default function Dashboard() {
         onClose={() => setActiveModal(null)}
         onUpgrade={handleUpgrade}
         checkoutLoading={checkoutLoading}
+        onValidateCoupon={validateCoupon}
       />
 
       {/* ── Manage Plan Modal ── */}

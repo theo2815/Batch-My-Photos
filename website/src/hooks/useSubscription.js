@@ -95,9 +95,12 @@ export function useSubscription() {
    * Creates a PayMongo checkout session and returns the checkout URL.
    * Also saves checkout_id to localStorage for verification on return.
    */
-  const createCheckout = useCallback(async () => {
+  const createCheckout = useCallback(async (couponCode) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
+
+    const body = { redirect_url: window.location.origin }
+    if (couponCode) body.coupon_code = couponCode
 
     const res = await fetch(`${API_BASE}/api/checkout`, {
       method: 'POST',
@@ -105,12 +108,13 @@ export function useSubscription() {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        redirect_url: window.location.origin
-      })
+      body: JSON.stringify(body)
     })
 
     if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('You\'re doing that too fast. Please wait a few minutes and try again.')
+      }
       const errData = await res.json()
       throw new Error(errData.error || 'Failed to create checkout session')
     }
@@ -198,5 +202,29 @@ export function useSubscription() {
     return true
   }, [fetchSubscription])
 
-  return { subscription, loading, error, refetch: fetchSubscription, createCheckout, verifyPayment, cancelSubscription }
+  /**
+   * Validates a coupon code server-side.
+   * Returns { valid, code, originalPrice, discountedPrice, description } or { valid: false, reason }
+   */
+  const validateCoupon = useCallback(async (code) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { valid: false, reason: 'Not authenticated' }
+
+    const res = await fetch(`${API_BASE}/api/validate-coupon`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    })
+
+    if (!res.ok) {
+      if (res.status === 429) return { valid: false, reason: 'You\'re doing that too fast. Please wait a few minutes and try again.' }
+      return { valid: false, reason: 'Server error' }
+    }
+    return res.json()
+  }, [])
+
+  return { subscription, loading, error, refetch: fetchSubscription, createCheckout, verifyPayment, cancelSubscription, validateCoupon }
 }
