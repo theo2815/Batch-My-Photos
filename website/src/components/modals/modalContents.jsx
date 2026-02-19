@@ -101,8 +101,8 @@ const MODAL_CONTENT = {
           <ul className="space-y-1 text-sm text-slate-400">
             <li>• Blur detection</li>
             <li>• Watermarking support</li>
-            <li>• Face recognition grouping</li>
             <li>• Multi-folder processing</li>
+            <li>• And more coming soon!</li>
           </ul>
         </div>
       </div>

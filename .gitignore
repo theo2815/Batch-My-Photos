@@ -19,12 +19,23 @@ build_log*.txt
 debug_log.txt
 simple_log.txt
 
-# Python virtual environments
+# Python virtual environments & cache
 backend/venv/
 .venv/
-<<<<<<< HEAD
-=======
+__pycache__/
+*.pyc
 
-# backend
->>>>>>> 92b7788f096fde9cb0081daffe965d71ac011481
+# AI model weights (large binary files)
+ai-service/models/*.pt
+ai-service/data/train/
+ai-service/data/val/
+
+# AI prompt/planning files (internal)
+*.prompt.md
+
+# Test scripts (contain hardcoded URLs/emails)
+ai-service/test_api.py
+backend/test-email.js
+
+# Backend migrations (contain DB schema details)
 backend/migrations/

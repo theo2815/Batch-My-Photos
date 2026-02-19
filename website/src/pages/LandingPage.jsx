@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useTheme } from '../context/ThemeContext'
-import { Zap, FolderOpen, Folder, Settings, ScanEye, CheckCircle, Copy, ArrowDownAZ, Trash2, Save, Info, Package, ChevronRight, ChevronDown, XCircle, RotateCcw, Undo2, History, ArrowLeft, Grid3x3, List, Play, Layers, Eye, Droplets, Users, Lock, Sparkles, Camera, Upload, WifiOff, ShieldCheck, SlidersHorizontal, Heart, Monitor, ArrowRight, ArrowUp } from 'lucide-react'
+import { Zap, FolderOpen, Folder, Settings, ScanEye, CheckCircle, Copy, ArrowDownAZ, Trash2, Save, Info, Package, ChevronRight, ChevronDown, XCircle, RotateCcw, Undo2, History, ArrowLeft, Grid3x3, List, Play, Layers, Eye, Droplets, Lock, Sparkles, Camera, Upload, WifiOff, ShieldCheck, SlidersHorizontal, Heart, Monitor, ArrowRight, ArrowUp } from 'lucide-react'
 import VerticalTimeline from '../components/VerticalTimeline'
 import Footer from '../components/Footer'
 
@@ -784,18 +784,18 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* ── Card 4: Face Recognition (Coming Soon) ── */}
+            {/* ── Card 4: More Features Coming Soon ── */}
             <div className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]' : 'border-gray-200 bg-white hover:bg-gray-50 shadow-sm'} p-8 hover:border-purple-500/30 transition-all duration-300`}>
               <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
               <div className="relative">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-purple-500/10 mb-5 group-hover:bg-purple-500/20 transition-colors">
-                  <Users className="w-6 h-6 text-purple-400" />
+                  <Sparkles className="w-6 h-6 text-purple-400" />
                 </div>
                 <div className="flex items-center gap-3 mb-2">
-                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Face Recognition</h3>
-                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20">Coming Soon</span>
+                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>More Features Coming Soon!</h3>
+                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20">Stay Tuned</span>
                 </div>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Group photos by the people in them. Identify faces across thousands of images so you can sort, review, and deliver faster than ever.</p>
+                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>We're constantly improving Batch My Photos. Exciting new features are on the way — stay tuned for updates!</p>
               </div>
             </div>
           </div>
