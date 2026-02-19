@@ -4,34 +4,21 @@
  * Manages user login, session persistence, and token verification
  * for the BatchMyPhotos desktop application.
  *
- * Uses Electron safeStorage (OS keychain / Windows DPAPI) to encrypt
- * sensitive session data at rest. Non-sensitive profile data (email, name)
- * is stored in plain electron-store.
+ * All data is stored in a SecureStore instance which encrypts the
+ * entire JSON file via Electron safeStorage (OS keychain / Windows DPAPI).
+ * No sensitive data (tokens, plan info) is ever written to disk in plain text.
  */
 
-const { app, net, shell, safeStorage } = require('electron')
-const Store = require('electron-store')
-const path = require('path')
-const fs = require('fs')
+const { app, net, shell } = require('electron')
+const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
 const config = require('./config')
 const deviceService = require('./deviceService')
 
-// Store for auth data — session token is encrypted via safeStorage,
-// profile data (email, name) is non-sensitive and stored as plain JSON.
-//
-// Migration: The old version used a hardcoded encryptionKey which produced
-// binary data in the JSON file. Without that key, electron-store fails to
-// parse it on construction. Delete the old file if it exists so we start fresh.
-let store
-try {
-  store = new Store({ name: 'auth-session' })
-} catch (_err) {
-  logger.warn('⚠️ [AUTH] Old encrypted store is unreadable — deleting and starting fresh')
-  const storeFile = path.join(app.getPath('userData'), 'auth-session.json')
-  try { fs.unlinkSync(storeFile) } catch (_e) { /* file may not exist */ }
-  store = new Store({ name: 'auth-session' })
-}
+// SecureStore encrypts all data at rest via safeStorage.
+// Automatic migration: existing plain-text keys from older versions
+// are encrypted into the blob on first access.
+const store = new SecureStore({ name: 'auth-session' })
 
 const BACKEND_URL = config.urls.BACKEND_URL
 const FRONTEND_URL = config.urls.FRONTEND_URL
@@ -41,25 +28,12 @@ const FRONTEND_URL = config.urls.FRONTEND_URL
 // ============================================================================
 
 /**
- * Get stored session token (decrypted via OS keychain).
+ * Get stored session token.
+ * SecureStore handles decryption transparently.
  * @returns {string|null} Session token or null if not logged in
  */
 function getStoredSession() {
-  try {
-    const encrypted = store.get('session_token_encrypted', null)
-    if (!encrypted) return null
-
-    if (!safeStorage.isEncryptionAvailable()) {
-      logger.warn('⚠️ [AUTH] safeStorage not available, cannot decrypt token')
-      return null
-    }
-
-    return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
-  } catch (err) {
-    logger.error('❌ [AUTH] Failed to decrypt session token:', err.message)
-    store.delete('session_token_encrypted')
-    return null
-  }
+  return store.get('session_token', null)
 }
 
 /**
@@ -71,18 +45,12 @@ function getStoredUser() {
 }
 
 /**
- * Save session to store. Token is encrypted via OS keychain (safeStorage).
+ * Save session to store. SecureStore encrypts everything at rest.
  * @param {string} sessionToken - Supabase JWT token
  * @param {object} userProfile - User profile data
  */
 function saveSession(sessionToken, userProfile) {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(sessionToken)
-    store.set('session_token_encrypted', encrypted.toString('base64'))
-  } else {
-    logger.warn('⚠️ [AUTH] safeStorage not available, storing token without OS encryption')
-    store.set('session_token_encrypted', Buffer.from(sessionToken).toString('base64'))
-  }
+  store.set('session_token', sessionToken)
   store.set('user_profile', userProfile)
   logger.log(`✅ [AUTH] Session saved for user: ${userProfile.email}`)
 }
@@ -91,10 +59,7 @@ function saveSession(sessionToken, userProfile) {
  * Clear session (logout)
  */
 function clearSession() {
-  store.delete('session_token_encrypted')
-  store.delete('user_profile')
-  // Clean up legacy key from old versions
-  store.delete('session_token')
+  store.clear()
   logger.log('🚪 [AUTH] Session cleared (logout)')
 }
 
@@ -103,7 +68,25 @@ function clearSession() {
 // ============================================================================
 
 /**
+ * Cache subscription data in the auth store for offline startup.
+ * SecureStore encrypts it at rest automatically.
+ * @param {Object} subscriptionData - Subscription data from /api/subscription
+ */
+function _cacheSubscription(subscriptionData) {
+  store.set('cached_subscription', subscriptionData)
+}
+
+/**
+ * Get cached subscription data (for offline use).
+ * @returns {Object|null}
+ */
+function getCachedSubscription() {
+  return store.get('cached_subscription', null)
+}
+
+/**
  * Verify session is still valid with backend.
+ * Retries once on 401 (transient Supabase getUser failures on cold starts).
  *
  * Returns:
  *  - `{ valid: true, subscription }` — server confirmed the session
@@ -116,34 +99,71 @@ function clearSession() {
 async function verifySession(sessionToken) {
   if (!sessionToken) return { valid: false }
 
-  try {
-    const headers = {
-      'Authorization': `Bearer ${sessionToken}`,
+  const MAX_ATTEMPTS = 2
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const headers = {
+        'Authorization': `Bearer ${sessionToken}`,
+      }
+
+      // Include device ID for HWID binding enforcement
+      if (config.features.HWID_BINDING_ENABLED) {
+        headers['X-Device-ID'] = deviceService.getHwid()
+      }
+
+      const response = await net.fetch(`${BACKEND_URL}/api/subscription`, {
+        method: 'GET',
+        headers,
+      })
+
+      if (!response.ok) {
+        const status = response.status
+
+        // 401: retry once (transient Supabase getUser() failures on cold starts)
+        if (status === 401 && attempt < MAX_ATTEMPTS) {
+          logger.log('🔄 [AUTH] Retrying session verification after 401...')
+          await new Promise(r => setTimeout(r, 1500))
+          continue
+        }
+
+        // 401/403 after retries: server explicitly rejected the session
+        if (status === 401 || status === 403) {
+          logger.warn(`⚠️ [AUTH] Session explicitly rejected: ${status}`)
+          return { valid: false }
+        }
+
+        // Any other status (0, 500, 502, 503, etc.) — treat as transient/network error
+        // Don't invalidate the session when the server is just having issues
+        if (attempt < MAX_ATTEMPTS) {
+          logger.log(`🔄 [AUTH] Retrying after unexpected status ${status}...`)
+          await new Promise(r => setTimeout(r, 1000))
+          continue
+        }
+        logger.warn(`⚠️ [AUTH] Server returned ${status} — treating as network error`)
+        return { valid: false, networkError: true }
+      }
+
+      const data = await response.json()
+      // Cache subscription for offline use
+      _cacheSubscription(data)
+      return { valid: true, subscription: data }
+    } catch (err) {
+      // Network errors: retry once, then report networkError
+      if (attempt < MAX_ATTEMPTS) {
+        logger.log('🔄 [AUTH] Retrying session verification after network error...')
+        await new Promise(r => setTimeout(r, 1000))
+        continue
+      }
+      // Network errors (ERR_CONNECTION_REFUSED, DNS failure, etc.)
+      // should NOT invalidate a locally-stored session — server is just unreachable.
+      logger.error('❌ [AUTH] Session verification error:', err.message)
+      return { valid: false, networkError: true }
     }
-
-    // Include device ID for HWID binding enforcement
-    if (config.features.HWID_BINDING_ENABLED) {
-      headers['X-Device-ID'] = deviceService.getHwid()
-    }
-
-    const response = await net.fetch(`${BACKEND_URL}/api/subscription`, {
-      method: 'GET',
-      headers,
-    })
-
-    if (!response.ok) {
-      logger.warn(`⚠️ [AUTH] Session verification failed: ${response.status}`)
-      return { valid: false }
-    }
-
-    const data = await response.json()
-    return { valid: true, subscription: data }
-  } catch (err) {
-    // Network errors (ERR_CONNECTION_REFUSED, ERR_CONNECTION_RESET, DNS failure, etc.)
-    // should NOT invalidate a locally-stored session — the server is just unreachable.
-    logger.error('❌ [AUTH] Session verification error:', err.message)
-    return { valid: false, networkError: true }
   }
+
+  // Safety fallback: if loop exits without returning (should never happen),
+  // treat as network error to avoid clearing a valid session
+  return { valid: false, networkError: true }
 }
 
 /**
@@ -166,12 +186,13 @@ async function checkAuthStatus() {
   if (!verification.valid) {
     if (verification.networkError) {
       // Server unreachable — trust the locally stored session (offline-resilient).
-      // Don't clear the session; the user can still work offline.
+      // Return cached subscription so the UI can display plan info.
+      const cachedSub = getCachedSubscription()
       logger.warn('⚠️ [AUTH] Backend unreachable — keeping local session (offline mode)')
       return {
         isAuthenticated: true,
         user: userProfile,
-        subscription: null,
+        subscription: cachedSub,
         offline: true,
         deviceBlocked: false,
       }

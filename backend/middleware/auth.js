@@ -21,11 +21,38 @@ async function authenticateUser(req, res, next) {
     }
   })
 
-  // Verify token by fetching user
-  const { data: { user }, error } = await userSupabase.auth.getUser()
+  // Verify token by fetching user — retry once on transient failures
+  // Supabase getUser() can fail on cold starts or right after login
+  let user = null
+  let lastError = null
 
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid or expired token' })
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { data, error } = await userSupabase.auth.getUser()
+    if (!error && data?.user) {
+      user = data.user
+      break
+    }
+    lastError = error
+    if (attempt < 2) {
+      await new Promise(r => setTimeout(r, 1500))
+    }
+  }
+
+  if (!user) {
+    // Distinguish between "token is invalid" vs "can't reach Supabase"
+    // Supabase returns status 401/403 for invalid tokens.
+    // Network errors have no status, status 0, or messages like "fetch failed".
+    const errorStatus = lastError?.status
+    const isAuthRejection = errorStatus === 401 || errorStatus === 403
+
+    if (isAuthRejection) {
+      console.error('[AUTH] Token explicitly rejected by Supabase:', lastError?.message)
+      return res.status(401).json({ error: 'Invalid or expired token' })
+    }
+
+    // Network/transient error — Supabase is unreachable, don't blame the token
+    console.error('[AUTH] Cannot reach Supabase to verify token:', lastError?.message)
+    return res.status(503).json({ error: 'Authentication service temporarily unavailable' })
   }
 
   req.user = user

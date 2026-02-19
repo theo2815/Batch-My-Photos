@@ -46,6 +46,7 @@ function App() {
   const [subscription, setSubscription] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   // ============================================================================
   // CORE STATE
@@ -201,6 +202,7 @@ function App() {
       setIsAuthenticated(authStatus.isAuthenticated);
       setUser(authStatus.user);
       setSubscription(authStatus.subscription);
+      setIsOffline(authStatus.offline || false);
       setAuthLoading(false);
     }
     checkAuth();
@@ -415,6 +417,7 @@ function App() {
       const authStatus = await window.electronAPI.authCheckStatus();
       setUser(authStatus.user);
       setSubscription(authStatus.subscription);
+      setIsOffline(authStatus.offline || false);
       setIsAuthenticated(true);
     } finally {
       setIsVerifyingAuth(false);
@@ -427,6 +430,7 @@ function App() {
     setIsAuthenticated(false);
     setUser(null);
     setSubscription(null);
+    setIsOffline(false);
     // Reset app state when logging out
     handleReset();
   };
@@ -579,6 +583,10 @@ function App() {
             onGoBack={() => {
               clearBatchLimitExceeded();
             }}
+            onRetry={() => {
+              clearBatchLimitExceeded();
+              onConfirmExecute();
+            }}
           />
         )}
         {appState === STATES.EXECUTING && (
@@ -612,6 +620,11 @@ function App() {
             onReset={handleResetWithRollbackClear}
             onUndo={handleUndoClick}
             onShowHistory={() => setShowHistoryModal(true)}
+            onExportReport={async () => {
+              if (window.electronAPI?.exportBatchReport && executionResults) {
+                await window.electronAPI.exportBatchReport(executionResults);
+              }
+            }}
           />
         )}
         {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}

@@ -186,8 +186,8 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.checkBatchLimit(sessionToken);
     } catch (error) {
       logger.error('❌ [IPC] subscription-check-batch-limit failed:', error);
-      // Fail-safe: allow offline usage
-      return { canExecute: true, offline: true };
+      // Fail-CLOSED: deny execution when limit check throws unexpectedly
+      return { canExecute: false, error: 'Could not verify subscription status. Please try again.' };
     }
   });
 
@@ -429,9 +429,32 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
   ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
     logger.time('TOTAL_BATCH_EXECUTION');
     try {
+      // ── SUBSCRIPTION LIMIT GUARD (server-side, not bypassable from renderer) ──
+      const sessionToken = authService.getStoredSession();
+      if (!sessionToken) {
+        return { success: false, error: 'Not authenticated. Please log in to execute batches.' };
+      }
+
+      let limitCheck;
+      try {
+        limitCheck = await subscriptionService.checkBatchLimit(sessionToken);
+      } catch (limitErr) {
+        logger.error('❌ [IPC] Subscription limit check threw in execute-batch:', limitErr);
+        // Fail-CLOSED: deny execution when limit check itself throws
+        return { success: false, error: 'Could not verify subscription status. Please try again.' };
+      }
+
+      if (!limitCheck.canExecute) {
+        logger.warn('🔒 [IPC] Batch execution blocked by subscription limit');
+        return {
+          success: false,
+          error: limitCheck.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.',
+          code: 'BATCH_LIMIT_EXCEEDED',
+        };
+      }
+
       // DEVICE GUARD: Live-verify this device is still registered on the server
       if (config.features.HWID_BINDING_ENABLED) {
-        const sessionToken = authService.getStoredSession();
         const deviceCheck = await deviceService.verifyDeviceLive(sessionToken);
         if (!deviceCheck.authorized) {
           logger.warn('🔒 [DEVICE] Blocked execute-batch — device not authorized:', deviceCheck.reason);
@@ -623,11 +646,20 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         mode,  // Include mode for rollback availability check
         results: resultsArray,
         outputDir: baseOutputDir,
+        sourceFolder: folderPath,
         hasErrors: errors.length > 0,
         errorCount: errors.length,
         errors: errors.length > 0 ? errors.slice(0, 10) : null,  // Return first 10 errors
         blurryFileCount: blurryFiles.length,
         blurryFolderName: blurryFolderName,
+        // Per-file operations for CSV export (original → new path mapping)
+        operations: operations.map(op => ({
+          fileName: op.fileName,
+          originalPath: op.sourcePath,
+          newPath: op.destPath,
+          batchFolder: path.basename(path.dirname(op.destPath)),
+        })),
+        completedAt: new Date().toISOString(),
       };
       
       // Save rollback manifest for successful move operations (if feature is enabled)
@@ -1581,6 +1613,145 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: err.message };
     }
   });
+
+  // ============================================================================
+  // 8. EXPORT BATCH REPORT (CSV)
+  // ============================================================================
+
+  /**
+   * Handler: Export a single batch operation as a CSV file.
+   * Opens a save dialog, writes CSV with per-file details.
+   */
+  ipcMain.handle('export-batch-report', async (event, data) => {
+    try {
+      const { operations, mode, sourceFolder, outputDir, completedAt, results, errors } = data || {};
+
+      if (!Array.isArray(operations) || operations.length === 0) {
+        return { success: false, error: 'No operations data to export' };
+      }
+
+      const dateStr = new Date(completedAt || Date.now()).toISOString().slice(0, 10);
+      const defaultName = `BatchMyPhotos_Report_${dateStr}.csv`;
+
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
+        title: 'Export Batch Report',
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      });
+
+      if (canceled || !savePath) {
+        return { success: false, cancelled: true };
+      }
+
+      // Build error lookup for status column
+      const errorMap = new Map();
+      if (Array.isArray(errors)) {
+        for (const e of errors) {
+          if (e.file) errorMap.set(e.file, e.error || 'Unknown error');
+        }
+      }
+
+      // CSV header
+      const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
+      const header = 'File Name,Original Path,New Path,Batch Folder,Status,Error';
+      const rows = operations.map(op => {
+        const status = errorMap.has(op.fileName) ? 'Error' : 'Success';
+        const errorMsg = errorMap.get(op.fileName) || '';
+        return [
+          csvEscape(op.fileName),
+          csvEscape(op.originalPath),
+          csvEscape(op.newPath),
+          csvEscape(op.batchFolder),
+          status,
+          csvEscape(errorMsg),
+        ].join(',');
+      });
+
+      // Summary rows at the top
+      const summary = [
+        `# BatchMyPhotos Report`,
+        `# Date: ${new Date(completedAt || Date.now()).toLocaleString()}`,
+        `# Mode: ${mode || 'N/A'}`,
+        `# Source: ${sourceFolder || 'N/A'}`,
+        `# Output: ${outputDir || 'N/A'}`,
+        `# Files: ${operations.length}`,
+        `# Batches: ${results?.length || 'N/A'}`,
+        '',
+      ];
+
+      const csv = BOM + summary.join('\n') + header + '\n' + rows.join('\n');
+      await fsPromises.writeFile(savePath, csv, 'utf8');
+
+      return { success: true, filePath: savePath };
+    } catch (error) {
+      logger.error('Export batch report failed:', error);
+      return { success: false, error: sanitizeError(error, 'export-batch-report') };
+    }
+  });
+
+  /**
+   * Handler: Export all operation history as a CSV summary.
+   */
+  ipcMain.handle('export-history-report', async () => {
+    try {
+      const history = rollbackManager.getOperationHistory();
+
+      if (!Array.isArray(history) || history.length === 0) {
+        return { success: false, error: 'No history to export' };
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const defaultName = `BatchMyPhotos_History_${dateStr}.csv`;
+
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
+        title: 'Export History Report',
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      });
+
+      if (canceled || !savePath) {
+        return { success: false, cancelled: true };
+      }
+
+      const BOM = '\uFEFF';
+      const header = 'Date,Source Folder,Output Folder,Mode,Files Processed,Batches Created,Output Prefix,Sort By';
+      const rows = history.map(entry => {
+        const date = entry.createdAt
+          ? new Date(entry.createdAt).toLocaleString()
+          : 'N/A';
+        return [
+          csvEscape(date),
+          csvEscape(entry.sourceFolder || ''),
+          csvEscape(entry.outputFolder || ''),
+          entry.mode || 'move',
+          entry.totalFiles || 0,
+          entry.batchFolderCount || entry.batchFolders?.length || 0,
+          csvEscape(entry.outputPrefix || ''),
+          entry.sortBy || 'name-asc',
+        ].join(',');
+      });
+
+      const csv = BOM + header + '\n' + rows.join('\n');
+      await fsPromises.writeFile(savePath, csv, 'utf8');
+
+      return { success: true, filePath: savePath };
+    } catch (error) {
+      logger.error('Export history report failed:', error);
+      return { success: false, error: sanitizeError(error, 'export-history-report') };
+    }
+  });
+}
+
+/**
+ * Escape a value for CSV: wrap in quotes if it contains commas, quotes, or newlines.
+ */
+function csvEscape(val) {
+  if (val == null) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 module.exports = { registerIpcHandlers };

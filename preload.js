@@ -529,6 +529,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} { success }
    */
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+
+  // ============================================================================
+  // EXPORT REPORT APIs
+  // ============================================================================
+
+  /**
+   * Export a single batch operation as a detailed CSV file.
+   * Opens a save dialog for the user to choose the save location.
+   * @param {Object} data - Execution results with operations array
+   * @returns {Promise<Object>} { success, filePath } or { success: false, cancelled: true }
+   */
+  exportBatchReport: (data) => ipcRenderer.invoke('export-batch-report', data),
+
+  /**
+   * Export all operation history as a CSV summary.
+   * Opens a save dialog for the user to choose the save location.
+   * @returns {Promise<Object>} { success, filePath } or { success: false, cancelled: true }
+   */
+  exportHistoryReport: () => ipcRenderer.invoke('export-history-report'),
 });
 
 // Log when preload script is loaded (helpful for debugging)

@@ -151,29 +151,31 @@ export function useBatchExecution({ setAppState, setError }) {
       limitCheck = await window.electronAPI.subscriptionCheckBatchLimit(authSession.sessionToken);
     } catch (err) {
       console.error('[SUBSCRIPTION] Limit check failed:', err);
-      // Fail-safe: allow execution if the check itself errors
-      limitCheck = { canExecute: true, offline: true };
+      // Fail-CLOSED: deny execution when the check itself errors
+      limitCheck = { canExecute: false, error: 'Could not verify subscription status. Please try again.' };
     } finally {
       setIsCheckingLimit(false);
     }
 
-    if (!limitCheck.canExecute && !limitCheck.offline) {
-      // User has exceeded their limit - show dedicated limit card
-      const message = limitCheck.subscriptionExpired
-        ? `Your Pro subscription has expired. Renew now to continue using unlimited batches.`
-        : `You've reached your monthly limit of ${limitCheck.usage?.limit || 5} batches. Upgrade to Pro for unlimited batches.`;
+    if (!limitCheck.canExecute) {
+      // User has exceeded their limit (online or offline) — show limit card
+      const message = limitCheck.error ||
+        (limitCheck.subscriptionExpired
+          ? `Your Pro subscription has expired. Renew now to continue using unlimited batches.`
+          : `You've reached your monthly limit of ${limitCheck.usage?.limit || 5} batches. Upgrade to Pro for unlimited batches.`);
 
       setBatchLimitExceeded({
         message,
         usage: limitCheck.usage || null,
         isExpired: !!limitCheck.subscriptionExpired,
+        isOfflineFree: !!limitCheck.freeOffline,
       });
       return;
     }
 
-    // If offline, log warning but allow execution (fail-safe mode)
+    // If offline but allowed to execute, log it
     if (limitCheck.offline) {
-      console.warn('[SUBSCRIPTION] Operating in offline mode - batch limits not enforced');
+      console.warn('[SUBSCRIPTION] Operating in offline mode — using cached subscription data');
     }
 
     // ============================================================================

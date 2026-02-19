@@ -41,7 +41,7 @@ if (process.defaultApp) {
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
-const Store = require('electron-store');
+const SecureStore = require('./src/main/secureStore');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 const { isPathAllowedAsync } = require('./src/main/securityManager');
@@ -65,27 +65,27 @@ logger.log('💾 [CACHE] Set cache path to:', cachePath);
 // ============================================================================
 // PERSISTENT STATE MANAGEMENT
 // ============================================================================
-// Initialize electron-store for persistent user preferences and session data.
-// No encryption key needed — preferences (theme, recent folders) are non-sensitive.
+// Initialize SecureStore for persistent user preferences and session data.
+// All data is encrypted via OS keychain (safeStorage / Windows DPAPI) so
+// technical users cannot edit the JSON file to bypass limits.
 //
-// Migration: Old versions used a hardcoded encryptionKey which produced binary
-// data in the JSON file. Without that key, electron-store fails to parse it.
-// Delete the old file if it exists so we start fresh with defaults.
+// Migration: SecureStore automatically migrates existing plain-text JSON
+// into an encrypted blob on first access after this upgrade.
 let store;
 try {
-  store = new Store({
-    projectName: 'BatchMyPhotos',
+  store = new SecureStore({
+    name: 'config',
     defaults: {
       theme: 'dark',
       recentFolders: [],
     },
   });
 } catch (_err) {
-  logger.warn('⚠️ [STORE] Old encrypted preferences store is unreadable — deleting and starting fresh');
+  logger.warn('⚠️ [STORE] Preferences store unreadable — deleting and starting fresh');
   const storeFile = path.join(app.getPath('userData'), 'config.json');
   try { fs.unlinkSync(storeFile); } catch (_e) { /* file may not exist */ }
-  store = new Store({
-    projectName: 'BatchMyPhotos',
+  store = new SecureStore({
+    name: 'config',
     defaults: {
       theme: 'dark',
       recentFolders: [],

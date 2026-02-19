@@ -227,30 +227,41 @@ router.get('/transactions', authenticateUser, async (req, res) => {
 router.post('/check-batch-limit', authenticateUser, async (req, res) => {
   try {
     const user = req.user
-    const supabase = req.supabase // Use RLS-enabled client
+    const supabaseAdmin = req.app.locals.supabaseAdmin // Use admin client — bypasses RLS
     const currentMonth = new Date().toISOString().slice(0, 7)
 
     // Get current usage
-    const { data: usageData } = await supabase
+    const { data: usageData, error: usageError } = await supabaseAdmin
       .from('batch_usage')
       .select('batch_count')
       .eq('user_id', user.id)
       .eq('month_year', currentMonth)
 
+    if (usageError) {
+      console.error('Batch usage query error:', usageError)
+    }
+
     const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
 
     // Get subscription status
-    const { data: sub } = await supabase
+    const { data: sub, error: subError } = await supabaseAdmin
       .from('subscriptions')
       .select('plan, status, expires_at')
       .eq('user_id', user.id)
       .single()
+
+    if (subError && subError.code !== 'PGRST116') {
+      // PGRST116 = "no rows returned" — expected for new users with no subscription row
+      console.error('Subscription query error:', subError)
+    }
 
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
 
     const canExecute = isPro || currentUsage < FREE_LIMIT
     const remaining = isPro ? null : Math.max(0, FREE_LIMIT - currentUsage)
+
+    console.log(`[CHECK-LIMIT] user=${user.id} plan=${sub?.plan} status=${sub?.status} expired=${isExpired} isPro=${isPro} usage=${currentUsage} canExecute=${canExecute}`)
 
     res.json({
       can_execute: canExecute,
@@ -260,6 +271,7 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
         limit: isPro ? null : FREE_LIMIT, // null = unlimited
         remaining: remaining              // null = unlimited
       },
+      expires_at: sub?.expires_at || null,
       subscription_expired: !!isExpired,
       needs_renewal: !!(isExpired && sub),
     })

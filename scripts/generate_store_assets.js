@@ -3,11 +3,17 @@ const fs = require('fs');
 const path = require('path');
 
 const sourceIcon = path.join(__dirname, '../src/images/app_icon.png');
-const outputDir = path.join(__dirname, '../src/images/store');
 
-if (!fs.existsSync(outputDir)) {
-  fs.mkdirSync(outputDir, { recursive: true });
-}
+// Legacy output dir (for website/misc use)
+const outputDir = path.join(__dirname, '../src/images/store');
+// AppX assets dir — electron-builder reads from build/appx/
+const appxDir = path.join(__dirname, '../build/appx');
+
+[outputDir, appxDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 const imagesToGenerate = [
   { name: 'PosterArt_720x1280.png', width: 720, height: 1280, fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } }, // 9:16
@@ -15,6 +21,19 @@ const imagesToGenerate = [
   { name: 'AppTile_150x150.png', width: 150, height: 150 }, // 1:1
   { name: 'AppTile_44x44.png', width: 44, height: 44 }, // 1:1
   { name: 'StoreLogo_50x50.png', width: 50, height: 50 }, // 1:1
+];
+
+// AppX assets required by electron-builder (placed in build/appx/)
+// These names must match exactly for electron-builder to pick them up.
+// See: https://www.electron.build/appx#appx-assets
+const appxAssets = [
+  { name: 'Square44x44Logo.png',   width: 44,  height: 44  },
+  { name: 'Square150x150Logo.png', width: 150, height: 150 },
+  { name: 'Wide310x150Logo.png',   width: 310, height: 150, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  { name: 'StoreLogo.png',         width: 50,  height: 50  },
+  { name: 'SmallTile.png',         width: 71,  height: 71  }, // Square71x71Logo (optional but recommended)
+  { name: 'LargeTile.png',         width: 310, height: 310 }, // Square310x310Logo (optional but recommended)
+  { name: 'SplashScreen.png',      width: 620, height: 300, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }, // optional
 ];
 
 
@@ -53,29 +72,34 @@ async function generatePosterArt() {
   }
 }
 
+async function resizeImage(src, destPath, width, height, fit, background) {
+  let pipeline = sharp(src);
+  if (fit === 'contain') {
+    pipeline = pipeline.resize({
+      width,
+      height,
+      fit: 'contain',
+      background: background || { r: 0, g: 0, b: 0, alpha: 0 }
+    });
+  } else {
+    pipeline = pipeline.resize(width, height);
+  }
+  await pipeline.toFile(destPath);
+}
+
 async function generateImages() {
   console.log('Generating store assets...');
 
-  // Generate standard resized images (excluding the old PosterArt logic)
+  // Generate legacy store assets (src/images/store/)
   for (const image of imagesToGenerate) {
-    if (image.name.includes('PosterArt')) continue; // Skip standard poster art logic
-
+    if (image.name.includes('PosterArt')) continue;
     try {
-      let pipeline = sharp(sourceIcon);
-
-      if (image.fit === 'contain') {
-        pipeline = pipeline.resize({
-          width: image.width,
-          height: image.height,
-          fit: 'contain',
-          background: image.background || { r: 0, g: 0, b: 0, alpha: 0 }
-        });
-      } else {
-        pipeline = pipeline.resize(image.width, image.height);
-      }
-
-      await pipeline.toFile(path.join(outputDir, image.name));
-      console.log(`Generated: ${image.name}`);
+      await resizeImage(
+        sourceIcon,
+        path.join(outputDir, image.name),
+        image.width, image.height, image.fit, image.background
+      );
+      console.log(`Generated (legacy): ${image.name}`);
     } catch (error) {
       console.error(`Error generating ${image.name}:`, error);
     }
@@ -84,7 +108,22 @@ async function generateImages() {
   // Generate specific Poster Art
   await generatePosterArt();
 
-  console.log('Done.');
+  // Generate AppX assets (build/appx/) — these are what electron-builder packages
+  console.log('\nGenerating AppX tile assets...');
+  for (const asset of appxAssets) {
+    try {
+      await resizeImage(
+        sourceIcon,
+        path.join(appxDir, asset.name),
+        asset.width, asset.height, asset.fit, asset.background
+      );
+      console.log(`Generated (appx): ${asset.name}`);
+    } catch (error) {
+      console.error(`Error generating AppX asset ${asset.name}:`, error);
+    }
+  }
+
+  console.log('\nDone. AppX assets are in build/appx/ — electron-builder will pick them up automatically.');
 }
 
 generateImages();

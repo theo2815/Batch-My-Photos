@@ -22,12 +22,12 @@
 const os = require('os')
 const { machineIdSync } = require('node-machine-id')
 const { net } = require('electron')
-const Store = require('electron-store')
+const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
 const config = require('./config')
 
 // Persistent cache so we never need to re-query the OS after first run
-const deviceStore = new Store({ name: 'device-info' })
+const deviceStore = new SecureStore({ name: 'device-info' })
 
 const API_BASE = config.urls.BACKEND_URL
 

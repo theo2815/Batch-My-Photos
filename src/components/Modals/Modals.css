@@ -940,6 +940,13 @@
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.history-footer-left,
+.history-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .history-count {
   font-size: 0.75rem;
   color: var(--text-muted);

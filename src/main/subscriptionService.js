@@ -2,16 +2,18 @@
  * Subscription Service for Desktop App
  *
  * Handles batch limit checking and usage tracking by communicating
- * with the backend API. Free users have a 5 batches/month limit,
+ * with the backend API. Free users have a 2 batches/month limit,
  * Pro users have unlimited batches.
  *
  * Offline mode: When the backend is unreachable, enforces limits
  * against a locally cached subscription state instead of allowing
  * unlimited access. Cache is updated on every successful API call.
+ *
+ * All cached data is encrypted at rest via SecureStore (safeStorage).
  */
 
 const { net } = require('electron')
-const Store = require('electron-store')
+const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
 const config = require('./config')
 const deviceService = require('./deviceService')
@@ -21,19 +23,42 @@ const API_BASE = config.urls.BACKEND_URL
 const FREE_LIMIT = 2
 const CACHE_STALE_DAYS = 7
 
-// Persistent cache for offline subscription enforcement
-const cache = new Store({ name: 'subscription-cache' })
+// Persistent cache for offline subscription enforcement.
+// SecureStore encrypts the entire JSON file via safeStorage (OS keychain / DPAPI).
+const cache = new SecureStore({ name: 'subscription-cache' })
+
+// ── Cache helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Read the subscription cache state.
+ * @returns {Object|null} { lastVerifiedAt, canExecute, isPro, expiresAt, usage } or null
+ */
+function _readSecureCache() {
+  return cache.get('state', null)
+}
+
+/**
+ * Write the subscription cache state.
+ * @param {Object} state - Complete cache state to persist
+ */
+function _writeSecureCache(state) {
+  cache.set('state', state)
+}
 
 /**
  * Save subscription state to local cache after a successful API response.
  * @param {Object} data - API response from check-batch-limit
  */
 function _cacheSubscriptionState(data) {
-  cache.set('lastVerifiedAt', Date.now())
-  cache.set('canExecute', data.canExecute)
-  cache.set('isPro', data.isPro || false)
-  cache.set('usage', data.usage || { used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT })
-  logger.log('💾 [SUBSCRIPTION] Cached subscription state')
+  const state = {
+    lastVerifiedAt: Date.now(),
+    canExecute: data.canExecute,
+    isPro: data.isPro || false,
+    expiresAt: data.expiresAt || null,
+    usage: data.usage || { used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT },
+  }
+  _writeSecureCache(state)
+  logger.log('💾 [SUBSCRIPTION] Cached subscription state (encrypted)')
 }
 
 /**
@@ -41,10 +66,14 @@ function _cacheSubscriptionState(data) {
  * @param {number} batchCount - Number of batches to add
  */
 function _incrementCachedUsage(batchCount) {
-  const usage = cache.get('usage', { used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT })
+  const state = _readSecureCache()
+  if (!state) return
+
+  const usage = state.usage || { used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT }
   usage.used += batchCount
   usage.remaining = Math.max(0, (usage.limit === null ? Infinity : usage.limit) - usage.used)
-  cache.set('usage', usage)
+  state.usage = usage
+  _writeSecureCache(state)
 }
 
 /**
@@ -52,12 +81,10 @@ function _incrementCachedUsage(batchCount) {
  * @returns {Object} Subscription check result based on cached data
  */
 function _enforceFromCache() {
-  const lastVerified = cache.get('lastVerifiedAt', null)
-  const isPro = cache.get('isPro', false)
-  const usage = cache.get('usage', null)
+  const state = _readSecureCache()
 
   // No cache at all (first-ever run, never connected) — require internet
-  if (!lastVerified || !usage) {
+  if (!state || !state.lastVerifiedAt || !state.usage) {
     logger.warn('⚠️ [SUBSCRIPTION] No cached state — internet connection required')
     return {
       canExecute: false,
@@ -68,7 +95,7 @@ function _enforceFromCache() {
   }
 
   // Cache too stale — require reconnection
-  const staleDays = (Date.now() - lastVerified) / (1000 * 60 * 60 * 24)
+  const staleDays = (Date.now() - state.lastVerifiedAt) / (1000 * 60 * 60 * 24)
   if (staleDays > CACHE_STALE_DAYS) {
     logger.warn(`⚠️ [SUBSCRIPTION] Cache is ${Math.floor(staleDays)} days old — requiring reconnection`)
     return {
@@ -78,20 +105,30 @@ function _enforceFromCache() {
     }
   }
 
-  // Pro users with fresh cache — allow
-  if (isPro) {
+  // Pro users with fresh cache — check if subscription has expired since last verification
+  if (state.isPro) {
+    if (state.expiresAt && new Date(state.expiresAt) < new Date()) {
+      logger.warn('⚠️ [SUBSCRIPTION] Pro subscription expired while offline')
+      return {
+        canExecute: false,
+        offline: true,
+        isPro: false,
+        subscriptionExpired: true,
+        error: 'Your Pro subscription has expired. Please connect to the internet to renew.',
+      }
+    }
     logger.log('✅ [SUBSCRIPTION] Offline mode — Pro plan cached, allowing batch')
-    return { canExecute: true, offline: true, isPro: true, usage }
+    return { canExecute: true, offline: true, isPro: true, usage: state.usage }
   }
 
-  // Free users — enforce cached limits
-  const canExecute = usage.used < FREE_LIMIT
-  logger.log(`✅ [SUBSCRIPTION] Offline mode — Free plan: ${usage.used}/${FREE_LIMIT} used, canExecute=${canExecute}`)
+  // Free users — MUST be online to batch (no offline batching for free accounts)
+  logger.warn('⚠️ [SUBSCRIPTION] Free user offline — blocking batch execution')
   return {
-    canExecute,
+    canExecute: false,
     offline: true,
     isPro: false,
-    usage: { ...usage, limit: FREE_LIMIT, remaining: Math.max(0, FREE_LIMIT - usage.used) },
+    freeOffline: true,
+    error: 'You need an internet connection to run batches on the Free plan. Connect to Wi-Fi and try again, or upgrade to Pro for offline batching.',
   }
 }
 
@@ -108,51 +145,74 @@ async function checkBatchLimit(sessionToken) {
     return { canExecute: false, error: 'Not authenticated' }
   }
 
-  try {
-    logger.log('🔍 [SUBSCRIPTION] Checking batch limit...')
+  const headers = {
+    'Authorization': `Bearer ${sessionToken}`,
+    'Content-Type': 'application/json',
+  }
 
-    const headers = {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
+  // Include device ID for HWID enforcement
+  if (config.features.HWID_BINDING_ENABLED) {
+    headers['X-Device-ID'] = deviceService.getHwid()
+  }
+
+  // Retry once on 401 — Supabase getUser() can fail transiently on cold starts
+  const MAX_ATTEMPTS = 2
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      logger.log(`🔍 [SUBSCRIPTION] Checking batch limit... (attempt ${attempt})`)
+
+      const response = await net.fetch(`${API_BASE}/api/check-batch-limit`, {
+        method: 'POST',
+        headers,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        logger.warn(`⚠️ [SUBSCRIPTION] Batch limit check failed: ${errorData.error}`)
+
+        // On 401, retry once after a brief delay (token validation can be transient)
+        if (response.status === 401 && attempt < MAX_ATTEMPTS) {
+          logger.log('🔄 [SUBSCRIPTION] Retrying after 401...')
+          await new Promise(r => setTimeout(r, 1500))
+          continue
+        }
+
+        // All retries exhausted — fall back to cached subscription state
+        // This lets Pro users batch even with an expired JWT (until cache goes stale)
+        logger.warn('⚠️ [SUBSCRIPTION] API auth failed — falling back to cached state')
+        return _enforceFromCache()
+      }
+
+      const data = await response.json()
+      logger.log(`✅ [SUBSCRIPTION] Can execute: ${data.can_execute}, Pro: ${data.is_pro}`)
+
+      const result = {
+        canExecute: data.can_execute,
+        usage: data.usage,
+        isPro: data.is_pro,
+        expiresAt: data.expires_at || null,
+        needsRenewal: data.needs_renewal,
+        subscriptionExpired: data.subscription_expired,
+      }
+
+      // Cache the successful response for offline enforcement
+      _cacheSubscriptionState(result)
+
+      return result
+    } catch (err) {
+      logger.error('❌ [SUBSCRIPTION] Check batch limit failed:', err.message)
+
+      // On network error, retry once before falling back to cache
+      if (attempt < MAX_ATTEMPTS) {
+        logger.log('🔄 [SUBSCRIPTION] Retrying after network error...')
+        await new Promise(r => setTimeout(r, 1000))
+        continue
+      }
+
+      // Offline: enforce limits from cached subscription state
+      logger.warn('⚠️ [SUBSCRIPTION] Operating in offline mode — enforcing cached limits')
+      return _enforceFromCache()
     }
-
-    // Include device ID for HWID enforcement
-    if (config.features.HWID_BINDING_ENABLED) {
-      headers['X-Device-ID'] = deviceService.getHwid()
-    }
-
-    const response = await net.fetch(`${API_BASE}/api/check-batch-limit`, {
-      method: 'POST',
-      headers,
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      logger.warn(`⚠️ [SUBSCRIPTION] Batch limit check failed: ${errorData.error}`)
-      return { canExecute: false, error: errorData.error }
-    }
-
-    const data = await response.json()
-    logger.log(`✅ [SUBSCRIPTION] Can execute: ${data.can_execute}, Pro: ${data.is_pro}`)
-
-    const result = {
-      canExecute: data.can_execute,
-      usage: data.usage,
-      isPro: data.is_pro,
-      needsRenewal: data.needs_renewal,
-      subscriptionExpired: data.subscription_expired,
-    }
-
-    // Cache the successful response for offline enforcement
-    _cacheSubscriptionState(result)
-
-    return result
-  } catch (err) {
-    logger.error('❌ [SUBSCRIPTION] Check batch limit failed:', err.message)
-
-    // Offline: enforce limits from cached subscription state
-    logger.warn('⚠️ [SUBSCRIPTION] Operating in offline mode — enforcing cached limits')
-    return _enforceFromCache()
   }
 }
 
@@ -205,10 +265,12 @@ async function trackBatchExecution(sessionToken, batchCount = 1) {
     logger.log(`✅ [SUBSCRIPTION] Tracked ${batchCount} batch(es) successfully`)
     logger.log(`   Usage: ${data.usage.used}/${data.usage.limit == null ? '∞' : data.usage.limit}`)
 
-    // Update cache with latest usage
+    // Update cache with latest usage (preserve expiresAt from existing cache)
+    const currentState = _readSecureCache()
     _cacheSubscriptionState({
       canExecute: true,
-      isPro: cache.get('isPro', false),
+      isPro: currentState?.isPro || false,
+      expiresAt: currentState?.expiresAt || null,
       usage: data.usage,
     })
 
@@ -265,6 +327,7 @@ async function refreshSubscription(sessionToken) {
     _cacheSubscriptionState({
       canExecute: true,
       isPro: data.plan === 'pro',
+      expiresAt: data.expires_at || null,
       usage: data.usage,
     })
 
