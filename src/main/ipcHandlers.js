@@ -1513,6 +1513,74 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: sanitizeError(error, 'clear-operation-history') };
     }
   });
+
+  // ============================================================================
+  // 7. VERSION CHECK
+  // ============================================================================
+
+  /**
+   * Handler: Check if a newer app version is available.
+   * Pings the backend /api/version endpoint, compares with app.getVersion(),
+   * and returns the result. Fails silently (returns updateAvailable: false)
+   * so the app works fine offline.
+   */
+  ipcMain.handle('check-app-version', async () => {
+    const { app, net } = require('electron');
+    const currentVersion = app.getVersion();
+
+    try {
+      const url = `${config.urls.BACKEND_URL}/api/version`;
+      const response = await net.fetch(url, { method: 'GET' });
+
+      if (!response.ok) {
+        return { updateAvailable: false, currentVersion };
+      }
+
+      const data = await response.json();
+      const latest = data.latestVersion || currentVersion;
+
+      // Simple semver comparison (major.minor.patch)
+      const compareSemver = (a, b) => {
+        const pa = a.split('.').map(Number);
+        const pb = b.split('.').map(Number);
+        for (let i = 0; i < 3; i++) {
+          if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+          if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+        }
+        return 0;
+      };
+
+      const updateAvailable = compareSemver(currentVersion, latest) < 0;
+
+      return {
+        updateAvailable,
+        currentVersion,
+        latestVersion: latest,
+        downloadUrl: data.downloadUrl || '',
+        releaseDate: data.releaseDate || '',
+      };
+    } catch (err) {
+      // Network error, timeout, offline — silently skip
+      logger.log('[VERSION] Check failed (offline?):', err.message);
+      return { updateAvailable: false, currentVersion };
+    }
+  });
+
+  /**
+   * Handler: Open a URL in the user's default browser.
+   * Only allows https:// URLs for security.
+   */
+  ipcMain.handle('open-external-url', async (event, url) => {
+    if (typeof url !== 'string' || !url.startsWith('https://')) {
+      return { success: false, error: 'Only HTTPS URLs are allowed' };
+    }
+    try {
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };

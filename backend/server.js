@@ -101,6 +101,17 @@ app.locals.supabaseAdmin = supabaseAdmin
 // Routes
 // (Root route removed to allow static website to serve index.html)
 
+// ── App Version Check ────────────────────────────────────────────────────────
+// The desktop app pings this on launch to check if a newer version is available.
+// Update LATEST_APP_VERSION env var (or the default below) when you release.
+app.get('/api/version', (req, res) => {
+  res.json({
+    latestVersion: process.env.LATEST_APP_VERSION || '1.0.1',
+    downloadUrl: process.env.APP_DOWNLOAD_URL || 'https://www.batchmyphotos.com/#pricing',
+    releaseDate: process.env.APP_RELEASE_DATE || '2026-02-18',
+  })
+})
+
 // ── Health Check ─────────────────────────────────────────────────────────────
 // Used by Railway/Render/monitoring tools to verify the service is healthy
 app.get('/api/health', async (req, res) => {

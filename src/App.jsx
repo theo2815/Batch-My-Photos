@@ -23,6 +23,7 @@ import { useFolderSelection } from './hooks/useFolderSelection';
 import { useBatchExecution } from './hooks/useBatchExecution';
 import { useRollback } from './hooks/useRollback';
 import { useBlurDetection } from './hooks/useBlurDetection';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 // Authentication Components
 import { LoginScreen } from './components/Auth/LoginScreen';
@@ -34,6 +35,7 @@ import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard,
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
 import BoxSpinner from './components/common/BoxSpinner';
+import { UpdateBanner } from './components/common/UpdateBanner';
 
 function App() {
   // ============================================================================
@@ -93,6 +95,9 @@ function App() {
 
   // Device manager modal state
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
+
+  // Version update check
+  const { showBanner, latestVersion, downloadUrl, dismiss: dismissUpdate } = useUpdateCheck();
 
   const batch = useBatchExecution({ setAppState, setError });
   const {
@@ -481,6 +486,13 @@ function App() {
   // Main app (authenticated users only)
   return (
     <div className={`app ${isProcessing ? 'processing' : ''}`}>
+      {showBanner && (
+        <UpdateBanner
+          latestVersion={latestVersion}
+          downloadUrl={downloadUrl}
+          onDismiss={dismissUpdate}
+        />
+      )}
       <header className="app-header">
         <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>

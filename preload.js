@@ -512,6 +512,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('update-status', listener);
     };
   },
+
+  // ============================================================================
+  // VERSION CHECK API
+  // ============================================================================
+
+  /**
+   * Check if a newer app version is available by pinging the backend.
+   * Returns { updateAvailable, currentVersion, latestVersion, downloadUrl, releaseDate }
+   */
+  checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
+
+  /**
+   * Open a URL in the user's default browser (HTTPS only)
+   * @param {string} url - The URL to open
+   * @returns {Promise<Object>} { success }
+   */
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
 });
 
 // Log when preload script is loaded (helpful for debugging)
