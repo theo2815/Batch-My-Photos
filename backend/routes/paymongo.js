@@ -1,6 +1,7 @@
 const express = require('express')
 const crypto = require('crypto')
 const { authenticateUser } = require('../middleware/auth')
+const { sendPaymentConfirmation, sendSubscriptionCancelled } = require('../services/emailService')
 const router = express.Router()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -49,10 +50,10 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
     .update(payload)
     .digest('hex')
 
-  return crypto.timingSafeEqual(
-    Buffer.from(computed, 'hex'),
-    Buffer.from(expectedSig, 'hex')
-  )
+  const computedBuf = Buffer.from(computed, 'hex')
+  const expectedBuf = Buffer.from(expectedSig, 'hex')
+  if (computedBuf.length !== expectedBuf.length) return false
+  return crypto.timingSafeEqual(computedBuf, expectedBuf)
 }
 
 // ── POST /api/checkout — Create a Checkout Session ────────────────────────────
@@ -65,9 +66,21 @@ router.post('/checkout', authenticateUser, async (req, res) => {
     
     // Use provided redirect_url (from client) or fallback to env var
     // This ensures users on localhost:5173 get redirected back to localhost:5173 (preserving session)
-    const baseUrl = (redirect_url && typeof redirect_url === 'string') 
-      ? redirect_url.replace(/\/$/, '') // remove trailing slash
-      : process.env.FRONTEND_URL
+    // SECURITY: Validate redirect_url against allowlist to prevent open redirect attacks
+    const ALLOWED_REDIRECT_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'localhost']
+    let baseUrl = process.env.FRONTEND_URL
+    if (redirect_url && typeof redirect_url === 'string') {
+      try {
+        const parsed = new URL(redirect_url)
+        if (ALLOWED_REDIRECT_HOSTS.includes(parsed.hostname)) {
+          baseUrl = redirect_url.replace(/\/$/, '') // remove trailing slash
+        } else {
+          console.warn(`Checkout: rejected redirect_url with host "${parsed.hostname}"`)
+        }
+      } catch {
+        console.warn('Checkout: rejected malformed redirect_url')
+      }
+    }
 
     const response = await fetch(`${PAYMONGO_API}/checkout_sessions`, {
       method: 'POST',
@@ -92,7 +105,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
                 quantity: 1,
               },
             ],
-            payment_method_types: ['gcash', 'card'],
+            payment_method_types: ['gcash', 'card', 'qrph', 'paymaya', 'grab_pay', 'dob', 'billease'],
             success_url: `${baseUrl}/dashboard?payment=success`,
             cancel_url: `${baseUrl}/dashboard?payment=cancelled`,
             reference_number: user.id,
@@ -129,7 +142,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
 
 router.get('/subscription', authenticateUser, async (req, res) => {
   try {
-    const supabase = req.app.locals.supabaseAdmin // Use admin client to bypass RLS
+    const supabase = req.supabase // Use RLS-enabled client
     const user = req.user
 
     const { data, error } = await supabase
@@ -195,7 +208,7 @@ router.get('/subscription', authenticateUser, async (req, res) => {
 
 router.get('/transactions', authenticateUser, async (req, res) => {
   try {
-    const supabase = req.app.locals.supabaseAdmin
+    const supabase = req.supabase // Use RLS-enabled client
     const user = req.user
 
     // Pagination: ?limit=50&offset=0 (defaults)
@@ -226,30 +239,42 @@ router.get('/transactions', authenticateUser, async (req, res) => {
 router.post('/check-batch-limit', authenticateUser, async (req, res) => {
   try {
     const user = req.user
-    const supabase = req.app.locals.supabaseAdmin
+    const supabaseAdmin = req.app.locals.supabaseAdmin // Use admin client — bypasses RLS
     const currentMonth = new Date().toISOString().slice(0, 7)
 
     // Get current usage
-    const { data: usageData } = await supabase
+    const { data: usageData, error: usageError } = await supabaseAdmin
       .from('batch_usage')
       .select('batch_count')
       .eq('user_id', user.id)
       .eq('month_year', currentMonth)
 
+    if (usageError) {
+      console.error('Batch usage query error:', usageError)
+      return res.status(503).json({ error: 'Unable to check usage. Try again.' })
+    }
+
     const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
 
     // Get subscription status
-    const { data: sub } = await supabase
+    const { data: sub, error: subError } = await supabaseAdmin
       .from('subscriptions')
       .select('plan, status, expires_at')
       .eq('user_id', user.id)
       .single()
+
+    if (subError && subError.code !== 'PGRST116') {
+      // PGRST116 = "no rows returned" — expected for new users with no subscription row
+      console.error('Subscription query error:', subError)
+    }
 
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
 
     const canExecute = isPro || currentUsage < FREE_LIMIT
     const remaining = isPro ? null : Math.max(0, FREE_LIMIT - currentUsage)
+
+    console.log(`[CHECK-LIMIT] user=${user.id} plan=${sub?.plan} status=${sub?.status} expired=${isExpired} isPro=${isPro} usage=${currentUsage} canExecute=${canExecute}`)
 
     res.json({
       can_execute: canExecute,
@@ -259,6 +284,7 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
         limit: isPro ? null : FREE_LIMIT, // null = unlimited
         remaining: remaining              // null = unlimited
       },
+      expires_at: sub?.expires_at || null,
       subscription_expired: !!isExpired,
       needs_renewal: !!(isExpired && sub),
     })
@@ -283,7 +309,7 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
     const supabase = req.app.locals.supabaseAdmin
     const currentMonth = new Date().toISOString().slice(0, 7)
 
-    // Check subscription (prevent going over limit)
+    // Check subscription (to determine limit)
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('plan, status, expires_at')
@@ -293,68 +319,39 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
 
-    // Insert tracking record first (optimistic insert)
-    const { error: insertError } = await supabase
-      .from('batch_usage')
-      .insert({
-        user_id: user.id,
-        batch_count: batch_count,
-        month_year: currentMonth,
-        executed_at: new Date().toISOString()
-      })
+    // Limit is FREE_LIMIT for free users, null (unlimited) for Pro
+    const limit = isPro ? null : FREE_LIMIT
 
-    if (insertError) {
-      console.error('Batch tracking error:', insertError)
+    // Call the RPC to atomically check and insert
+    const { data: result, error: rpcError } = await supabase.rpc('track_batch_usage', {
+      p_user_id: user.id,
+      p_month_year: currentMonth,
+      p_count: batch_count,
+      p_limit: limit
+    })
+
+    if (rpcError) {
+      console.error('Track batch RPC error:', rpcError)
       return res.status(500).json({ error: 'Failed to track batch usage' })
     }
 
-    // SECURITY: Re-query usage AFTER insert to get the authoritative total.
-    // This closes the race window: even if two requests insert concurrently,
-    // the post-insert count reflects both, and we roll back if over limit.
-    const { data: usageData, error: usageError } = await supabase
-      .from('batch_usage')
-      .select('batch_count')
-      .eq('user_id', user.id)
-      .eq('month_year', currentMonth)
-
-    if (usageError) {
-      console.error('Usage re-query error:', usageError)
-      return res.status(500).json({ error: 'Failed to verify usage' })
-    }
-
-    const newUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
-
-    // If free user exceeded limit after insert, roll back by deleting the row
-    if (!isPro && newUsage > FREE_LIMIT) {
-      // Delete the most recent row we just inserted
-      const { data: rows } = await supabase
-        .from('batch_usage')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('month_year', currentMonth)
-        .order('executed_at', { ascending: false })
-        .limit(1)
-
-      if (rows && rows.length > 0) {
-        await supabase.from('batch_usage').delete().eq('id', rows[0].id)
-      }
-
+    if (!result.success) {
       return res.status(403).json({
-        error: 'Monthly batch limit exceeded',
-        used: newUsage - batch_count,
-        limit: FREE_LIMIT,
+        error: result.error,
+        used: result.used,
+        limit: result.limit,
         upgrade_required: true
       })
     }
 
-    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${newUsage}/${isPro ? '∞' : FREE_LIMIT})`)
+    console.log(`✅ Tracked ${batch_count} batch(es) for user ${user.id} (${result.used}/${isPro ? '∞' : FREE_LIMIT})`)
 
     res.json({
       success: true,
       usage: {
-        used: newUsage,
-        limit: isPro ? null : FREE_LIMIT,
-        remaining: isPro ? null : Math.max(0, FREE_LIMIT - newUsage)
+        used: result.used,
+        limit: result.limit,
+        remaining: result.remaining
       }
     })
   } catch (err) {
@@ -393,7 +390,6 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
       console.error('PayMongo verify error:', JSON.stringify(data, null, 2))
       return res.status(502).json({
         error: 'Payment verification failed. Please try again.',
-        details: data.errors // Pass through PayMongo errors for debugging
       })
     }
 
@@ -426,6 +422,9 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
           user_id: user.id,
           plan: 'pro',
           status: 'active',
+          device_limit: 2,
+          device_removals_limit: 3,
+          device_removals_reset_at: expiresAt.toISOString(),
           paymongo_checkout_id: checkout_id,
           paymongo_payment_id: paymentId,
           amount: PLAN_PRICE_CENTAVOS,
@@ -462,6 +461,15 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     }
 
     console.log(`✅ Payment verified & subscription activated for user ${user.id}`)
+
+    // Fire-and-forget payment confirmation email
+    sendPaymentConfirmation({
+      to: user.email,
+      amount: PLAN_PRICE_CENTAVOS,
+      currency: PLAN_CURRENCY,
+      plan: 'pro',
+      expiresAt: expiresAt.toISOString(),
+    }).catch(() => { /* logged inside sendPaymentConfirmation */ })
 
     res.json({
       verified: true,
@@ -514,6 +522,10 @@ router.post('/cancel-subscription', authenticateUser, async (req, res) => {
     }
 
     console.log(`User ${user.id} cancelled subscription immediately.`)
+
+    // Fire-and-forget cancellation email
+    sendSubscriptionCancelled({ to: user.email }).catch(() => {})
+
     res.json({ success: true, message: 'Subscription cancelled successfully' })
   } catch (err) {
     console.error('Cancel subscription error:', err)
@@ -581,6 +593,9 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
             user_id: userId,
             plan: 'pro',
             status: 'active',
+            device_limit: 2,
+            device_removals_limit: 3,
+            device_removals_reset_at: expiresAt.toISOString(),
             paymongo_checkout_id: checkoutData?.id,
             paymongo_payment_id: paymentId,
             amount: PLAN_PRICE_CENTAVOS,
@@ -617,6 +632,18 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       }
 
       console.log(`✅ Subscription activated for user ${userId} until ${expiresAt.toISOString()}`)
+
+      // Fire-and-forget payment confirmation email
+      const userEmail = metadata.user_email
+      if (userEmail) {
+        sendPaymentConfirmation({
+          to: userEmail,
+          amount: PLAN_PRICE_CENTAVOS,
+          currency: PLAN_CURRENCY,
+          plan: 'pro',
+          expiresAt: expiresAt.toISOString(),
+        }).catch(() => { /* logged inside sendPaymentConfirmation */ })
+      }
     }
 
     // Always respond 200 to acknowledge receipt

@@ -1,8 +1,8 @@
 
-import { Check, X, CreditCard, Sparkles } from 'lucide-react'
+import { Check, X, CreditCard, Sparkles, ArrowRight } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
-export default function PricingModal({ isOpen, onClose }) {
+export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoading }) {
   const { isDark } = useTheme()
 
   if (!isOpen) return null
@@ -71,12 +71,25 @@ export default function PricingModal({ isOpen, onClose }) {
 
               <div className="flex flex-col gap-2 mt-auto">
                 <button
-                  disabled
-                  className="w-full py-3 rounded-xl bg-indigo-600/50 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none flex items-center justify-center gap-2"
+                  onClick={onUpgrade}
+                  disabled={checkoutLoading}
+                  className={`w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 ${checkoutLoading ? 'opacity-75 cursor-wait' : ''}`}
                 >
-                  Coming Soon
+                  {checkoutLoading ? (
+                    <div className="flex items-center gap-2">
+                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
+                      <span>Redirecting...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span>Upgrade Now</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
+                  )}
                 </button>
-                <span className={`text-[10px] ${isDark ? 'text-indigo-300/60' : 'text-indigo-400/80'} text-center italic`}>Under review by Microsoft Store</span>
+                <div className="flex items-center justify-center gap-2">
+                   <span className={`text-[10px] ${isDark ? 'text-indigo-300/60' : 'text-indigo-400/80'} text-center`}>Secured by PayMongo</span>
+                </div>
               </div>
             </div>
 

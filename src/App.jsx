@@ -23,17 +23,19 @@ import { useFolderSelection } from './hooks/useFolderSelection';
 import { useBatchExecution } from './hooks/useBatchExecution';
 import { useRollback } from './hooks/useRollback';
 import { useBlurDetection } from './hooks/useBlurDetection';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 // Authentication Components
 import { LoginScreen } from './components/Auth/LoginScreen';
 import { ProfileDropdown } from './components/Auth/ProfileDropdown';
 
 // Components
-import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal } from './components/Modals';
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal, DeviceManagerModal } from './components/Modals';
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
 import BoxSpinner from './components/common/BoxSpinner';
+import { UpdateBanner } from './components/common/UpdateBanner';
 
 function App() {
   // ============================================================================
@@ -44,6 +46,7 @@ function App() {
   const [subscription, setSubscription] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   // ============================================================================
   // CORE STATE
@@ -90,6 +93,12 @@ function App() {
   // Blur sensitivity modal state
   const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
+
+  // Device manager modal state
+  const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
+
+  // Version update check
+  const { showBanner, latestVersion, downloadUrl, dismiss: dismissUpdate } = useUpdateCheck();
 
   const batch = useBatchExecution({ setAppState, setError });
   const {
@@ -193,6 +202,7 @@ function App() {
       setIsAuthenticated(authStatus.isAuthenticated);
       setUser(authStatus.user);
       setSubscription(authStatus.subscription);
+      setIsOffline(authStatus.offline || false);
       setAuthLoading(false);
     }
     checkAuth();
@@ -407,6 +417,7 @@ function App() {
       const authStatus = await window.electronAPI.authCheckStatus();
       setUser(authStatus.user);
       setSubscription(authStatus.subscription);
+      setIsOffline(authStatus.offline || false);
       setIsAuthenticated(true);
     } finally {
       setIsVerifyingAuth(false);
@@ -419,6 +430,7 @@ function App() {
     setIsAuthenticated(false);
     setUser(null);
     setSubscription(null);
+    setIsOffline(false);
     // Reset app state when logging out
     handleReset();
   };
@@ -478,6 +490,13 @@ function App() {
   // Main app (authenticated users only)
   return (
     <div className={`app ${isProcessing ? 'processing' : ''}`}>
+      {showBanner && (
+        <UpdateBanner
+          latestVersion={latestVersion}
+          downloadUrl={downloadUrl}
+          onDismiss={dismissUpdate}
+        />
+      )}
       <header className="app-header">
         <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>
@@ -488,6 +507,7 @@ function App() {
             onLogout={handleLogout}
             onViewProfile={handleViewProfile}
             onUpgrade={handleUpgrade}
+            onManageDevices={() => setShowDeviceManagerModal(true)}
           />
           <div className="header-icons">
             {operationHistory.length > 0 && (
@@ -563,6 +583,10 @@ function App() {
             onGoBack={() => {
               clearBatchLimitExceeded();
             }}
+            onRetry={() => {
+              clearBatchLimitExceeded();
+              onConfirmExecute();
+            }}
           />
         )}
         {appState === STATES.EXECUTING && (
@@ -596,6 +620,11 @@ function App() {
             onReset={handleResetWithRollbackClear}
             onUndo={handleUndoClick}
             onShowHistory={() => setShowHistoryModal(true)}
+            onExportReport={async () => {
+              if (window.electronAPI?.exportBatchReport && executionResults) {
+                await window.electronAPI.exportBatchReport(executionResults);
+              }
+            }}
           />
         )}
         {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
@@ -686,6 +715,11 @@ function App() {
         currentSensitivity={blurSensitivity}
         onStart={handleConfirmBlurAnalysis}
         onCancel={handleDismissBlurModal}
+      />
+
+      <DeviceManagerModal
+        isOpen={showDeviceManagerModal}
+        onClose={() => setShowDeviceManagerModal(false)}
       />
     </div>
   );

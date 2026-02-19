@@ -166,7 +166,7 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-semibold text-white mb-2">Free &amp; Pro plans</h4>
           <ul className="space-y-1.5 text-sm text-slate-400">
-            <li>• The <strong className="text-slate-300">Free plan</strong> lets you process up to 5 batches per month.</li>
+            <li>• The <strong className="text-slate-300">Free plan</strong> lets you process up to 2 batches per month.</li>
             <li>• The <strong className="text-slate-300">Pro plan</strong> gives you unlimited batch processing. Monthly billing. Cancel anytime.</li>
           </ul>
         </div>

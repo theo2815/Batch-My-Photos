@@ -19,6 +19,7 @@ const progressManager = require('./progressManager');
 const rollbackManager = require('./rollbackManager');
 const authService = require('./authService');
 const subscriptionService = require('./subscriptionService');
+const deviceService = require('./deviceService');
 const logger = require('../utils/logger');
 const config = require('./config');
 const { sanitizeError } = require('../utils/errorSanitizer');
@@ -54,6 +55,7 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
 
   registerAuthHandlers(ipcInstance);
   registerSubscriptionHandlers(ipcInstance);
+  registerDeviceHandlers(ipcInstance);
   registerFolderHandlers(ipcInstance, storeInstance, getMainWindow);
   registerCoreHandlers(ipcInstance, getMainWindow, appState);
   registerFileSystemHandlers(ipcInstance, getMainWindow);
@@ -112,12 +114,17 @@ function registerAuthHandlers(ipcMain) {
     try {
       // Verify token is valid before saving
       const verification = await authService.verifySession(sessionToken);
-      if (!verification.valid) {
+      if (!verification.valid && !verification.networkError) {
         return { success: false, error: 'Invalid session token' };
       }
 
+      // Mark as unverified if saved during network error so it gets re-checked later
+      if (verification.networkError && userProfile) {
+        userProfile.unverified = true;
+      }
+
       authService.saveSession(sessionToken, userProfile);
-      return { success: true, subscription: verification.subscription };
+      return { success: true, subscription: verification.subscription || null };
     } catch (error) {
       logger.error('❌ [IPC] auth-save-session failed:', error);
       return { success: false, error: sanitizeError(error, 'auth-save-session') };
@@ -130,6 +137,7 @@ function registerAuthHandlers(ipcMain) {
    */
   ipcMain.handle('auth-logout', async () => {
     try {
+      deviceService.stopHeartbeat();
       authService.clearSession();
       return { success: true };
     } catch (error) {
@@ -183,8 +191,8 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.checkBatchLimit(sessionToken);
     } catch (error) {
       logger.error('❌ [IPC] subscription-check-batch-limit failed:', error);
-      // Fail-safe: allow offline usage
-      return { canExecute: true, offline: true };
+      // Fail-CLOSED: deny execution when limit check throws unexpectedly
+      return { canExecute: false, error: 'Could not verify subscription status. Please try again.' };
     }
   });
 
@@ -197,7 +205,7 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.trackBatchExecution(sessionToken, batchCount);
     } catch (error) {
       logger.error('❌ [IPC] subscription-track-batch failed:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'subscription-track-batch') };
     }
   });
 
@@ -210,7 +218,85 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.refreshSubscription(sessionToken);
     } catch (error) {
       logger.error('❌ [IPC] subscription-refresh failed:', error);
-      return { error: error.message };
+      return { error: sanitizeError(error, 'subscription-refresh') };
+    }
+  });
+}
+
+// ============================================================================
+// GROUP 0.75: DEVICE MANAGEMENT HANDLERS (5 handlers)
+// ============================================================================
+
+function registerDeviceHandlers(ipcMain) {
+
+  /**
+   * Handler: Get this machine's Hardware ID (HWID)
+   */
+  ipcMain.handle('device-get-hwid', async () => {
+    try {
+      return { hwid: deviceService.getHwid(), label: deviceService.getDeviceLabel() };
+    } catch (error) {
+      logger.error('❌ [IPC] device-get-hwid failed:', error);
+      return { hwid: null, error: sanitizeError(error, 'device-get-hwid') };
+    }
+  });
+
+  /**
+   * Handler: Check if this device is authorized
+   */
+  ipcMain.handle('device-check-authorized', async () => {
+    try {
+      return { authorized: deviceService.isDeviceAuthorized() };
+    } catch (error) {
+      logger.error('❌ [IPC] device-check-authorized failed:', error);
+      return { authorized: false, error: 'Could not verify device status' }; // Fail-closed
+    }
+  });
+
+  /**
+   * Handler: List all devices bound to the user's subscription
+   */
+  ipcMain.handle('device-get-list', async (event, sessionToken) => {
+    try {
+      return await deviceService.listDevices(sessionToken);
+    } catch (error) {
+      logger.error('❌ [IPC] device-get-list failed:', error);
+      return { error: sanitizeError(error, 'device-get-list') };
+    }
+  });
+
+  /**
+   * Handler: De-authorize (remove) a device binding
+   */
+  ipcMain.handle('device-deauthorize', async (event, sessionToken, deviceId) => {
+    try {
+      return await deviceService.deauthorizeDevice(sessionToken, deviceId);
+    } catch (error) {
+      logger.error('❌ [IPC] device-deauthorize failed:', error);
+      return { success: false, error: sanitizeError(error, 'device-deauthorize') };
+    }
+  });
+
+  /**
+   * Handler: Start/stop heartbeat lifecycle
+   */
+  ipcMain.handle('device-start-heartbeat', async () => {
+    try {
+      deviceService.startHeartbeat(() => authService.getStoredSession());
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] device-start-heartbeat failed:', error);
+      return { success: false };
+    }
+  });
+
+  ipcMain.handle('device-stop-heartbeat', async () => {
+    try {
+      deviceService.stopHeartbeat();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] device-stop-heartbeat failed:', error);
+      return { success: false };
     }
   });
 }
@@ -348,6 +434,43 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
   ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
     logger.time('TOTAL_BATCH_EXECUTION');
     try {
+      // ── SUBSCRIPTION LIMIT GUARD (server-side, not bypassable from renderer) ──
+      const sessionToken = authService.getStoredSession();
+      if (!sessionToken) {
+        return { success: false, error: 'Not authenticated. Please log in to execute batches.' };
+      }
+
+      let limitCheck;
+      try {
+        limitCheck = await subscriptionService.checkBatchLimit(sessionToken);
+      } catch (limitErr) {
+        logger.error('❌ [IPC] Subscription limit check threw in execute-batch:', limitErr);
+        // Fail-CLOSED: deny execution when limit check itself throws
+        return { success: false, error: 'Could not verify subscription status. Please try again.' };
+      }
+
+      if (!limitCheck.canExecute) {
+        logger.warn('🔒 [IPC] Batch execution blocked by subscription limit');
+        return {
+          success: false,
+          error: limitCheck.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.',
+          code: 'BATCH_LIMIT_EXCEEDED',
+        };
+      }
+
+      // DEVICE GUARD: Live-verify this device is still registered on the server
+      if (config.features.HWID_BINDING_ENABLED) {
+        const deviceCheck = await deviceService.verifyDeviceLive(sessionToken);
+        if (!deviceCheck.authorized) {
+          logger.warn('🔒 [DEVICE] Blocked execute-batch — device not authorized:', deviceCheck.reason);
+          return {
+            success: false,
+            error: deviceCheck.reason || 'This device is not authorized for your subscription. Please manage your devices in Settings or re-login.',
+            code: 'DEVICE_NOT_AUTHORIZED',
+          };
+        }
+      }
+
       // SECURITY: Validate paths are allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
         logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered path:', folderPath);
@@ -528,11 +651,20 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         mode,  // Include mode for rollback availability check
         results: resultsArray,
         outputDir: baseOutputDir,
+        sourceFolder: folderPath,
         hasErrors: errors.length > 0,
         errorCount: errors.length,
         errors: errors.length > 0 ? errors.slice(0, 10) : null,  // Return first 10 errors
         blurryFileCount: blurryFiles.length,
         blurryFolderName: blurryFolderName,
+        // Per-file operations for CSV export (original → new path mapping)
+        operations: operations.map(op => ({
+          fileName: op.fileName,
+          originalPath: op.sourcePath,
+          newPath: op.destPath,
+          batchFolder: path.basename(path.dirname(op.destPath)),
+        })),
+        completedAt: new Date().toISOString(),
       };
       
       // Save rollback manifest for successful move operations (if feature is enabled)
@@ -688,7 +820,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       return {
         success: false,
         error: isAiError
-          ? error.message
+          ? 'Blur analysis service is currently unavailable. Please try again later.'
           : sanitizeError(error, 'analyze-blur'),
         aiUnavailable: isAiError,
       };
@@ -1418,6 +1550,220 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: sanitizeError(error, 'clear-operation-history') };
     }
   });
+
+  // ============================================================================
+  // 7. VERSION CHECK
+  // ============================================================================
+
+  /**
+   * Handler: Check if a newer app version is available.
+   * Pings the backend /api/version endpoint, compares with app.getVersion(),
+   * and returns the result. Fails silently (returns updateAvailable: false)
+   * so the app works fine offline.
+   */
+  ipcMain.handle('check-app-version', async () => {
+    const { app, net } = require('electron');
+    const currentVersion = app.getVersion();
+
+    try {
+      const url = `${config.urls.BACKEND_URL}/api/version`;
+      const response = await net.fetch(url, { method: 'GET' });
+
+      if (!response.ok) {
+        return { updateAvailable: false, currentVersion };
+      }
+
+      const data = await response.json();
+      const latest = data.latestVersion || currentVersion;
+
+      // Simple semver comparison (major.minor.patch)
+      const compareSemver = (a, b) => {
+        const pa = a.split('.').map(Number);
+        const pb = b.split('.').map(Number);
+        for (let i = 0; i < 3; i++) {
+          if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+          if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+        }
+        return 0;
+      };
+
+      const updateAvailable = compareSemver(currentVersion, latest) < 0;
+
+      return {
+        updateAvailable,
+        currentVersion,
+        latestVersion: latest,
+        downloadUrl: data.downloadUrl || '',
+        releaseDate: data.releaseDate || '',
+      };
+    } catch (err) {
+      // Network error, timeout, offline — silently skip
+      logger.log('[VERSION] Check failed (offline?):', err.message);
+      return { updateAvailable: false, currentVersion };
+    }
+  });
+
+  /**
+   * Handler: Open a URL in the user's default browser.
+   * Only allows https:// URLs for security.
+   */
+  ipcMain.handle('open-external-url', async (event, url) => {
+    if (typeof url !== 'string' || !url.startsWith('https://')) {
+      return { success: false, error: 'Only HTTPS URLs are allowed' };
+    }
+    // Restrict to known domains for security
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'supabase.co'];
+    try {
+      const parsed = new URL(url);
+      const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
+      if (!isAllowed) {
+        return { success: false, error: 'URL domain not allowed' };
+      }
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: sanitizeError(err, 'open-external-url') };
+    }
+  });
+
+  // ============================================================================
+  // 8. EXPORT BATCH REPORT (CSV)
+  // ============================================================================
+
+  /**
+   * Handler: Export a single batch operation as a CSV file.
+   * Opens a save dialog, writes CSV with per-file details.
+   */
+  ipcMain.handle('export-batch-report', async (event, data) => {
+    try {
+      const { operations, mode, sourceFolder, outputDir, completedAt, results, errors } = data || {};
+
+      if (!Array.isArray(operations) || operations.length === 0) {
+        return { success: false, error: 'No operations data to export' };
+      }
+
+      const dateStr = new Date(completedAt || Date.now()).toISOString().slice(0, 10);
+      const defaultName = `BatchMyPhotos_Report_${dateStr}.csv`;
+
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
+        title: 'Export Batch Report',
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      });
+
+      if (canceled || !savePath) {
+        return { success: false, cancelled: true };
+      }
+
+      // Build error lookup for status column
+      const errorMap = new Map();
+      if (Array.isArray(errors)) {
+        for (const e of errors) {
+          if (e.file) errorMap.set(e.file, e.error || 'Unknown error');
+        }
+      }
+
+      // CSV header
+      const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
+      const header = 'File Name,Original Path,New Path,Batch Folder,Status,Error';
+      const rows = operations.map(op => {
+        const status = errorMap.has(op.fileName) ? 'Error' : 'Success';
+        const errorMsg = errorMap.get(op.fileName) || '';
+        return [
+          csvEscape(op.fileName),
+          csvEscape(op.originalPath),
+          csvEscape(op.newPath),
+          csvEscape(op.batchFolder),
+          status,
+          csvEscape(errorMsg),
+        ].join(',');
+      });
+
+      // Summary rows at the top
+      const summary = [
+        `# BatchMyPhotos Report`,
+        `# Date: ${new Date(completedAt || Date.now()).toLocaleString()}`,
+        `# Mode: ${mode || 'N/A'}`,
+        `# Source: ${sourceFolder || 'N/A'}`,
+        `# Output: ${outputDir || 'N/A'}`,
+        `# Files: ${operations.length}`,
+        `# Batches: ${results?.length || 'N/A'}`,
+        '',
+      ];
+
+      const csv = BOM + summary.join('\n') + header + '\n' + rows.join('\n');
+      await fsPromises.writeFile(savePath, csv, 'utf8');
+
+      return { success: true, filePath: savePath };
+    } catch (error) {
+      logger.error('Export batch report failed:', error);
+      return { success: false, error: sanitizeError(error, 'export-batch-report') };
+    }
+  });
+
+  /**
+   * Handler: Export all operation history as a CSV summary.
+   */
+  ipcMain.handle('export-history-report', async () => {
+    try {
+      const history = rollbackManager.getOperationHistory();
+
+      if (!Array.isArray(history) || history.length === 0) {
+        return { success: false, error: 'No history to export' };
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const defaultName = `BatchMyPhotos_History_${dateStr}.csv`;
+
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
+        title: 'Export History Report',
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      });
+
+      if (canceled || !savePath) {
+        return { success: false, cancelled: true };
+      }
+
+      const BOM = '\uFEFF';
+      const header = 'Date,Source Folder,Output Folder,Mode,Files Processed,Batches Created,Output Prefix,Sort By';
+      const rows = history.map(entry => {
+        const date = entry.createdAt
+          ? new Date(entry.createdAt).toLocaleString()
+          : 'N/A';
+        return [
+          csvEscape(date),
+          csvEscape(entry.sourceFolder || ''),
+          csvEscape(entry.outputFolder || ''),
+          entry.mode || 'move',
+          entry.totalFiles || 0,
+          entry.batchFolderCount || entry.batchFolders?.length || 0,
+          csvEscape(entry.outputPrefix || ''),
+          entry.sortBy || 'name-asc',
+        ].join(',');
+      });
+
+      const csv = BOM + header + '\n' + rows.join('\n');
+      await fsPromises.writeFile(savePath, csv, 'utf8');
+
+      return { success: true, filePath: savePath };
+    } catch (error) {
+      logger.error('Export history report failed:', error);
+      return { success: false, error: sanitizeError(error, 'export-history-report') };
+    }
+  });
+}
+
+/**
+ * Escape a value for CSV: wrap in quotes if it contains commas, quotes, or newlines.
+ */
+function csvEscape(val) {
+  if (val == null) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 module.exports = { registerIpcHandlers };

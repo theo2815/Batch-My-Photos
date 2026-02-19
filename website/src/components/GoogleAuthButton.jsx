@@ -14,10 +14,6 @@ export default function GoogleAuthButton({ text = "Sign in with Google", classNa
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
           // redirectTo ensures we get back to the right place
            redirectTo: isDesktop
              ? `${window.location.origin}/auth/desktop-callback`
