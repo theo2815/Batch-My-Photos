@@ -118,6 +118,11 @@ function registerAuthHandlers(ipcMain) {
         return { success: false, error: 'Invalid session token' };
       }
 
+      // Mark as unverified if saved during network error so it gets re-checked later
+      if (verification.networkError && userProfile) {
+        userProfile.unverified = true;
+      }
+
       authService.saveSession(sessionToken, userProfile);
       return { success: true, subscription: verification.subscription || null };
     } catch (error) {
@@ -200,7 +205,7 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.trackBatchExecution(sessionToken, batchCount);
     } catch (error) {
       logger.error('❌ [IPC] subscription-track-batch failed:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: sanitizeError(error, 'subscription-track-batch') };
     }
   });
 
@@ -213,7 +218,7 @@ function registerSubscriptionHandlers(ipcMain) {
       return await subscriptionService.refreshSubscription(sessionToken);
     } catch (error) {
       logger.error('❌ [IPC] subscription-refresh failed:', error);
-      return { error: error.message };
+      return { error: sanitizeError(error, 'subscription-refresh') };
     }
   });
 }
@@ -244,7 +249,7 @@ function registerDeviceHandlers(ipcMain) {
       return { authorized: deviceService.isDeviceAuthorized() };
     } catch (error) {
       logger.error('❌ [IPC] device-check-authorized failed:', error);
-      return { authorized: true }; // Fail-open to avoid blocking users on error
+      return { authorized: false, error: 'Could not verify device status' }; // Fail-closed
     }
   });
 
@@ -815,7 +820,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       return {
         success: false,
         error: isAiError
-          ? error.message
+          ? 'Blur analysis service is currently unavailable. Please try again later.'
           : sanitizeError(error, 'analyze-blur'),
         aiUnavailable: isAiError,
       };
@@ -1606,11 +1611,18 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
     if (typeof url !== 'string' || !url.startsWith('https://')) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
+    // Restrict to known domains for security
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'supabase.co'];
     try {
+      const parsed = new URL(url);
+      const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
+      if (!isAllowed) {
+        return { success: false, error: 'URL domain not allowed' };
+      }
       await shell.openExternal(url);
       return { success: true };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: sanitizeError(err, 'open-external-url') };
     }
   });
 

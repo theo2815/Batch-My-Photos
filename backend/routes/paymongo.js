@@ -50,10 +50,10 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
     .update(payload)
     .digest('hex')
 
-  return crypto.timingSafeEqual(
-    Buffer.from(computed, 'hex'),
-    Buffer.from(expectedSig, 'hex')
-  )
+  const computedBuf = Buffer.from(computed, 'hex')
+  const expectedBuf = Buffer.from(expectedSig, 'hex')
+  if (computedBuf.length !== expectedBuf.length) return false
+  return crypto.timingSafeEqual(computedBuf, expectedBuf)
 }
 
 // ── POST /api/checkout — Create a Checkout Session ────────────────────────────
@@ -66,9 +66,21 @@ router.post('/checkout', authenticateUser, async (req, res) => {
     
     // Use provided redirect_url (from client) or fallback to env var
     // This ensures users on localhost:5173 get redirected back to localhost:5173 (preserving session)
-    const baseUrl = (redirect_url && typeof redirect_url === 'string') 
-      ? redirect_url.replace(/\/$/, '') // remove trailing slash
-      : process.env.FRONTEND_URL
+    // SECURITY: Validate redirect_url against allowlist to prevent open redirect attacks
+    const ALLOWED_REDIRECT_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'localhost']
+    let baseUrl = process.env.FRONTEND_URL
+    if (redirect_url && typeof redirect_url === 'string') {
+      try {
+        const parsed = new URL(redirect_url)
+        if (ALLOWED_REDIRECT_HOSTS.includes(parsed.hostname)) {
+          baseUrl = redirect_url.replace(/\/$/, '') // remove trailing slash
+        } else {
+          console.warn(`Checkout: rejected redirect_url with host "${parsed.hostname}"`)
+        }
+      } catch {
+        console.warn('Checkout: rejected malformed redirect_url')
+      }
+    }
 
     const response = await fetch(`${PAYMONGO_API}/checkout_sessions`, {
       method: 'POST',
@@ -239,6 +251,7 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
 
     if (usageError) {
       console.error('Batch usage query error:', usageError)
+      return res.status(503).json({ error: 'Unable to check usage. Try again.' })
     }
 
     const currentUsage = usageData?.reduce((sum, row) => sum + row.batch_count, 0) || 0
@@ -377,7 +390,6 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
       console.error('PayMongo verify error:', JSON.stringify(data, null, 2))
       return res.status(502).json({
         error: 'Payment verification failed. Please try again.',
-        details: data.errors // Pass through PayMongo errors for debugging
       })
     }
 

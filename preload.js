@@ -378,18 +378,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // STORAGE & MAINTENANCE APIs
   // ============================================================================
 
-  /**
-   * Get information about the application cache
-   * @returns {Promise<Object>} { sizeBytes, sizeStr, path }
-   */
-  getCacheInfo: () => ipcRenderer.invoke('get-cache-info'),
-
-  /**
-   * Clear the application cache
-   * @returns {Promise<Object>} Success status
-   */
-  clearCache: () => ipcRenderer.invoke('clear-cache'),
-
   // ============================================================================
   // UNDO/ROLLBACK APIs
   // ============================================================================

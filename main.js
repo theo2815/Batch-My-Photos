@@ -152,12 +152,17 @@ async function handleDeepLink(url) {
       return;
     }
     // If networkError: token just came from the browser auth flow — safe to save
+    // but mark as unverified so it gets re-checked when online
     if (verification.networkError) {
-      logger.warn('[DEEP-LINK] Backend unreachable — saving session anyway (token from live auth flow)');
+      logger.warn('[DEEP-LINK] Backend unreachable — saving session as unverified (token from live auth flow)');
     }
 
-    // Token verified — save session
-    authService.saveSession(token, { email: decodeURIComponent(email), name: decodeURIComponent(name || '') });
+    // Token verified (or unverified due to network error) — save session
+    authService.saveSession(token, {
+      email: decodeURIComponent(email),
+      name: decodeURIComponent(name || ''),
+      ...(verification.networkError ? { unverified: true } : {}),
+    });
 
     // Start device heartbeat after successful authentication
     deviceService.startHeartbeat(() => authService.getStoredSession());
@@ -275,6 +280,26 @@ app.whenReady().then(() => {
   if (storedSession) {
     logger.log('💓 [STARTUP] Starting device heartbeat for existing session');
     deviceService.startHeartbeat(() => authService.getStoredSession());
+
+    // Re-verify unverified tokens (saved during network outage) now that we're online
+    const profile = authService.getStoredUser?.();
+    if (profile?.unverified) {
+      logger.log('🔄 [STARTUP] Re-verifying unverified session token...');
+      authService.verifySession(storedSession).then(result => {
+        if (result.valid) {
+          // Token is valid — clear the unverified flag
+          logger.log('✅ [STARTUP] Unverified session re-verified successfully');
+          const cleanProfile = { ...profile };
+          delete cleanProfile.unverified;
+          authService.saveSession(storedSession, cleanProfile);
+        } else if (!result.networkError) {
+          // Token is invalid and server is reachable — clear session
+          logger.warn('⚠️ [STARTUP] Unverified session token is invalid — clearing session');
+          authService.clearSession();
+        }
+        // If still networkError, keep waiting until next launch
+      }).catch(() => {});
+    }
   }
 
   // Handle cold-start deep link (app was launched by clicking a deep link)

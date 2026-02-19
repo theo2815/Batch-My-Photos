@@ -25,20 +25,21 @@ app.use(helmet({
         "'self'",
         process.env.SUPABASE_URL,
         "https://*.supabase.co",
+        "wss://*.supabase.co",
         "https://api.paymongo.com",
-        "http://127.0.0.1:7242",
+        ...(isDev ? ["http://127.0.0.1:7242"] : []),
       ],
       scriptSrc: [
         "'self'",
-        "'unsafe-inline'",
-        ...(isDev ? ["'unsafe-eval'"] : []),
+        ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : []),
       ],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       fontSrc: ["'self'", "https:", "data:"],
-      upgradeInsecureRequests: null,
+      upgradeInsecureRequests: isDev ? null : [],
     },
   },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }))
 
 // CORS — only allow listed origins (comma-separated in .env)
@@ -47,6 +48,11 @@ app.use(helmet({
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:3000']
+
+// SECURITY: In production, ALLOWED_ORIGINS must be explicitly configured
+if (!isDev && !process.env.ALLOWED_ORIGINS) {
+  throw new Error('Missing ALLOWED_ORIGINS in .env — required in production to restrict CORS.')
+}
 
 app.use(cors({
   origin: allowedOrigins,
@@ -70,6 +76,28 @@ const apiLimiter = rateLimit({
 })
 app.use('/api/', apiLimiter)
 
+// Stricter rate limiter for sensitive endpoints (10 requests per 15 minutes)
+const sensitiveApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+})
+app.use('/api/checkout', sensitiveApiLimiter)
+app.use('/api/verify-payment', sensitiveApiLimiter)
+app.use('/api/cancel-subscription', sensitiveApiLimiter)
+
+// Webhook rate limiter (higher threshold, protects against flood)
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+})
+app.use('/api/webhooks', webhookLimiter)
+
 // Supabase Clients
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -83,6 +111,10 @@ if (!supabaseUrl || !supabaseKey) {
 
 if (!process.env.PAYMONGO_SECRET_KEY) {
   throw new Error('Missing PAYMONGO_SECRET_KEY in .env — required for payment processing.')
+}
+
+if (!process.env.PAYMONGO_WEBHOOK_SECRET) {
+  console.warn('⚠️  Missing PAYMONGO_WEBHOOK_SECRET — webhook signature verification will reject all incoming webhooks.')
 }
 
 // Anon client — for auth token verification
@@ -124,19 +156,16 @@ app.get('/api/health', async (req, res) => {
       .limit(1)
 
     const isTableMissing = error && error.code === '42P01'
-    const dbStatus = !error ? 'connected' : isTableMissing ? 'connected (pending migrations)' : 'unreachable'
 
     res.json({
       status: error && !isTableMissing ? 'degraded' : 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: dbStatus,
+      database: !error ? 'ok' : isTableMissing ? 'ok' : 'unreachable',
     })
   } catch (err) {
     res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
       database: 'unreachable',
     })
   }

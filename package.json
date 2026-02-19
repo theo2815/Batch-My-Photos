@@ -1,6 +1,6 @@
 {
   "name": "batchmyphotos",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Desktop utility for photographers to batch-split image folders",
   "main": "main.js",
   "scripts": {
@@ -79,7 +79,7 @@
     "utility"
   ],
   "author": "Theo Cedric Chan",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",

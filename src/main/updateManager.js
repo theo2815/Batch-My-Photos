@@ -98,8 +98,8 @@ function initAutoUpdater(getMainWindow) {
   });
 
   // 4. INITIAL CHECK
-  // Check for updates shortly after startup (if not in dev mode)
-  if (!process.env.content && app.isPackaged) {
+  // Check for updates shortly after startup (skip for Store builds)
+  if (!process.windowsStore && app.isPackaged) {
       setTimeout(() => {
         autoUpdater.checkForUpdates();
       }, 3000);

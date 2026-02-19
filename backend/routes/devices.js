@@ -305,8 +305,9 @@ router.delete('/devices/:id', authenticateUser, async (req, res) => {
       })
 
     if (checkErr) {
-      console.error('check_removal_allowed RPC error:', checkErr)
-      // Fail-open: allow removal if the RPC itself errors
+      console.error('check_removal_allowed RPC error:', checkErr.message)
+      // Fail-closed: deny removal if the RPC itself errors
+      return res.status(500).json({ error: 'Unable to verify removal limits. Please try again.' })
     } else if (checkResult && !checkResult.allowed) {
       return res.status(403).json({
         error: `You've used all ${removalsLimit} device removals for this billing period. Removals reset on ${new Date(removalsResetAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`,
