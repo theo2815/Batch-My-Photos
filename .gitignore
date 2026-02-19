@@ -22,3 +22,4 @@ simple_log.txt
 # Python virtual environments
 backend/venv/
 .venv/
+backend/migrations/
