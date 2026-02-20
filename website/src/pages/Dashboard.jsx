@@ -419,7 +419,7 @@ export default function Dashboard() {
               {/* Quick details row */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱499/mo' },
+                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱299/mo' },
                   { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
                   { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 2} batches`, full: true },
                 ].map(d => (
@@ -829,7 +829,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {sub?.plan === 'pro' ? '₱499' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
+                      {sub?.plan === 'pro' ? '₱299' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
                     </p>
                   </div>
 

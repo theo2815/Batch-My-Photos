@@ -8,8 +8,8 @@ const router = express.Router()
 
 const PAYMONGO_API = 'https://api.paymongo.com/v1'
 
-/** Pro plan price in centavos (₱499.00). Single source of truth for all payment operations. */
-const PLAN_PRICE_CENTAVOS = 49900
+/** Pro plan price in centavos (₱299.00). Single source of truth for all payment operations. */
+const PLAN_PRICE_CENTAVOS = 29900
 const PLAN_CURRENCY = 'PHP'
 const PLAN_DESCRIPTION = 'BatchMyPhotos Pro — Monthly Subscription'
 const FREE_LIMIT = 2
@@ -20,9 +20,9 @@ const WEBHOOK_MAX_AGE_SECONDS = 300 // 5 minutes
 // ── Coupon Codes ──────────────────────────────────────────────────────────────
 
 const COUPONS = {
-  EARLY249: {
-    discountedPriceCentavos: 24900, // ₱249.00
-    description: 'Early Bird Discount — ₱249 for first month',
+  EARLY149: {
+    discountedPriceCentavos: 14900, // ₱149.00
+    description: 'Early Bird Discount — ₱149 for first month',
     expiresAt: new Date('2026-03-31T23:59:59+08:00'), // March 31, 2026 PHT
   },
 }

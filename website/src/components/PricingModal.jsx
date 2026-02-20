@@ -14,7 +14,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
   const [checkoutError, setCheckoutError] = useState('')
 
   const appliedCoupon = couponResult?.valid ? couponResult : null
-  const displayPrice = appliedCoupon ? appliedCoupon.discountedPrice / 100 : 499
+  const displayPrice = appliedCoupon ? appliedCoupon.discountedPrice / 100 : 299
 
   const handleApplyCoupon = async () => {
     const code = couponInput.trim().toUpperCase()
@@ -127,10 +127,10 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Pro</h3>
                 {appliedCoupon ? (
                   <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>
-                    — <span className="line-through opacity-50">₱499</span> ₱{displayPrice}/mo
+                    — <span className="line-through opacity-50">₱299</span> ₱{displayPrice}/mo
                   </span>
                 ) : (
-                  <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱499/mo</span>
+                  <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱299/mo</span>
                 )}
               </div>
               <p className={`text-sm ${isDark ? 'text-indigo-200' : 'text-indigo-600'} mb-6 relative z-10`}>For power users</p>
@@ -186,7 +186,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                           <p className="text-[11px] text-red-400 px-1">{couponError}</p>
                         )}
                         <a
-                          href="https://www.facebook.com/share/p/1E86d7zWWr/"
+                          href="https://web.facebook.com/people/Batch-My-Photos/61588309656493/"
                           target="_blank"
                           rel="noopener noreferrer"
                           className={`text-[11px] px-1 transition-colors ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-500 hover:text-indigo-600'} hover:underline`}
