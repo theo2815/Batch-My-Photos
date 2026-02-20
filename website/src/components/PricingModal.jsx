@@ -14,7 +14,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
   const [checkoutError, setCheckoutError] = useState('')
 
   const appliedCoupon = couponResult?.valid ? couponResult : null
-  const displayPrice = appliedCoupon ? appliedCoupon.discountedPrice / 100 : 249
+  const displayPrice = appliedCoupon ? appliedCoupon.discountedPrice / 100 : 499
 
   const handleApplyCoupon = async () => {
     const code = couponInput.trim().toUpperCase()
@@ -123,10 +123,10 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Pro</h3>
                 {appliedCoupon ? (
                   <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>
-                    — <span className="line-through opacity-50">₱249</span> ₱{displayPrice}/mo
+                    — <span className="line-through opacity-50">₱499</span> ₱{displayPrice}/mo
                   </span>
                 ) : (
-                  <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱249/mo</span>
+                  <span className={`text-xl font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>— ₱499/mo</span>
                 )}
               </div>
               <p className={`text-sm ${isDark ? 'text-indigo-200' : 'text-indigo-600'} mb-6 relative z-10`}>For power users</p>
