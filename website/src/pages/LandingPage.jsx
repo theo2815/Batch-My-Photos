@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useTheme } from '../context/ThemeContext'
-import { Zap, FolderOpen, Folder, Settings, ScanEye, CheckCircle, Copy, ArrowDownAZ, Trash2, Save, Info, Package, ChevronRight, ChevronDown, XCircle, RotateCcw, Undo2, History, ArrowLeft, Grid3x3, List, Play, Layers, Eye, Droplets, Lock, Sparkles, Camera, Upload, WifiOff, ShieldCheck, SlidersHorizontal, Heart, Monitor, ArrowRight, ArrowUp } from 'lucide-react'
+import { Zap, FolderOpen, Folder, Settings, ScanEye, CheckCircle, Copy, ArrowDownAZ, Trash2, Save, Info, Package, ChevronRight, ChevronDown, XCircle, RotateCcw, Undo2, History, ArrowLeft, Grid3x3, List, Play, Layers, Eye, Droplets, Lock, Sparkles, Camera, Upload, WifiOff, ShieldCheck, SlidersHorizontal, Heart, Monitor, ArrowRight, ArrowUp, Download } from 'lucide-react'
 import VerticalTimeline from '../components/VerticalTimeline'
 import Footer from '../components/Footer'
 
@@ -635,15 +635,14 @@ export default function LandingPage() {
               >
                 <Play className="w-5 h-5" /> Try the Live Demo
               </a>
-                <button
-                  disabled
-                  className={`inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
+                <a
+                  href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
                 >
-                  <div className="flex flex-col items-center leading-none gap-1">
-                    <span>Coming Soon</span>
-                    <span className="text-[10px] opacity-70 italic font-normal">Under review</span>
-                  </div>
-                </button>
+                  <Download className="w-5 h-5" /> Get it on Microsoft Store
+                </a>
               </div>
 
             {/* Trust indicators */}
@@ -716,14 +715,14 @@ export default function LandingPage() {
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
-            <div className="flex flex-col items-center">
-              <button
-                disabled
-                className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
-              >
-                Coming Soon <span className="text-[10px] opacity-70 italic font-normal ml-1">Under review</span>
-              </button>
-            </div>
+            <a
+              href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
+            >
+              <Download className="w-5 h-5" /> Get it on Microsoft Store
+            </a>
           </div>
         </div>
       </div>
@@ -977,12 +976,14 @@ export default function LandingPage() {
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
-            <button
-              disabled
-              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-100 text-gray-400'} cursor-not-allowed text-base font-semibold transition-all shadow-none`}
+            <a
+              href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
             >
-              Coming Soon <span className="text-[10px] opacity-70 italic font-normal ml-1">Under review</span>
-            </button>
+              <Download className="w-5 h-5" /> Get it on Microsoft Store
+            </a>
           </div>
 
           <p className={`mt-8 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Free to start · No credit card · Cancel anytime</p>

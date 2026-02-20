@@ -351,15 +351,18 @@ export default function Dashboard() {
 
               {/* CTA */}
               <div className="shrink-0 flex flex-col gap-2.5">
-                <button
-                  disabled
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600/50 text-sm font-semibold text-white/50 cursor-not-allowed shadow-none"
+                <a
+                  href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
                 >
+                  <Download className="w-4 h-4" />
                   <div className="flex flex-col items-center leading-none">
-                    <span>Coming Soon</span>
+                    <span>Get it on Microsoft Store</span>
                   </div>
-                </button>
-                <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review by Microsoft Store</span>
+                </a>
+                <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center`}>Windows 10 / 11</span>
               </div>
             </div>
 

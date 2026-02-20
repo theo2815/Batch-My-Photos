@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, X, Minus, Square, Command, History, Sun, Moon } from 'lucide-react';
+import { Camera, X, Minus, Square, Command, History, Sun, Moon, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../styles/desktop.css';
 
@@ -94,14 +94,13 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
             This interactive demo simulates a complex desktop workflow.
             Please open it on a larger screen for the full experience.
           </p>
-          <div className="flex flex-col gap-3 items-center">
-            <Link to="/" className="text-indigo-400 underline hover:text-indigo-300 transition-colors">
-              ← Back to Home
-            </Link>
-            <Link to="/register" className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-semibold text-sm transition-colors">
-              Get the Real App Instead
-            </Link>
-          </div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-indigo-400 transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            Back to Home
+          </Link>
         </div>
       </div>
     </div>

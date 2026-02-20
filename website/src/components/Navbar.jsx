@@ -1,6 +1,6 @@
 
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Play, Menu, X } from 'lucide-react'
@@ -16,6 +16,8 @@ export default function Navbar() {
   const [user, setUser] = useState(null)
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const mobileMenuRef = useRef(null)
+  const hamburgerRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
   const isLanding = location.pathname === '/'
@@ -52,6 +54,25 @@ export default function Navbar() {
 
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
+
+  // Close mobile menu on click outside
+  useEffect(() => {
+    if (!mobileOpen) return
+    const handler = (e) => {
+      if (
+        mobileMenuRef.current && !mobileMenuRef.current.contains(e.target) &&
+        hamburgerRef.current && !hamburgerRef.current.contains(e.target)
+      ) {
+        setMobileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
+  }, [mobileOpen])
 
   const [loggingOut, setLoggingOut] = useState(false)
   const handleLogout = async () => {
@@ -175,6 +196,7 @@ export default function Navbar() {
 
             {/* Mobile hamburger */}
             <button
+              ref={hamburgerRef}
               className={`md:hidden p-2 rounded-lg transition-colors ${
                 dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
               }`}
@@ -188,6 +210,7 @@ export default function Navbar() {
 
         {/* Mobile menu */}
         <div
+          ref={mobileMenuRef}
           className={`md:hidden overflow-hidden transition-all duration-300 ${
             mobileOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
           }`}

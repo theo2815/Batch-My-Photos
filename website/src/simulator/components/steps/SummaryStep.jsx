@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { CheckCircle, Download, RotateCcw, FolderOpen, Undo2, History } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { trackCTAClicked } from '../../analytics';
 import FileExplorer from '../common/FileExplorer';
 
@@ -138,14 +137,16 @@ const SummaryStep = ({ batches, stats, elapsedTime, onReset, selectedFolder, has
                     <FolderOpen size={16} /> Open in Explorer
                 </button>
 
-                <Link
-                    to="/register"
+                <a
+                    href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     onClick={() => trackCTAClicked('download_real_app')}
                     className="btn primary"
                     style={{ textDecoration: 'none' }}
                 >
-                    <Download size={16} /> Download the Real App
-                </Link>
+                    <Download size={16} /> Get the Real App
+                </a>
 
                 <button
                     className="btn secondary"
