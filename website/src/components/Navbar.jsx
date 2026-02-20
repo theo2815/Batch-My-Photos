@@ -6,6 +6,8 @@ import { useTheme } from '../context/ThemeContext'
 import { Play, Menu, X } from 'lucide-react'
 import PricingModal from './PricingModal'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 const NAV_LINKS = [
   { label: 'Features', href: '/#features' },
   { label: 'Pricing', action: 'pricing' },
@@ -19,6 +21,8 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pricingOpen, setPricingOpen] = useState(false)
+  const [userPlan, setUserPlan] = useState(null) // 'free' | 'pro' | null
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const mobileMenuRef = useRef(null)
   const hamburgerRef = useRef(null)
   const location = useLocation()
@@ -92,14 +96,90 @@ export default function Navbar() {
   // Theme-driven styling
   const { isDark: dark } = useTheme()
 
-  // Pricing modal: redirect to login if guest, or to dashboard checkout if logged in
-  const handlePricingUpgrade = () => {
-    setPricingOpen(false)
+  // Fetch user's plan as soon as they're logged in (so it's ready before modal opens)
+  useEffect(() => {
+    if (!user) { setUserPlan(null); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session || cancelled) return
+        const res = await fetch(`${API_BASE}/api/subscription`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (!cancelled) setUserPlan(data?.plan || 'free')
+      } catch {
+        if (!cancelled) setUserPlan('free')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
+  // Pricing modal: if guest → login, if logged in → create checkout directly and redirect to PayMongo
+  const handlePricingUpgrade = async (couponCode = null) => {
     if (!user) {
+      setPricingOpen(false)
       navigate('/login')
-    } else {
-      navigate('/dashboard?modal=pricing')
+      return
     }
+    try {
+      setCheckoutLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const body = { redirect_url: window.location.origin }
+      if (couponCode) body.coupon_code = couponCode
+
+      const res = await fetch(`${API_BASE}/api/checkout`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        if (res.status === 429) throw new Error('You\'re doing that too fast. Please wait a few minutes and try again.')
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to create checkout session')
+      }
+
+      const { checkout_url, checkout_id } = await res.json()
+      if (checkout_id) localStorage.setItem('pending_checkout_id', checkout_id)
+      if (checkout_url) {
+        window.location.href = checkout_url
+      } else {
+        throw new Error('No checkout URL returned')
+      }
+    } catch (err) {
+      setCheckoutLoading(false)
+      throw err // PricingModal will catch this and display the error inline
+    }
+  }
+
+  // Coupon validation for logged-in users
+  const handleValidateCoupon = async (code) => {
+    if (!user) return { valid: false, reason: 'Not authenticated' }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { valid: false, reason: 'Not authenticated' }
+
+    const res = await fetch(`${API_BASE}/api/validate-coupon`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    })
+
+    if (!res.ok) {
+      if (res.status === 429) return { valid: false, reason: 'You\'re doing that too fast. Please wait a few minutes and try again.' }
+      return { valid: false, reason: 'Server error' }
+    }
+    return res.json()
   }
 
   return (
@@ -318,9 +398,11 @@ export default function Navbar() {
       {/* Pricing Modal — opened from navbar */}
       <PricingModal
         isOpen={pricingOpen}
-        onClose={() => setPricingOpen(false)}
+        onClose={() => { setPricingOpen(false); setCheckoutLoading(false) }}
         onUpgrade={handlePricingUpgrade}
-        checkoutLoading={false}
+        checkoutLoading={checkoutLoading}
+        onValidateCoupon={user ? handleValidateCoupon : null}
+        isPro={userPlan === 'pro'}
       />
     </>
   )
