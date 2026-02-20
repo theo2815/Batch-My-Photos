@@ -238,7 +238,9 @@ async function sendPaymentConfirmation({ to, amount, currency, plan, expiresAt }
        { label: 'Amount', value: formattedAmount },
        { label: 'Valid Until', value: expiryDate },
      ])}
-     ${p('You now have access to unlimited batch operations and up to 2 devices. Enjoy!')}`
+     ${p('You now have access to unlimited batch operations and up to 2 devices. Enjoy!')}
+     ${p('Don\'t have the app yet? Download it now from the Microsoft Store:')}
+     ${ctaButton('Download BatchMyPhotos', 'https://apps.microsoft.com/detail/9N1KKMV4NX4J')}`
   )
 
   return sendEmail({ to, subject: 'Payment Confirmed — BatchMyPhotos Pro', html })
