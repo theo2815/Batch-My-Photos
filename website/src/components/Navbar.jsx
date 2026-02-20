@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Play, Menu, X } from 'lucide-react'
+import PricingModal from './PricingModal'
 
 const NAV_LINKS = [
   { label: 'Features', href: '/#features' },
+  { label: 'Pricing', action: 'pricing' },
   { label: 'Demo', href: '/demo', external: true },
   { label: 'FAQ', href: '/#faq' },
   { label: 'Contact', href: 'mailto:batchmyphotos@gmail.com', external: true },
@@ -16,6 +18,7 @@ export default function Navbar() {
   const [user, setUser] = useState(null)
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [pricingOpen, setPricingOpen] = useState(false)
   const mobileMenuRef = useRef(null)
   const hamburgerRef = useRef(null)
   const location = useLocation()
@@ -89,6 +92,16 @@ export default function Navbar() {
   // Theme-driven styling
   const { isDark: dark } = useTheme()
 
+  // Pricing modal: redirect to login if guest, or to dashboard checkout if logged in
+  const handlePricingUpgrade = () => {
+    setPricingOpen(false)
+    if (!user) {
+      navigate('/login')
+    } else {
+      navigate('/dashboard?modal=pricing')
+    }
+  }
+
   return (
     <>
       <nav
@@ -118,7 +131,19 @@ export default function Navbar() {
             {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-1">
               {NAV_LINKS.map(link => (
-                link.external ? (
+                link.action === 'pricing' ? (
+                  <button
+                    key={link.label}
+                    onClick={() => setPricingOpen(true)}
+                    className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                      dark
+                        ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    {link.label}
+                  </button>
+                ) : link.external ? (
                   <a
                     key={link.label}
                     href={link.href}
@@ -219,7 +244,17 @@ export default function Navbar() {
             dark ? 'bg-slate-950/95 backdrop-blur-xl border-t border-white/[0.04]' : 'bg-white/95 backdrop-blur-xl border-t border-gray-100'
           }`}>
             {NAV_LINKS.map(link => (
-              link.external ? (
+              link.action === 'pricing' ? (
+                <button
+                  key={link.label}
+                  onClick={() => { setPricingOpen(true); setMobileOpen(false) }}
+                  className={`block w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {link.label}
+                </button>
+              ) : link.external ? (
                 <a
                   key={link.label}
                   href={link.href}
@@ -279,6 +314,14 @@ export default function Navbar() {
           </div>
         </div>
       </nav>
+
+      {/* Pricing Modal — opened from navbar */}
+      <PricingModal
+        isOpen={pricingOpen}
+        onClose={() => setPricingOpen(false)}
+        onUpgrade={handlePricingUpgrade}
+        checkoutLoading={false}
+      />
     </>
   )
 }
