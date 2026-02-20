@@ -5,6 +5,9 @@ builder = "NIXPACKS"
 # 3. Build the website (creates /website/dist)
 buildCommand = "npm install --prefix backend && npm install --prefix website && npm run build --prefix website"
 
+[build.env]
+NIXPACKS_NODE_VERSION = "20"
+
 [deploy]
 # Start the backend server
 # Note: server.js handles serving the ../website/dist static files

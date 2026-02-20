@@ -14,6 +14,10 @@ const { initCronJobs } = require('./services/cronService')
 const app = express()
 const port = process.env.PORT || 3000
 
+// Trust the first proxy (Railway's reverse proxy) so Express uses the real client IP
+// from the X-Forwarded-For header. Required for express-rate-limit to work correctly.
+app.set('trust proxy', 1)
+
 // ── Security Middleware ──────────────────────────────────────────────────────
 const isDev = process.env.NODE_ENV !== 'production'
 

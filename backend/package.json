@@ -14,6 +14,9 @@
   "author": "",
   "license": "UNLICENSED",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
     "cors": "^2.8.6",
