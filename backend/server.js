@@ -188,6 +188,104 @@ app.get('/api/me', authenticateUser, (req, res) => {
   })
 })
 
+// ── Token Refresh ────────────────────────────────────────────────────────────
+// Accepts a Supabase refresh_token, exchanges it for a new access_token +
+// refresh_token pair.  No Bearer auth required (the old JWT is expired).
+// Rate-limited: 10 requests per 15 minutes (same as other sensitive endpoints).
+app.use('/api/auth/refresh', sensitiveApiLimiter)
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const { refresh_token } = req.body
+
+  if (!refresh_token || typeof refresh_token !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid refresh_token' })
+  }
+
+  try {
+    // Use the anon client to exchange the refresh token.
+    // Supabase's setSession validates the refresh_token server-side and
+    // returns a fresh session (new access_token + new refresh_token).
+    const { data, error } = await supabase.auth.setSession({
+      access_token: 'expired',   // placeholder — Supabase only needs the refresh_token
+      refresh_token,
+    })
+
+    if (error || !data?.session) {
+      console.error('❌ [AUTH/REFRESH] Supabase error:', error?.message || 'No session returned')
+      return res.status(401).json({ error: 'Invalid or expired refresh token' })
+    }
+
+    const session = data.session
+    console.log(`✅ [AUTH/REFRESH] Token refreshed for user: ${session.user?.email || 'unknown'}`)
+
+    return res.json({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    })
+  } catch (err) {
+    console.error('❌ [AUTH/REFRESH] Unexpected error:', err.message)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ── Session Migration (Legacy → Refresh Token) ──────────────────────────────
+// For users who logged in BEFORE refresh-token support was added:
+// Exchanges a still-valid access_token for a brand-new session that includes a
+// refresh_token.  This happens silently on app startup — no user interaction.
+//
+// Security: requires a valid JWT (authenticateUser middleware verifies it).
+// The magic link is generated and consumed entirely server-side — never emailed.
+app.use('/api/auth/exchange-session', sensitiveApiLimiter)
+
+app.post('/api/auth/exchange-session', authenticateUser, async (req, res) => {
+  const userEmail = req.user.email
+
+  if (!userEmail) {
+    return res.status(400).json({ error: 'User email not found in token' })
+  }
+
+  try {
+    // Step 1: Generate a magic link server-side (no email sent)
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: userEmail,
+    })
+
+    if (linkError || !linkData) {
+      console.error('❌ [AUTH/EXCHANGE] generateLink failed:', linkError?.message)
+      return res.status(500).json({ error: 'Failed to generate session link' })
+    }
+
+    const hashedToken = linkData.properties?.hashed_token
+    if (!hashedToken) {
+      console.error('❌ [AUTH/EXCHANGE] No hashed_token in generateLink response')
+      return res.status(500).json({ error: 'Failed to extract token hash' })
+    }
+
+    // Step 2: Verify the OTP server-side to produce a full session
+    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: hashedToken,
+      type: 'email',
+    })
+
+    if (verifyError || !verifyData?.session) {
+      console.error('❌ [AUTH/EXCHANGE] verifyOtp failed:', verifyError?.message)
+      return res.status(500).json({ error: 'Failed to create session' })
+    }
+
+    const session = verifyData.session
+    console.log(`✅ [AUTH/EXCHANGE] Session migrated for user: ${userEmail}`)
+
+    return res.json({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    })
+  } catch (err) {
+    console.error('❌ [AUTH/EXCHANGE] Unexpected error:', err.message)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // ── PayMongo Routes ─────────────────────────────────────────────────────────
 // Mounted at /api — auth is handled per-route inside the router
 app.use('/api', paymongoRoutes)

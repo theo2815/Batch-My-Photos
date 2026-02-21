@@ -1,6 +1,6 @@
 {
   "name": "batchmyphotos",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Desktop utility for photographers to batch-split image folders",
   "main": "main.js",
   "scripts": {

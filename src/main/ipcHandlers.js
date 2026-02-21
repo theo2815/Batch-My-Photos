@@ -31,6 +31,7 @@ const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateM
 const { collectFileStats, isSameDrive, getDiskSpace, testWritePermission, formatBytes, calculateTotalSize, SPACE_BUFFER_MULTIPLIER } = require('./fileUtils');
 const { generateBatchFolderName } = require('../utils/batchNaming');
 const sharp = require('sharp');
+const { rateLimitedHandle: handle } = require('./ipcRateLimiter');
 const {
   STAT_CONCURRENCY,
   FOLDER_CONCURRENCY,
@@ -40,6 +41,10 @@ const {
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
 } = require('./constants');
+
+// Module-level storage for last batch operations (used by export-batch-report on demand).
+// Kept in main process memory to avoid sending large arrays through IPC.
+let lastBatchOperations = null;
 
 /**
  * Main export: Register all IPC handlers
@@ -76,7 +81,7 @@ function registerAuthHandlers(ipcMain) {
    * Handler: Check authentication status
    * Called on app startup to restore session and verify token validity
    */
-  ipcMain.handle('auth-check-status', async () => {
+  handle(ipcMain, 'auth-check-status', async () => {
     try {
       const authStatus = await authService.checkAuthStatus();
       return authStatus;
@@ -95,7 +100,7 @@ function registerAuthHandlers(ipcMain) {
    * Handler: Open login page in browser
    * Opens the website dashboard where users can authenticate
    */
-  ipcMain.handle('auth-open-login', async () => {
+  handle(ipcMain, 'auth-open-login', async () => {
     try {
       authService.openLoginPage();
       return { success: true };
@@ -110,7 +115,7 @@ function registerAuthHandlers(ipcMain) {
    * User pastes their session token from the website into the desktop app
    * Verifies the token is valid before storing it
    */
-  ipcMain.handle('auth-save-session', async (event, { sessionToken, userProfile }) => {
+  handle(ipcMain, 'auth-save-session', async (event, { sessionToken, userProfile }) => {
     try {
       // Verify token is valid before saving
       const verification = await authService.verifySession(sessionToken);
@@ -135,7 +140,7 @@ function registerAuthHandlers(ipcMain) {
    * Handler: Logout
    * Clears stored session and user profile
    */
-  ipcMain.handle('auth-logout', async () => {
+  handle(ipcMain, 'auth-logout', async () => {
     try {
       deviceService.stopHeartbeat();
       authService.clearSession();
@@ -150,7 +155,7 @@ function registerAuthHandlers(ipcMain) {
    * Handler: Get current session token
    * Used by the renderer process to make authenticated API calls
    */
-  ipcMain.handle('auth-get-session', async () => {
+  handle(ipcMain, 'auth-get-session', async () => {
     try {
       const sessionToken = authService.getStoredSession();
       const userProfile = authService.getStoredUser();
@@ -165,7 +170,7 @@ function registerAuthHandlers(ipcMain) {
    * Handler: Open dashboard in browser
    * Opens the website dashboard (for "View Profile" and "Upgrade to Pro" actions)
    */
-  ipcMain.handle('auth-open-dashboard', async () => {
+  handle(ipcMain, 'auth-open-dashboard', async () => {
     try {
       authService.openDashboard();
       return { success: true };
@@ -186,7 +191,7 @@ function registerSubscriptionHandlers(ipcMain) {
    * Handler: Check if user can execute a batch
    * Verifies current usage against subscription limits
    */
-  ipcMain.handle('subscription-check-batch-limit', async (event, sessionToken) => {
+  handle(ipcMain, 'subscription-check-batch-limit', async (event, sessionToken) => {
     try {
       return await subscriptionService.checkBatchLimit(sessionToken);
     } catch (error) {
@@ -200,7 +205,7 @@ function registerSubscriptionHandlers(ipcMain) {
    * Handler: Track batch execution
    * Records usage in backend after successful batch completion
    */
-  ipcMain.handle('subscription-track-batch', async (event, sessionToken, batchCount) => {
+  handle(ipcMain, 'subscription-track-batch', async (event, sessionToken, batchCount) => {
     try {
       return await subscriptionService.trackBatchExecution(sessionToken, batchCount);
     } catch (error) {
@@ -213,12 +218,26 @@ function registerSubscriptionHandlers(ipcMain) {
    * Handler: Refresh subscription status
    * Fetches latest subscription info from backend
    */
-  ipcMain.handle('subscription-refresh', async (event, sessionToken) => {
+  handle(ipcMain, 'subscription-refresh', async (event, sessionToken) => {
     try {
       return await subscriptionService.refreshSubscription(sessionToken);
     } catch (error) {
       logger.error('❌ [IPC] subscription-refresh failed:', error);
       return { error: sanitizeError(error, 'subscription-refresh') };
+    }
+  });
+
+  /**
+   * Handler: Flush pending batch tracks
+   * Retries any queued batch-tracking calls that failed while offline.
+   * Called on app startup and periodically by the renderer.
+   */
+  handle(ipcMain, 'subscription-flush-pending', async (event, sessionToken) => {
+    try {
+      return await subscriptionService.flushPendingTracks(sessionToken);
+    } catch (error) {
+      logger.error('❌ [IPC] subscription-flush-pending failed:', error);
+      return { flushed: 0, remaining: -1, error: sanitizeError(error, 'subscription-flush-pending') };
     }
   });
 }
@@ -232,7 +251,7 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: Get this machine's Hardware ID (HWID)
    */
-  ipcMain.handle('device-get-hwid', async () => {
+  handle(ipcMain, 'device-get-hwid', async () => {
     try {
       return { hwid: deviceService.getHwid(), label: deviceService.getDeviceLabel() };
     } catch (error) {
@@ -244,7 +263,7 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: Check if this device is authorized
    */
-  ipcMain.handle('device-check-authorized', async () => {
+  handle(ipcMain, 'device-check-authorized', async () => {
     try {
       return { authorized: deviceService.isDeviceAuthorized() };
     } catch (error) {
@@ -256,7 +275,7 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: List all devices bound to the user's subscription
    */
-  ipcMain.handle('device-get-list', async (event, sessionToken) => {
+  handle(ipcMain, 'device-get-list', async (event, sessionToken) => {
     try {
       return await deviceService.listDevices(sessionToken);
     } catch (error) {
@@ -268,7 +287,7 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: De-authorize (remove) a device binding
    */
-  ipcMain.handle('device-deauthorize', async (event, sessionToken, deviceId) => {
+  handle(ipcMain, 'device-deauthorize', async (event, sessionToken, deviceId) => {
     try {
       return await deviceService.deauthorizeDevice(sessionToken, deviceId);
     } catch (error) {
@@ -280,7 +299,7 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: Start/stop heartbeat lifecycle
    */
-  ipcMain.handle('device-start-heartbeat', async () => {
+  handle(ipcMain, 'device-start-heartbeat', async () => {
     try {
       deviceService.startHeartbeat(() => authService.getStoredSession());
       return { success: true };
@@ -290,7 +309,7 @@ function registerDeviceHandlers(ipcMain) {
     }
   });
 
-  ipcMain.handle('device-stop-heartbeat', async () => {
+  handle(ipcMain, 'device-stop-heartbeat', async () => {
     try {
       deviceService.stopHeartbeat();
       return { success: true };
@@ -307,7 +326,7 @@ function registerDeviceHandlers(ipcMain) {
 
 function registerFolderHandlers(ipcMain, store, getMainWindow) {
   
-  ipcMain.handle('select-folder', async () => {
+  handle(ipcMain, 'select-folder', async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
       properties: ['openDirectory'],
       title: 'Select Source Folder',
@@ -323,7 +342,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('select-output-folder', async () => {
+  handle(ipcMain, 'select-output-folder', async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Select Output Folder for Batches',
@@ -344,7 +363,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
    * This is called when a user drops a folder via drag & drop.
    * We verify it's a valid directory before allowing access.
    */
-  ipcMain.handle('register-dropped-folder', async (event, folderPath) => {
+  handle(ipcMain, 'register-dropped-folder', async (event, folderPath) => {
     try {
       if (!folderPath || typeof folderPath !== 'string') {
         return { success: false, error: 'Invalid folder path' };
@@ -379,7 +398,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Scan folder and analyze file groups
    * OPTIMIZED: Uses fs.promises and yields for responsiveness
    */
-  ipcMain.handle('scan-folder', async (event, folderPath) => {
+  handle(ipcMain, 'scan-folder', async (event, folderPath) => {
     try {
       // SECURITY: Validate path is allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -431,7 +450,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Execute the batch splitting operation
    * OPTIMIZED: Uses concurrency pool instead of batch chunks
    */
-  ipcMain.handle('execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
+  handle(ipcMain, 'execute-batch', async (event, { folderPath, maxFilesPerBatch, outputPrefix, mode = 'move', outputDir = null, sortBy = 'name-asc', blurryGroups = null }) => {
     logger.time('TOTAL_BATCH_EXECUTION');
     try {
       // ── SUBSCRIPTION LIMIT GUARD (server-side, not bypassable from renderer) ──
@@ -440,43 +459,100 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         return { success: false, error: 'Not authenticated. Please log in to execute batches.' };
       }
 
-      let limitCheck;
-      try {
-        limitCheck = await subscriptionService.checkBatchLimit(sessionToken);
-      } catch (limitErr) {
-        logger.error('❌ [IPC] Subscription limit check threw in execute-batch:', limitErr);
-        // Fail-CLOSED: deny execution when limit check itself throws
-        return { success: false, error: 'Could not verify subscription status. Please try again.' };
+      // ── PENDING TRACK QUEUE: local check (instant, no network) ────────────────
+      // Only block if too many are unsynced — the actual flush runs in parallel below
+      const pendingCheck = subscriptionService.checkPendingTrackLimit();
+      if (pendingCheck.blocked) {
+        // Before blocking, try a quick flush if we're online
+        const { net } = require('electron');
+        if (net.isOnline()) {
+          await subscriptionService.flushPendingTracks(sessionToken).catch(() => {});
+          const recheck = subscriptionService.checkPendingTrackLimit();
+          if (!recheck.blocked) {
+            logger.log('✅ [IPC] Pending tracks flushed — unblocked');
+          } else {
+            logger.warn(`🔒 [IPC] Blocked execute-batch — ${recheck.pending} unsynced batch tracks`);
+            return {
+              success: false,
+              error: `You have ${recheck.pending} unsynced batch records. Please connect to the internet to sync your usage before running more batches.`,
+              code: 'PENDING_TRACKS_EXCEEDED',
+            };
+          }
+        } else {
+          logger.warn(`🔒 [IPC] Blocked execute-batch — ${pendingCheck.pending} unsynced batch tracks (offline)`);
+          return {
+            success: false,
+            error: `You have ${pendingCheck.pending} unsynced batch records. Please connect to the internet to sync your usage before running more batches.`,
+            code: 'PENDING_TRACKS_EXCEEDED',
+          };
+        }
       }
 
-      if (!limitCheck.canExecute) {
+      // ── PARALLEL PRE-EXECUTION CHECKS (subscription + flush + device + path validation) ──
+      // Run ALL independent checks concurrently — flush no longer blocks separately
+      const parallelChecks = {};
+
+      // 1. Subscription limit check
+      parallelChecks.limitCheck = subscriptionService.checkBatchLimit(sessionToken)
+        .catch(limitErr => {
+          logger.error('❌ [IPC] Subscription limit check threw in execute-batch:', limitErr);
+          return { canExecute: false, error: 'Could not verify subscription status. Please try again.', _threw: true };
+        });
+
+      // 2. Device verification (if enabled)
+      if (config.features.HWID_BINDING_ENABLED) {
+        parallelChecks.deviceCheck = deviceService.verifyDeviceLive(sessionToken);
+      }
+
+      // 3. Path validation (run in parallel with network calls)
+      parallelChecks.sourcePathCheck = isPathAllowedAsync(folderPath);
+      if (outputDir) {
+        parallelChecks.outputPathCheck = isPathAllowedAsync(outputDir);
+      }
+
+      // 4. Background flush of pending tracks (best-effort, runs in parallel)
+      parallelChecks.flushPending = subscriptionService.flushPendingTracks(sessionToken)
+        .catch(err => { logger.warn('⚠️ [IPC] Background queue flush failed:', err.message) });
+
+      // Await all checks at once
+      const [limitCheck, deviceCheck, sourceAllowed, outputAllowed] = await Promise.all([
+        parallelChecks.limitCheck,
+        parallelChecks.deviceCheck || Promise.resolve(null),
+        parallelChecks.sourcePathCheck,
+        parallelChecks.outputPathCheck || Promise.resolve(true),
+        parallelChecks.flushPending,  // awaited but doesn't block result evaluation
+      ]);
+
+      // Evaluate results
+      if (limitCheck._threw || !limitCheck.canExecute) {
+        if (limitCheck._threw) {
+          return { success: false, error: limitCheck.error };
+        }
         logger.warn('🔒 [IPC] Batch execution blocked by subscription limit');
         return {
           success: false,
           error: limitCheck.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.',
           code: 'BATCH_LIMIT_EXCEEDED',
+          usage: limitCheck.usage || null,
+          subscriptionExpired: !!limitCheck.subscriptionExpired,
+          freeOffline: !!limitCheck.freeOffline,
         };
       }
 
-      // DEVICE GUARD: Live-verify this device is still registered on the server
-      if (config.features.HWID_BINDING_ENABLED) {
-        const deviceCheck = await deviceService.verifyDeviceLive(sessionToken);
-        if (!deviceCheck.authorized) {
-          logger.warn('🔒 [DEVICE] Blocked execute-batch — device not authorized:', deviceCheck.reason);
-          return {
-            success: false,
-            error: deviceCheck.reason || 'This device is not authorized for your subscription. Please manage your devices in Settings or re-login.',
-            code: 'DEVICE_NOT_AUTHORIZED',
-          };
-        }
+      if (deviceCheck && !deviceCheck.authorized) {
+        logger.warn('🔒 [DEVICE] Blocked execute-batch — device not authorized:', deviceCheck.reason);
+        return {
+          success: false,
+          error: deviceCheck.reason || 'This device is not authorized for your subscription. Please manage your devices in Settings or re-login.',
+          code: 'DEVICE_NOT_AUTHORIZED',
+        };
       }
 
-      // SECURITY: Validate paths are allowed (with symlink protection)
-      if (!(await isPathAllowedAsync(folderPath))) {
+      if (!sourceAllowed) {
         logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered path:', folderPath);
         return { success: false, error: 'Access denied: source folder not selected through dialog' };
       }
-      if (outputDir && !(await isPathAllowedAsync(outputDir))) {
+      if (!outputAllowed) {
         logger.warn('🔒 [SECURITY] Blocked execute-batch on unregistered output path:', outputDir);
         return { success: false, error: 'Access denied: output folder not selected through dialog' };
       }
@@ -484,6 +560,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // SECURITY: Sanitize inputs
       const safePrefix = sanitizeOutputPrefix(outputPrefix);
       const safeMaxFiles = validateMaxFilesPerBatch(maxFilesPerBatch);
+      const VALID_SORT_MODES = new Set(['name-asc', 'name-desc', 'date-asc', 'date-desc', 'exif-asc', 'exif-desc', 'size-desc']);
+      const safeSortBy = VALID_SORT_MODES.has(sortBy) ? sortBy : 'name-asc';
       
       // Reset cancellation flag at start of new operation
       appState.resetBatchCancellation();
@@ -494,16 +572,17 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Collect stats based on sort mode
       let fileStats = null;
-      if (sortBy.startsWith('date')) {
+      if (safeSortBy.startsWith('date')) {
         logger.log('📊 [SORT] Collecting file stats for date sorting...');
         fileStats = await collectFileStats(files, folderPath, STAT_CONCURRENCY);
-      } else if (sortBy.startsWith('exif')) {
+      } else if (safeSortBy.startsWith('exif')) {
         fileStats = await exifService.extractExifDates(files, folderPath);
       }
       
       // Group files and separate blurry groups if provided
       const fileGroups = await groupFilesByBaseName(files);
-      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups : []);
+      const MAX_BLURRY_GROUPS = 10000;
+      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
       const blurryFiles = [];
       
       if (blurryGroupSet.size > 0) {
@@ -517,8 +596,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       }
       
       // Recalculate batches with user's sort preference (blurry groups excluded)
-      const batches = await calculateBatches(fileGroups, safeMaxFiles, sortBy, fileStats);
-      
+      const batches = await calculateBatches(fileGroups, safeMaxFiles, safeSortBy, fileStats);
+
       const baseOutputDir = (mode === 'copy' && outputDir) ? outputDir : folderPath;
       
       // Create all batch folders first (Parallel Optimized)
@@ -545,8 +624,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       logger.timeEnd('FOLDER_CREATION');
 
       let processedFiles = 0;
-      const totalFiles = files.length;
-      
+
       // Flatten the work into a single array of operations
       // Yield periodically during this heavy synchronous calculation
       const operations = [];
@@ -580,6 +658,10 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           });
         }
       }
+
+      // Use the actual filtered count (operations built from grouped media files + blurry files)
+      // instead of raw files.length which includes system/non-media files skipped by groupFilesByBaseName
+      const totalFiles = operations.length;
 
       // HIGH-PERFORMANCE FILE PROCESSING
       logger.time('FILE_MOVING');
@@ -642,6 +724,21 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         resultsArray.push({ folder: blurryFolderName, fileCount: blurryFiles.length });
       }
       
+      // Store operations in main process memory for on-demand CSV export.
+      // This avoids sending the full array through IPC (can be 20MB+ for large batches).
+      lastBatchOperations = {
+        operations: operations.map(op => ({
+          fileName: op.fileName,
+          originalPath: op.sourcePath,
+          newPath: op.destPath,
+          batchFolder: path.basename(path.dirname(op.destPath)),
+        })),
+        mode,
+        sourceFolder: folderPath,
+        outputDir: baseOutputDir,
+        errors: errors.length > 0 ? errors.slice(0, 10) : null,
+      };
+
       const result = {
         success: !wasCancelled,
         cancelled: wasCancelled,
@@ -657,19 +754,13 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         errors: errors.length > 0 ? errors.slice(0, 10) : null,  // Return first 10 errors
         blurryFileCount: blurryFiles.length,
         blurryFolderName: blurryFolderName,
-        // Per-file operations for CSV export (original → new path mapping)
-        operations: operations.map(op => ({
-          fileName: op.fileName,
-          originalPath: op.sourcePath,
-          newPath: op.destPath,
-          batchFolder: path.basename(path.dirname(op.destPath)),
-        })),
         completedAt: new Date().toISOString(),
       };
       
-      // Save rollback manifest for successful move operations (if feature is enabled)
+      // Save rollback manifest for successful move operations (non-blocking)
+      // Fire-and-forget: don't delay returning results to the user
       if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
-        await rollbackManager.saveRollbackManifest({
+        rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
@@ -679,13 +770,28 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           outputPrefix: safePrefix,
           // Extended metadata for history detail display
           maxFilesPerBatch: safeMaxFiles,
-          sortBy,
+          sortBy: safeSortBy,
           batchResults: result.results, // [{ folder, fileCount }, ...]
-        });
+        }).catch(err => logger.error('💾 [ROLLBACK] Background manifest save failed:', err.message));
       }
       
       if (wasCancelled) {
         logger.log(`⚠️ [CANCEL] Batch operation cancelled. Processed ${processedFiles} of ${totalFiles} files.`);
+      }
+
+      // ── SERVER-SIDE BATCH TRACKING (non-blocking, queue-backed) ───────────────
+      // Track usage after successful execution.  This is fire-and-forget but SAFE:
+      // trackBatchExecution automatically enqueues on any failure (offline/error),
+      // and the queue is drained on the next successful run.  We don't block the
+      // result return to keep the UI snappy.
+      if (!wasCancelled) {
+        subscriptionService.trackBatchExecution(sessionToken, totalBatchCount)
+          .then(trackResult => {
+            if (!trackResult.success) {
+              logger.warn(`⚠️ [IPC] Batch tracking ${trackResult.offline ? 'queued (offline)' : 'failed'}: ${trackResult.error || 'unknown'}`);
+            }
+          })
+          .catch(err => logger.error('❌ [IPC] Batch tracking threw:', err.message));
       }
       
       return result;
@@ -701,7 +807,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Calculate batch preview
    * OPTIMIZED: async + yielding
    */
-  ipcMain.handle('preview-batches', async (event, { folderPath, maxFilesPerBatch, sortBy = 'name-asc', excludeGroups = null }) => {
+  handle(ipcMain, 'preview-batches', async (event, { folderPath, maxFilesPerBatch, sortBy = 'name-asc', excludeGroups = null }) => {
     try {
       // SECURITY: Validate path is allowed (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -711,20 +817,22 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // SECURITY: Validate and sanitize maxFilesPerBatch
       const safeMaxFiles = validateMaxFilesPerBatch(maxFilesPerBatch);
-      
+      const VALID_SORT_MODES = new Set(['name-asc', 'name-desc', 'date-asc', 'date-desc', 'exif-asc', 'exif-desc', 'size-desc']);
+      const safeSortBy = VALID_SORT_MODES.has(sortBy) ? sortBy : 'name-asc';
+
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
-      
+
       // Collect stats based on sort mode
       let fileStats = null;
-      if (sortBy.startsWith('date')) {
+      if (safeSortBy.startsWith('date')) {
         fileStats = await collectFileStats(files, folderPath, STAT_CONCURRENCY);
-      } else if (sortBy.startsWith('exif')) {
+      } else if (safeSortBy.startsWith('exif')) {
         fileStats = await exifService.extractExifDates(files, folderPath);
       }
-      
+
       const fileGroups = await groupFilesByBaseName(files);
-      
+
       // Separate blurry groups if excludeGroups is provided
       const blurryFiles = [];
       if (Array.isArray(excludeGroups) && excludeGroups.length > 0) {
@@ -735,8 +843,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           }
         }
       }
-      
-      const batches = await calculateBatches(fileGroups, safeMaxFiles, sortBy, fileStats);
+
+      const batches = await calculateBatches(fileGroups, safeMaxFiles, safeSortBy, fileStats);
       
       const oversizedGroups = Object.entries(fileGroups)
         .filter(([_name, files]) => files.length > safeMaxFiles)
@@ -776,7 +884,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * When AI mode is enabled, sends images to the Python FastAPI server.
    * If the AI service is unavailable, returns an error (no fallback).
    */
-  ipcMain.handle('analyze-blur', async (event, { folderPath, threshold = 'moderate' }) => {
+  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate' }) => {
     try {
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -834,7 +942,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * For same-drive move: only checks write permission (rename is O(1), no extra space).
    * For cross-drive move and copy: checks both disk space and write permission.
    */
-  ipcMain.handle('validate-execution', async (event, { folderPath, mode = 'move', outputDir = null }) => {
+  handle(ipcMain, 'validate-execution', async (event, { folderPath, mode = 'move', outputDir = null }) => {
     try {
       // SECURITY: Validate paths
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -851,8 +959,11 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       let sameDrive = true;
       if (mode === 'copy' && outputDir) {
         sameDrive = await isSameDrive(folderPath, outputDir);
+      } else if (mode === 'move' && outputDir) {
+        // Move with explicit outputDir: check cross-drive (batchExecutor falls back to copy+delete)
+        sameDrive = await isSameDrive(folderPath, outputDir);
       } else if (mode === 'move') {
-        // For move mode, source and output are the same folder (same drive by definition)
+        // Default move: subfolders of source → always same drive
         sameDrive = true;
       }
 
@@ -944,7 +1055,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
 
 function registerFileSystemHandlers(ipcMain, _getMainWindow) {
   
-  ipcMain.handle('open-folder', async (event, folderPath) => {
+  handle(ipcMain, 'open-folder', async (event, folderPath) => {
     try {
       // SECURITY: Validate path is allowed before opening in shell (with symlink protection)
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -966,9 +1077,9 @@ function registerFileSystemHandlers(ipcMain, _getMainWindow) {
 
 function registerPreferenceHandlers(ipcMain, store) {
   
-  ipcMain.handle('get-recent-folders', async () => store.get('recentFolders', []));
+  handle(ipcMain, 'get-recent-folders', async () => store.get('recentFolders', []));
 
-  ipcMain.handle('add-recent-folder', async (event, folderPath) => {
+  handle(ipcMain, 'add-recent-folder', async (event, folderPath) => {
     // Validate input
     if (!folderPath || typeof folderPath !== 'string') {
       logger.warn('🔒 [SECURITY] Invalid folder path for recent folders');
@@ -1000,9 +1111,9 @@ function registerPreferenceHandlers(ipcMain, store) {
     }
   });
 
-  ipcMain.handle('get-theme', async () => store.get('theme', 'dark'));
+  handle(ipcMain, 'get-theme', async () => store.get('theme', 'dark'));
 
-  ipcMain.handle('set-theme', async (event, theme) => {
+  handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'
     const validThemes = ['dark', 'light'];
     const safeTheme = validThemes.includes(theme) ? theme : 'dark';
@@ -1012,9 +1123,9 @@ function registerPreferenceHandlers(ipcMain, store) {
   });
 
   // Presets Management
-  ipcMain.handle('get-presets', async () => store.get('presets', []));
+  handle(ipcMain, 'get-presets', async () => store.get('presets', []));
 
-  ipcMain.handle('save-preset', async (event, { name, settings }) => {
+  handle(ipcMain, 'save-preset', async (event, { name, settings }) => {
     // SECURITY: Validate inputs exist and are correct types
     if (!name || typeof name !== 'string') return false;
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
@@ -1058,7 +1169,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     return true;
   });
 
-  ipcMain.handle('delete-preset', async (event, name) => {
+  handle(ipcMain, 'delete-preset', async (event, name) => {
     if (!name) return false;
     
     let presets = store.get('presets', []);
@@ -1085,7 +1196,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Handler: Cancel the current batch operation
    * Sets the cancellation flag which is checked during file processing
    */
-  ipcMain.handle('cancel-batch', async () => {
+  handle(ipcMain, 'cancel-batch', async () => {
     logger.log('⚠️ [CANCEL] Batch cancellation requested');
     appState.batchCancelled = true;
     return { success: true };
@@ -1096,7 +1207,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Removes folders that no longer exist from the recent folders list.
    * Called on app startup to ensure the list is always valid.
    */
-  ipcMain.handle('cleanup-recent-folders', async () => {
+  handle(ipcMain, 'cleanup-recent-folders', async () => {
     const recentFolders = store.get('recentFolders', []);
     const validFolders = [];
     
@@ -1123,7 +1234,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Handler: Check if there's an interrupted batch operation
    * Called on app startup to detect if recovery is needed
    */
-  ipcMain.handle('check-interrupted-progress', async () => {
+  handle(ipcMain, 'check-interrupted-progress', async () => {
     try {
       const progress = await progressManager.loadProgress();
       if (progress) {
@@ -1161,8 +1272,73 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
   /**
    * Handler: Clear interrupted progress (user chose to discard)
    */
-  ipcMain.handle('clear-interrupted-progress', async () => {
+  handle(ipcMain, 'clear-interrupted-progress', async () => {
     await progressManager.clearProgress();
+    return { success: true };
+  });
+
+  /**
+   * Handler: Check if there's an interrupted rollback operation
+   * Called on app startup alongside check-interrupted-progress
+   */
+  handle(ipcMain, 'check-interrupted-rollback', async () => {
+    try {
+      const info = await rollbackManager.checkInterruptedRollback();
+      if (info) {
+        // Validate source folder still exists
+        try {
+          const stats = await fsPromises.stat(info.sourceFolder);
+          if (!stats.isDirectory()) {
+            await rollbackManager.clearRollbackProgress();
+            return null;
+          }
+        } catch {
+          logger.log('🔄 [ROLLBACK] Source folder no longer exists, clearing rollback progress');
+          await rollbackManager.clearRollbackProgress();
+          return null;
+        }
+        return info;
+      }
+      return null;
+    } catch (error) {
+      logger.error('Failed to check interrupted rollback:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Handler: Resume an interrupted rollback operation
+   */
+  handle(ipcMain, 'resume-rollback', async (event) => {
+    logger.time('RESUME_ROLLBACK_EXECUTION');
+    try {
+      appState.resetBatchCancellation();
+
+      const result = await rollbackManager.resumeInterruptedRollback(
+        appState,
+        (progress) => {
+          event.sender.send('rollback-progress', progress);
+        }
+      );
+
+      // Register source folder so "Open in Explorer" works
+      if (result.success && result.sourceFolder) {
+        registerAllowedPath(result.sourceFolder);
+      }
+
+      logger.timeEnd('RESUME_ROLLBACK_EXECUTION');
+      return result;
+    } catch (error) {
+      logger.timeEnd('RESUME_ROLLBACK_EXECUTION');
+      return { success: false, error: sanitizeError(error, 'resume-rollback') };
+    }
+  });
+
+  /**
+   * Handler: Clear interrupted rollback progress (user chose to discard)
+   */
+  handle(ipcMain, 'clear-interrupted-rollback', async () => {
+    await rollbackManager.clearRollbackProgress();
     return { success: true };
   });
 
@@ -1171,7 +1347,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
    * Continues from where the previous operation stopped
    * Uses stored operations to ensure files go to their original intended destinations
    */
-  ipcMain.handle('resume-batch', async (event) => {
+  handle(ipcMain, 'resume-batch', async (event) => {
     logger.time('RESUME_BATCH_EXECUTION');
     try {
       const progress = await progressManager.loadProgress();
@@ -1179,29 +1355,50 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         return { success: false, error: 'No interrupted progress found' };
       }
       
-      const { folderPath, outputDir, mode, processedFileNames, totalFiles, 
-              operations: storedOperations, batchInfo } = progress;
-      
+      const { folderPath, outputDir, mode, processedFileNames, processedFiles: checkpointCount,
+              totalFiles, operations: storedOperations, batchInfo } = progress;
+
       // Register the folder path as allowed for this session
       registerAllowedPath(folderPath);
       if (outputDir && outputDir !== folderPath) {
         registerAllowedPath(outputDir);
       }
-      
-      // Filter to only remaining operations (skip already processed files)
-      const processedSet = new Set(processedFileNames);
-      const remainingOperations = storedOperations.filter(op => !processedSet.has(op.fileName));
+
+      // Derive which operations are already complete.
+      // New checkpoints store only a count (not the full filename array) for performance.
+      // Legacy checkpoints may still have processedFileNames — use them if available,
+      // otherwise determine remaining work by checking filesystem state.
+      let remainingOperations;
+      if (processedFileNames && processedFileNames.length > 0) {
+        // Legacy path: use the persisted filename list
+        const processedSet = new Set(processedFileNames);
+        remainingOperations = storedOperations.filter(op => !processedSet.has(op.fileName));
+      } else {
+        // Current path: derive from filesystem — a file is "processed" if it exists at destPath
+        const checkResults = await Promise.all(
+          storedOperations.map(async (op) => {
+            try {
+              await fsPromises.access(op.destPath);
+              return true; // file exists at destination — already processed
+            } catch {
+              return false;
+            }
+          })
+        );
+        remainingOperations = storedOperations.filter((_, i) => !checkResults[i]);
+      }
+      const alreadyProcessed = storedOperations.length - remainingOperations.length;
       
       logger.log('💾 [RESUME] Resuming batch operation');
-      logger.log('   - Already processed:', processedFileNames.length);
+      logger.log('   - Already processed:', alreadyProcessed);
       logger.log('   - Remaining operations:', remainingOperations.length);
-      
+
       if (remainingOperations.length === 0) {
         await progressManager.clearProgress();
-        return { 
-          success: true, 
+        return {
+          success: true,
           batchesCreated: batchInfo?.length || 0,
-          filesProcessed: processedFileNames.length,
+          filesProcessed: alreadyProcessed,
           totalFiles,
           results: batchInfo || [],
           outputDir: outputDir || folderPath,
@@ -1228,7 +1425,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         remainingOperations, mode, {
           totalFiles,
           batchCount: resumeBatchCount,
-          initialProcessed: processedFileNames.length,
+          initialProcessed: alreadyProcessed,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
           onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
@@ -1274,7 +1471,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    * Returns summary info about the last batch operation if rollback is possible
    * Respects the ROLLBACK_ENABLED feature flag.
    */
-  ipcMain.handle('check-rollback-available', async () => {
+  handle(ipcMain, 'check-rollback-available', async () => {
     if (!config.features.ROLLBACK_ENABLED) {
       return null;
     }
@@ -1285,7 +1482,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Execute rollback operation
    * Moves files back to original locations and deletes empty batch folders
    */
-  ipcMain.handle('rollback-batch', async (event) => {
+  handle(ipcMain, 'rollback-batch', async (event) => {
     logger.time('ROLLBACK_EXECUTION');
     
     try {
@@ -1310,7 +1507,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Clear rollback manifest
    * Called when user dismisses the undo option or starts a new batch
    */
-  ipcMain.handle('clear-rollback-manifest', async () => {
+  handle(ipcMain, 'clear-rollback-manifest', async () => {
     rollbackManager.clearRollbackManifest();
     return { success: true };
   });
@@ -1322,7 +1519,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    * SECURITY: Validates folderPath against allowed paths and sanitizes fileNames
    * to prevent path traversal attacks (e.g. "../../etc/passwd").
    */
-  ipcMain.handle('get-thumbnails', async (event, { folderPath, fileNames }) => {
+  handle(ipcMain, 'get-thumbnails', async (event, { folderPath, fileNames }) => {
     // SECURITY: Validate folder path is in allowed list
     if (!(await isPathAllowedAsync(folderPath))) {
       logger.warn('🔒 [SECURITY] Blocked get-thumbnails on unregistered path:', folderPath);
@@ -1391,7 +1588,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    */
   const previewCache = new Map();
 
-  ipcMain.handle('get-image-preview', async (event, { folderPath, fileName }) => {
+  handle(ipcMain, 'get-image-preview', async (event, { folderPath, fileName }) => {
     // SECURITY: Validate folder path is in allowed list
     if (!(await isPathAllowedAsync(folderPath))) {
       logger.warn('🔒 [SECURITY] Blocked get-image-preview on unregistered path:', folderPath);
@@ -1466,7 +1663,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Get operation history
    * Returns an array of past operation summaries for the history panel
    */
-  ipcMain.handle('get-operation-history', async () => {
+  handle(ipcMain, 'get-operation-history', async () => {
     try {
       return rollbackManager.getOperationHistory();
     } catch (error) {
@@ -1479,7 +1676,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Validate a history entry
    * Checks if files are still at their expected locations before rollback
    */
-  ipcMain.handle('validate-history-entry', async (event, operationId) => {
+  handle(ipcMain, 'validate-history-entry', async (event, operationId) => {
     try {
       if (!operationId || typeof operationId !== 'string') {
         return { valid: false, error: 'Invalid operation ID' };
@@ -1494,7 +1691,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Rollback a specific history entry
    * Loads manifest from disk, validates, and executes rollback
    */
-  ipcMain.handle('rollback-history-entry', async (event, operationId) => {
+  handle(ipcMain, 'rollback-history-entry', async (event, operationId) => {
     logger.time('HISTORY_ROLLBACK_EXECUTION');
     
     try {
@@ -1513,6 +1710,13 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
         }
       );
 
+      // Register the source folder so "Open in Explorer" works after history undo.
+      // This is safe: the path was originally user-selected (in a prior session)
+      // and the successful rollback confirms it's a real, accessible directory.
+      if (result.success && result.sourceFolder) {
+        registerAllowedPath(result.sourceFolder);
+      }
+
       logger.timeEnd('HISTORY_ROLLBACK_EXECUTION');
       return result;
 
@@ -1526,7 +1730,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Delete a specific history entry
    * Removes from index and deletes manifest file
    */
-  ipcMain.handle('delete-history-entry', async (event, operationId) => {
+  handle(ipcMain, 'delete-history-entry', async (event, operationId) => {
     try {
       if (!operationId || typeof operationId !== 'string') {
         return { success: false, error: 'Invalid operation ID' };
@@ -1542,7 +1746,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   /**
    * Handler: Clear all operation history
    */
-  ipcMain.handle('clear-operation-history', async () => {
+  handle(ipcMain, 'clear-operation-history', async () => {
     try {
       const count = await rollbackManager.clearHistory();
       return { success: true, entriesCleared: count };
@@ -1561,7 +1765,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * and returns the result. Fails silently (returns updateAvailable: false)
    * so the app works fine offline.
    */
-  ipcMain.handle('check-app-version', async () => {
+  handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
 
@@ -1607,7 +1811,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Open a URL in the user's default browser.
    * Only allows https:// URLs for security.
    */
-  ipcMain.handle('open-external-url', async (event, url) => {
+  handle(ipcMain, 'open-external-url', async (event, url) => {
     if (typeof url !== 'string' || !url.startsWith('https://')) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
@@ -1634,9 +1838,19 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
    * Handler: Export a single batch operation as a CSV file.
    * Opens a save dialog, writes CSV with per-file details.
    */
-  ipcMain.handle('export-batch-report', async (event, data) => {
+  handle(ipcMain, 'export-batch-report', async (event, data) => {
     try {
-      const { operations, mode, sourceFolder, outputDir, completedAt, results, errors } = data || {};
+      // Use operations from the request data, or fall back to the last batch operations
+      // stored in main process memory (operations are no longer sent through IPC for performance).
+      const reportData = data || {};
+      const stored = lastBatchOperations || {};
+      const operations = reportData.operations || stored.operations;
+      const mode = reportData.mode || stored.mode;
+      const sourceFolder = reportData.sourceFolder || stored.sourceFolder;
+      const outputDir = reportData.outputDir || stored.outputDir;
+      const completedAt = reportData.completedAt;
+      const results = reportData.results;
+      const errors = reportData.errors || stored.errors;
 
       if (!Array.isArray(operations) || operations.length === 0) {
         return { success: false, error: 'No operations data to export' };
@@ -1704,7 +1918,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   /**
    * Handler: Export all operation history as a CSV summary.
    */
-  ipcMain.handle('export-history-report', async () => {
+  handle(ipcMain, 'export-history-report', async () => {
     try {
       const history = rollbackManager.getOperationHistory();
 

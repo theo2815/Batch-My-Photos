@@ -53,6 +53,9 @@ function sanitizeError(error, _context = '') {
       if (error.message.startsWith('Access denied:')) {
         return 'Access denied. Please select the folder using the app.';
       }
+      if (error.message.startsWith('RATE_LIMITED:')) {
+        return 'Too many requests. Please wait a moment and try again.';
+      }
     }
   }
 
@@ -162,6 +165,13 @@ describe('sanitizeError', () => {
       const error = new Error('something');
       error.code = 'UNKNOWN_CODE';
       expect(sanitizeError(error)).toBe(DEFAULT_ERROR_MESSAGE);
+    });
+
+    it('passes through rate-limited errors with safe message', () => {
+      const error = new Error('RATE_LIMITED: Too many requests on "execute-batch". Please wait a moment and try again.');
+      const result = sanitizeError(error);
+      expect(result).toBe('Too many requests. Please wait a moment and try again.');
+      expect(result).not.toContain('execute-batch');
     });
   });
 });

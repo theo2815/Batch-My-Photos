@@ -203,30 +203,36 @@ function sortFileGroups(groupsArray, sortBy = 'name-asc', fileStats = null) {
 async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc', fileStats = null) {
   const groupsArray = Object.entries(fileGroups);
   const groupCount = groupsArray.length;
-  
+
   // Memory warning for very large datasets
   if (groupCount > 50000) {
-    logger.warn(`⚠️ [MEMORY] Large dataset detected: ${groupCount.toLocaleString()} file groups`);
-    logger.warn('⚠️ [MEMORY] This may take a moment to process...');
+    logger.warn(`\u26a0\ufe0f [MEMORY] Large dataset detected: ${groupCount.toLocaleString()} file groups`);
+    logger.warn('\u26a0\ufe0f [MEMORY] This may take a moment to process...');
   }
-  
-  // Sort groups based on user preference
-  sortFileGroups(groupsArray, sortBy, fileStats);
-  logger.log(`📊 [SORT] File groups sorted by: ${sortBy}`);
-  
+
+  // TWO-PASS APPROACH:
+  // 1. Always bin-pack by group size descending (optimal First-Fit-Decreasing).
+  //    This minimizes wasted space and total batch count regardless of user sort.
+  // 2. After packing, sort files WITHIN each batch by user preference.
+  //    This preserves the user's desired ordering inside batches.
+  const packingGroups = [...groupsArray].sort((a, b) => b[1].length - a[1].length);
+  logger.log(`\ud83d\udcca [SORT] Bin-packing by size-desc, then re-sorting within batches by: ${sortBy}`);
+
   const batches = [];
   const batchCounts = [];
-  
-  for (let i = 0; i < groupsArray.length; i++) {
-    const [_baseName, files] = groupsArray[i];
+  // Track which groups belong to which batch for re-sorting
+  const batchGroupMap = [];
+
+  for (let i = 0; i < packingGroups.length; i++) {
+    const [baseName, files] = packingGroups[i];
     const groupSize = files.length;
-    
+
     let placed = false;
-    // Iterate backwards - optimization heuristic: 
+    // Iterate backwards - optimization heuristic:
     // Newer batches are at the end, more likely to have space.
     // BOUNDED SEARCH: Only check the last N batches to ensure O(N) complexity
     const searchStart = Math.max(0, batches.length - BATCH_SEARCH_DEPTH);
-    
+
     for (let j = batches.length - 1; j >= searchStart; j--) {
       if (batchCounts[j] + groupSize <= maxFilesPerBatch) {
         // MEMORY FIX: Use manual loop instead of spread operator
@@ -235,11 +241,12 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
           batches[j].push(files[k]);
         }
         batchCounts[j] += groupSize;
+        batchGroupMap[j].push([baseName, files]);
         placed = true;
         break;
       }
     }
-    
+
     if (!placed) {
       // MEMORY FIX: Create new batch with manual loop instead of [...files]
       // This avoids creating an intermediate array copy
@@ -249,20 +256,38 @@ async function calculateBatches(fileGroups, maxFilesPerBatch, sortBy = 'name-asc
       }
       batches.push(newBatch);
       batchCounts.push(groupSize);
+      batchGroupMap.push([[baseName, files]]);
     }
-    
+
     // Yield periodically to keep UI responsive
     if (i % BATCH_YIELD_THRESHOLD === 0 && i > 0) {
       await yieldToMain();
     }
   }
-  
+
+  // PASS 2: Re-sort files within each batch by user's preferred order.
+  // This only matters for non-size-desc sorts (where the packing order differs from display order).
+  if (sortBy !== 'size-desc') {
+    for (let b = 0; b < batches.length; b++) {
+      const groups = batchGroupMap[b];
+      // Sort the groups within this batch by user preference
+      sortFileGroups(groups, sortBy, fileStats);
+      // Rebuild the flat file array in the new order
+      let idx = 0;
+      for (const [, files] of groups) {
+        for (const file of files) {
+          batches[b][idx++] = file;
+        }
+      }
+    }
+  }
+
   // Log stats for large operations
   if (groupCount > 10000) {
     const totalFiles = batchCounts.reduce((sum, count) => sum + count, 0);
-    logger.log(`📊 [BATCH] Processed ${groupCount.toLocaleString()} groups into ${batches.length} batches (${totalFiles.toLocaleString()} files)`);
+    logger.log(`\ud83d\udcca [BATCH] Processed ${groupCount.toLocaleString()} groups into ${batches.length} batches (${totalFiles.toLocaleString()} files)`);
   }
-  
+
   return batches;
 }
 

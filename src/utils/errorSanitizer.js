@@ -84,6 +84,10 @@ function sanitizeError(error, context = '') {
       if (error.message.startsWith('Access denied:')) {
         return 'Access denied. Please select the folder using the app.';
       }
+      // Pass through rate-limit messages (user-friendly, no sensitive info)
+      if (error.message.startsWith('RATE_LIMITED:')) {
+        return 'Too many requests. Please wait a moment and try again.';
+      }
     }
   }
   

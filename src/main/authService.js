@@ -4,6 +4,13 @@
  * Manages user login, session persistence, and token verification
  * for the BatchMyPhotos desktop application.
  *
+ * Persistent session strategy:
+ * - On login, both access_token (JWT) and refresh_token are stored.
+ * - The JWT expires (default ~1h via Supabase), but the refresh token is
+ *   long-lived.  When a JWT check returns 401, we silently refresh it using
+ *   the stored refresh token via the backend’s /api/auth/refresh endpoint.
+ * - Users remain logged in indefinitely until they explicitly log out.
+ *
  * All data is stored in a SecureStore instance which encrypts the
  * entire JSON file via Electron safeStorage (OS keychain / Windows DPAPI).
  * No sensitive data (tokens, plan info) is ever written to disk in plain text.
@@ -22,6 +29,9 @@ const store = new SecureStore({ name: 'auth-session' })
 
 const BACKEND_URL = config.urls.BACKEND_URL
 const FRONTEND_URL = config.urls.FRONTEND_URL
+
+// Prevent concurrent refresh attempts from racing
+let _refreshPromise = null
 
 // ============================================================================
 // Session Management
@@ -56,10 +66,28 @@ function saveSession(sessionToken, userProfile) {
 }
 
 /**
+ * Save refresh token separately (used for silent re-auth when JWT expires).
+ * @param {string} refreshToken - Supabase refresh token
+ */
+function saveRefreshToken(refreshToken) {
+  store.set('refresh_token', refreshToken)
+  logger.log('🔒 [AUTH] Refresh token saved')
+}
+
+/**
+ * Get stored refresh token.
+ * @returns {string|null}
+ */
+function getStoredRefreshToken() {
+  return store.get('refresh_token', null)
+}
+
+/**
  * Clear session (logout)
  */
 function clearSession() {
   store.clear()
+  _refreshPromise = null
   logger.log('🚪 [AUTH] Session cleared (logout)')
 }
 
@@ -84,6 +112,161 @@ function getCachedSubscription() {
   return store.get('cached_subscription', null)
 }
 
+// ============================================================================
+// Silent Token Refresh
+// ============================================================================
+
+/**
+ * Silently refresh the access token using the stored refresh token.
+ * Uses the backend's /api/auth/refresh endpoint (which calls Supabase
+ * setSession under the hood).
+ *
+ * Returns:
+ *  - `{ refreshed: true, accessToken }` on success (new tokens saved)
+ *  - `{ refreshed: false }` on any failure (invalid refresh token, offline, etc.)
+ *
+ * Coalesces concurrent calls: only one actual request is made at a time.
+ */
+async function refreshAccessToken() {
+  // Coalesce concurrent refresh requests
+  if (_refreshPromise) {
+    logger.log('🔄 [AUTH] Joining existing refresh request...')
+    return _refreshPromise
+  }
+
+  const refreshToken = getStoredRefreshToken()
+  if (!refreshToken) {
+    logger.warn('⚠️ [AUTH] No refresh token stored — cannot refresh')
+    return { refreshed: false }
+  }
+
+  _refreshPromise = _doRefresh(refreshToken)
+  try {
+    return await _refreshPromise
+  } finally {
+    _refreshPromise = null
+  }
+}
+
+/**
+ * Internal: execute the actual refresh request.
+ * @param {string} refreshToken
+ * @returns {Promise<{refreshed: boolean, accessToken?: string}>}
+ */
+async function _doRefresh(refreshToken) {
+  try {
+    logger.log('🔄 [AUTH] Refreshing access token via backend...')
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000) // 10s timeout
+
+    const response = await net.fetch(`${BACKEND_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      logger.warn(`⚠️ [AUTH] Refresh failed: ${response.status} — ${errorData.error || 'unknown'}`)
+
+      // If the server says the refresh token itself is invalid (401/403),
+      // it means the user must log in again — but we DON'T clear the session
+      // here; the caller decides whether to clear based on context.
+      return { refreshed: false, authRejected: response.status === 401 || response.status === 403 }
+    }
+
+    const data = await response.json()
+    const newAccessToken = data.access_token
+    const newRefreshToken = data.refresh_token
+
+    if (!newAccessToken) {
+      logger.error('❌ [AUTH] Refresh response missing access_token')
+      return { refreshed: false }
+    }
+
+    // Save the new tokens
+    store.set('session_token', newAccessToken)
+    if (newRefreshToken) {
+      store.set('refresh_token', newRefreshToken)
+    }
+
+    logger.log('✅ [AUTH] Access token refreshed successfully')
+    return { refreshed: true, accessToken: newAccessToken }
+  } catch (err) {
+    logger.error('❌ [AUTH] Refresh error:', err.message)
+    return { refreshed: false, networkError: true }
+  }
+}
+
+// ============================================================================
+// Legacy Session Migration
+// ============================================================================
+
+/**
+ * Silently migrate a pre-refresh-token session to a full session.
+ *
+ * For users who logged in BEFORE refresh-token support was deployed:
+ *   - Their stored access_token is valid but they have no refresh_token.
+ *   - When the JWT expires (~1 hr), they'd be forced to re-login.
+ *
+ * This function calls the backend's /api/auth/exchange-session endpoint which
+ * uses the Supabase admin API to generate a new session (access + refresh)
+ * entirely server-side — no email, no user interaction.
+ *
+ * Must be called while the old JWT is still valid (the endpoint requires auth).
+ *
+ * @param {string} sessionToken - The still-valid access token
+ * @returns {Promise<string|null>} New access token on success, null on failure
+ */
+async function _migrateSession(sessionToken) {
+  try {
+    logger.log('🔄 [AUTH] Migrating legacy session (acquiring refresh token)...')
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+
+    const response = await net.fetch(`${BACKEND_URL}/api/auth/exchange-session`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      logger.warn(`⚠️ [AUTH] Session migration failed (${response.status}): ${err.error || 'unknown'}`)
+      return null
+    }
+
+    const data = await response.json()
+
+    if (!data.access_token || !data.refresh_token) {
+      logger.warn('⚠️ [AUTH] Migration response missing tokens')
+      return null
+    }
+
+    // Save the new full session
+    store.set('session_token', data.access_token)
+    saveRefreshToken(data.refresh_token)
+
+    logger.log('✅ [AUTH] Legacy session migrated — refresh token acquired')
+    return data.access_token
+  } catch (err) {
+    // Network error or timeout — not critical, will retry next launch
+    logger.warn('⚠️ [AUTH] Session migration skipped (offline or error):', err.message)
+    return null
+  }
+}
+
 /**
  * Verify session is still valid with backend.
  * Retries once on 401 (transient Supabase getUser failures on cold starts).
@@ -96,7 +279,7 @@ function getCachedSubscription() {
  * @param {string} sessionToken - JWT token to verify
  * @returns {Promise<{valid: boolean, subscription?: object, networkError?: boolean}>}
  */
-async function verifySession(sessionToken) {
+async function verifySession(sessionToken, { allowRefresh = true } = {}) {
   if (!sessionToken) return { valid: false }
 
   const MAX_ATTEMPTS = 2
@@ -126,8 +309,19 @@ async function verifySession(sessionToken) {
           continue
         }
 
-        // 401/403 after retries: server explicitly rejected the session
+        // 401/403 after retries — JWT is expired or revoked.
+        // Try refreshing the token silently before giving up.
         if (status === 401 || status === 403) {
+          if (allowRefresh) {
+            logger.log('🔄 [AUTH] JWT expired — attempting silent token refresh...')
+            const refreshResult = await refreshAccessToken()
+            if (refreshResult.refreshed) {
+              // Re-verify with the brand-new token (but don't allow another refresh
+              // to prevent infinite loops)
+              logger.log('✅ [AUTH] Token refreshed — re-verifying with new token...')
+              return verifySession(refreshResult.accessToken, { allowRefresh: false })
+            }
+          }
           logger.warn(`⚠️ [AUTH] Session explicitly rejected: ${status}`)
           return { valid: false }
         }
@@ -171,12 +365,27 @@ async function verifySession(sessionToken) {
  * @returns {Promise<{isAuthenticated: boolean, user: object|null, subscription: object|null}>}
  */
 async function checkAuthStatus() {
-  const sessionToken = getStoredSession()
+  let sessionToken = getStoredSession()
   const userProfile = getStoredUser()
 
   if (!sessionToken || !userProfile) {
     logger.log('ℹ️  [AUTH] No stored session found')
     return { isAuthenticated: false, user: null, subscription: null }
+  }
+
+  // ── Proactive migration for legacy sessions ──────────────────────────────
+  // If we have a stored access token but NO refresh token, this is a pre-update
+  // session.  Try to exchange the still-valid JWT for a full session (with
+  // refresh token) BEFORE it expires.  This is a one-time, zero-friction
+  // migration that happens silently on startup.
+  if (!getStoredRefreshToken()) {
+    logger.log('🔄 [AUTH] No refresh token stored — attempting legacy migration...')
+    const migratedToken = await _migrateSession(sessionToken)
+    if (migratedToken) {
+      sessionToken = migratedToken // Use the fresh token for verification
+    }
+    // If migration fails (offline, token already expired), continue with
+    // the original token — verifySession will handle refresh/failure below.
   }
 
   // Verify session is still valid
@@ -197,10 +406,14 @@ async function checkAuthStatus() {
         deviceBlocked: false,
       }
     }
-    // Server explicitly rejected the session (401/403) — session is truly invalid
+    // Server explicitly rejected the session (401/403) — session is truly invalid.
+    // Auto-open the login page so the user can re-authenticate with one click
+    // instead of having to manually navigate to Settings → Login.
     logger.warn('⚠️ [AUTH] Stored session is invalid, clearing')
     clearSession()
-    return { isAuthenticated: false, user: null, subscription: null }
+    logger.log('🔄 [AUTH] Auto-opening login page for seamless re-authentication...')
+    openLoginPage()
+    return { isAuthenticated: false, user: null, subscription: null, sessionExpired: true }
   }
 
   // Bind this device to the user's subscription (HWID enforcement)
@@ -263,6 +476,9 @@ module.exports = {
   getStoredUser,
   saveSession,
   clearSession,
+  saveRefreshToken,
+  getStoredRefreshToken,
+  refreshAccessToken,
   checkAuthStatus,
   verifySession,
   openLoginPage,

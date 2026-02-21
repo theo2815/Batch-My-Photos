@@ -44,6 +44,7 @@ export function useBatchExecution({ setAppState, setError }) {
     }
   }, []);
 
+
   /**
    * Internal: Run the actual batch execution (no validation).
    * Extracted so it can be called directly after validation passes
@@ -91,25 +92,19 @@ export function useBatchExecution({ setAppState, setError }) {
         setExecutionResults(results);
         setAppState(STATES.COMPLETE);
 
-        // ============================================================================
-        // BATCH USAGE TRACKING (Phase 2: Record batch execution)
-        // ============================================================================
-
-        // Track successful batch execution in backend
-        const authSession = await window.electronAPI.authGetSession();
-        if (authSession.sessionToken) {
-          const batchCount = results.batchesCreated || 1;
-          const trackResult = await window.electronAPI.subscriptionTrackBatch(
-            authSession.sessionToken,
-            batchCount
-          );
-
-          if (trackResult.success) {
-            console.log(`✅ [SUBSCRIPTION] Tracked ${batchCount} batch(es) successfully`);
-          } else if (!trackResult.offline) {
-            console.warn('⚠️ [SUBSCRIPTION] Failed to track batch usage:', trackResult.error);
-          }
-        }
+        // Batch tracking is now handled server-side in the execute-batch main process handler.
+        // No fire-and-forget needed here — tracks are enqueued for retry if offline.
+      } else if (results.code === 'BATCH_LIMIT_EXCEEDED' || results.code === 'PENDING_TRACKS_EXCEEDED') {
+        // Subscription limit or pending-tracks limit enforced server-side — show limit card
+        const message = results.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.';
+        setBatchLimitExceeded({
+          message,
+          usage: results.usage || null,
+          isExpired: !!results.subscriptionExpired,
+          isOfflineFree: !!results.freeOffline,
+          isPendingSync: results.code === 'PENDING_TRACKS_EXCEEDED',
+        });
+        return;
       } else {
         throw new Error(results.error);
       }
@@ -132,51 +127,8 @@ export function useBatchExecution({ setAppState, setError }) {
     setSafetyCheckResult(null);
     setShowSafetyWarning(false);
 
-    // ============================================================================
-    // BATCH LIMIT CHECK (Phase 2: Subscription enforcement)
-    // ============================================================================
-
-    // Get user session token for subscription check
-    const authSession = await window.electronAPI.authGetSession();
-    if (!authSession.sessionToken) {
-      setError('Please log in to execute batches');
-      setAppState(STATES.ERROR);
-      return;
-    }
-
-    // Check subscription limits (5 batches/month for free, unlimited for Pro)
-    setIsCheckingLimit(true);
-    let limitCheck;
-    try {
-      limitCheck = await window.electronAPI.subscriptionCheckBatchLimit(authSession.sessionToken);
-    } catch (err) {
-      console.error('[SUBSCRIPTION] Limit check failed:', err);
-      // Fail-CLOSED: deny execution when the check itself errors
-      limitCheck = { canExecute: false, error: 'Could not verify subscription status. Please try again.' };
-    } finally {
-      setIsCheckingLimit(false);
-    }
-
-    if (!limitCheck.canExecute) {
-      // User has exceeded their limit (online or offline) — show limit card
-      const message = limitCheck.error ||
-        (limitCheck.subscriptionExpired
-          ? `Your Pro subscription has expired. Renew now to continue using unlimited batches.`
-          : `You've reached your monthly limit of ${limitCheck.usage?.limit || 5} batches. Upgrade to Pro for unlimited batches.`);
-
-      setBatchLimitExceeded({
-        message,
-        usage: limitCheck.usage || null,
-        isExpired: !!limitCheck.subscriptionExpired,
-        isOfflineFree: !!limitCheck.freeOffline,
-      });
-      return;
-    }
-
-    // If offline but allowed to execute, log it
-    if (limitCheck.offline) {
-      console.warn('[SUBSCRIPTION] Operating in offline mode — using cached subscription data');
-    }
+    // NOTE: Subscription limit is enforced server-side inside execute-batch handler.
+    // No separate renderer-side check needed — saves a full network round-trip.
 
     // ============================================================================
     // SAFETY VALIDATION

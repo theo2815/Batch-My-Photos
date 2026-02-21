@@ -15,6 +15,7 @@ import ForgotPassword from './pages/ForgotPassword'
 import UpdatePassword from './pages/UpdatePassword'
 import BillingHistory from './pages/BillingHistory'
 import DesktopCallback from './pages/DesktopCallback'
+import ConnectApp from './pages/ConnectApp'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 
@@ -52,6 +53,7 @@ const AppContent = () => {
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
           <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
           <Route path="/auth/desktop-callback" element={<PageTransition><DesktopCallback /></PageTransition>} />
+          <Route path="/auth/connect-app" element={<PageTransition><ConnectApp /></PageTransition>} />
           <Route path="/dashboard" element={<PageTransition><ProtectedRoute><Dashboard /></ProtectedRoute></PageTransition>} />
           <Route path="/settings" element={<PageTransition><ProtectedRoute><Settings /></ProtectedRoute></PageTransition>} />
           <Route path="/billing" element={<PageTransition><ProtectedRoute><BillingHistory /></ProtectedRoute></PageTransition>} />

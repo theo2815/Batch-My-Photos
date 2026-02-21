@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
@@ -17,7 +17,29 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [activeModal, setActiveModal] = useState(null)
+  const [sessionChecked, setSessionChecked] = useState(!isDesktop) // skip check for non-desktop
   const { isDark } = useTheme()
+
+  // ── Desktop fast-path: if user already has a website session, skip login ──
+  // Redirect to the ConnectApp page which shows their identity + a "Connect" button.
+  useEffect(() => {
+    if (!isDesktop) return
+
+    async function checkExistingSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          navigate('/auth/connect-app', { replace: true })
+          return
+        }
+      } catch {
+        // Session check failed — fall through to normal login
+      }
+      setSessionChecked(true)
+    }
+
+    checkExistingSession()
+  }, [isDesktop, navigate])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -35,6 +57,16 @@ export default function Login() {
       navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
     }
     setLoading(false)
+  }
+
+  // While checking for an existing session (desktop flow), show a brief loading state
+  // so the login form doesn't flash before redirecting to /auth/connect-app.
+  if (!sessionChecked) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
+        <Loader2 className={`w-8 h-8 animate-spin ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+      </div>
+    )
   }
 
   return (

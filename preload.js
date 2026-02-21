@@ -197,6 +197,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   subscriptionRefresh: (sessionToken) =>
     ipcRenderer.invoke('subscription-refresh', sessionToken),
 
+  /**
+   * Flush pending batch tracking queue
+   * Retries any batch-tracking calls that failed while offline.
+   *
+   * @param {string} sessionToken - User's session token
+   * @returns {Promise<Object>} { flushed, remaining }
+   */
+  subscriptionFlushPending: (sessionToken) =>
+    ipcRenderer.invoke('subscription-flush-pending', sessionToken),
+
   // ============================================================================
   // DEVICE MANAGEMENT APIs
   // ============================================================================
@@ -373,6 +383,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Execution results
    */
   resumeBatch: () => ipcRenderer.invoke('resume-batch'),
+
+  /**
+   * Check if there's an interrupted rollback from a previous session
+   * @returns {Promise<Object|null>} Info about interrupted rollback or null
+   */
+  checkInterruptedRollback: () => ipcRenderer.invoke('check-interrupted-rollback'),
+
+  /**
+   * Resume an interrupted rollback operation
+   * @returns {Promise<Object>} Rollback results
+   */
+  resumeRollback: () => ipcRenderer.invoke('resume-rollback'),
+
+  /**
+   * Clear interrupted rollback progress (user chose to discard)
+   * @returns {Promise<Object>} Result with success status
+   */
+  clearInterruptedRollback: () => ipcRenderer.invoke('clear-interrupted-rollback'),
 
   // ============================================================================
   // STORAGE & MAINTENANCE APIs

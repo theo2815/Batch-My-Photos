@@ -72,7 +72,15 @@ async function executeFileOperations(operations, mode, options) {
           throw new Error('Copy verification failed - size mismatch');
         }
         // Delete source (safe now that copy is verified)
-        await fsPromises.unlink(op.sourcePath);
+        // Separate try-catch: if unlink fails, the copy already succeeded
+        // — the file is duplicated, not lost. We report this distinctly.
+        try {
+          await fsPromises.unlink(op.sourcePath);
+        } catch (unlinkErr) {
+          const err = new Error(`Moved successfully but source cleanup failed: ${unlinkErr.message}`);
+          err.duplicated = true;
+          throw err;
+        }
       }, {
         isCancelled,
         onFileProcessed: (fileName) => {
@@ -81,7 +89,9 @@ async function executeFileOperations(operations, mode, options) {
         },
         onFileError: (fileName, err) => {
           processedFiles++;
-          errors.push({ file: fileName, error: err.message });
+          const entry = { file: fileName, error: err.message };
+          if (err.duplicated) entry.duplicated = true;
+          errors.push(entry);
         },
         onProgress: () => _sendProgress(processedFiles, totalFiles, batchCount, onProgress),
         onSaveProgress,
@@ -93,6 +103,7 @@ async function executeFileOperations(operations, mode, options) {
       // ================================================================
       logger.log('⚡ [EXECUTOR] Same-drive move - using fast sync rename');
       let lastSaveTime = Date.now();
+      let successCount = 0;
 
       for (let i = 0; i < operations.length; i += FILE_MOVE_CHUNK_SIZE) {
         // Check for cancellation between chunks
@@ -108,6 +119,7 @@ async function executeFileOperations(operations, mode, options) {
           try {
             fs.renameSync(op.sourcePath, op.destPath);
             chunkFileNames.push(op.fileName);
+            successCount++;
           } catch (err) {
             errors.push({ file: op.fileName, error: err.message });
           }
@@ -118,8 +130,8 @@ async function executeFileOperations(operations, mode, options) {
           onProcessedFiles(chunkFileNames);
         }
 
-        // Update count
-        processedFiles = initialProcessed + Math.min(i + FILE_MOVE_CHUNK_SIZE, operations.length);
+        // Update count: use actual processed (successes + errors) for accurate progress
+        processedFiles = initialProcessed + successCount + errors.length;
 
         // Send progress update
         _sendProgress(processedFiles, totalFiles, batchCount, onProgress);
@@ -148,6 +160,16 @@ async function executeFileOperations(operations, mode, options) {
 
     await _runWorkerPool(operations, async (op) => {
       await fsPromises.copyFile(op.sourcePath, op.destPath);
+      // Verify copy integrity (same check as cross-drive move)
+      const [srcStat, destStat] = await Promise.all([
+        fsPromises.stat(op.sourcePath),
+        fsPromises.stat(op.destPath)
+      ]);
+      if (srcStat.size !== destStat.size) {
+        // Clean up partial copy before reporting error
+        try { await fsPromises.unlink(op.destPath); } catch { /* ignore */ }
+        throw new Error('Copy verification failed - size mismatch');
+      }
     }, {
       isCancelled,
       onFileProcessed: (fileName) => {

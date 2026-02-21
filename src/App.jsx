@@ -30,7 +30,7 @@ import { LoginScreen } from './components/Auth/LoginScreen';
 import { ProfileDropdown } from './components/Auth/ProfileDropdown';
 
 // Components
-import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal, DeviceManagerModal } from './components/Modals';
+import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModal, ResumeRollbackModal, UndoConfirmationModal, HistoryModal, SafetyCheckModal, BlurSensitivityModal, DeviceManagerModal } from './components/Modals';
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
@@ -47,6 +47,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // ============================================================================
   // CORE STATE
@@ -131,6 +132,10 @@ function App() {
     handleClearHistory, handleValidateEntry,
     // Undo complete
     undoCompleteResult, clearUndoComplete,
+    // Interrupted rollback recovery
+    checkInterruptedRollback,
+    showResumeRollbackModal, interruptedRollback,
+    handleResumeRollback, handleDiscardRollback,
   } = rollback;
 
   // ============================================================================
@@ -203,6 +208,7 @@ function App() {
       setUser(authStatus.user);
       setSubscription(authStatus.subscription);
       setIsOffline(authStatus.offline || false);
+      setSessionExpired(authStatus.sessionExpired || false);
       setAuthLoading(false);
     }
     checkAuth();
@@ -212,7 +218,8 @@ function App() {
   useEffect(() => {
     loadRecentFolders();
     checkInterruptedProgress();
-  }, [loadRecentFolders, checkInterruptedProgress]);
+    checkInterruptedRollback();
+  }, [loadRecentFolders, checkInterruptedProgress, checkInterruptedRollback]);
 
   // Debounced preview refresh when settings change
   const refreshPreview = useCallback(async () => {
@@ -484,7 +491,7 @@ function App() {
 
   // Show login screen if not authenticated
   if (!isAuthenticated) {
-    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} sessionExpired={sessionExpired} />;
   }
 
   // Main app (authenticated users only)
@@ -673,6 +680,13 @@ function App() {
         progress={interruptedProgress}
         onResume={handleResume}
         onDiscard={handleDiscardProgress}
+      />
+
+      <ResumeRollbackModal
+        isOpen={showResumeRollbackModal}
+        info={interruptedRollback}
+        onResume={handleResumeRollback}
+        onDiscard={handleDiscardRollback}
       />
 
       <UndoConfirmationModal

@@ -128,6 +128,7 @@ async function handleDeepLink(url) {
     }
 
     const token = parsed.searchParams.get('token');
+    const refreshToken = parsed.searchParams.get('refresh_token');
     const email = parsed.searchParams.get('email');
     const name = parsed.searchParams.get('name');
 
@@ -163,6 +164,11 @@ async function handleDeepLink(url) {
       name: decodeURIComponent(name || ''),
       ...(verification.networkError ? { unverified: true } : {}),
     });
+
+    // Store refresh token for persistent sessions (silent re-auth on JWT expiry)
+    if (refreshToken) {
+      authService.saveRefreshToken(refreshToken);
+    }
 
     // Start device heartbeat after successful authentication
     deviceService.startHeartbeat(() => authService.getStoredSession());

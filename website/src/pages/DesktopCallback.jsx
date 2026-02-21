@@ -32,11 +32,12 @@ export default function DesktopCallback() {
         }
 
         const token = session.access_token
+        const refreshToken = session.refresh_token
         const email = session.user?.email || ''
         const name = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name || ''
 
-        // Build deep link URL
-        const url = `batchmyphotos://auth/callback?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`
+        // Build deep link URL (includes refresh_token for persistent sessions)
+        const url = `batchmyphotos://auth/callback?token=${encodeURIComponent(token)}&refresh_token=${encodeURIComponent(refreshToken)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`
         setDeepLinkUrl(url)
         setStatus('redirecting')
 

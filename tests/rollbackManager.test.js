@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import crypto from 'crypto';
 
 // ============================================================================
 // SESSION-LEVEL ROLLBACK TESTS (re-implemented for isolated testing)
@@ -552,24 +553,190 @@ describe('Manifest file path sanitization', () => {
   });
 });
 
-describe('Validation logic', () => {
-  it('validates file existence with sampling', async () => {
+// ============================================================================
+// MANIFEST ENCRYPTION TESTS (AES-256-GCM)
+// ============================================================================
+
+describe('Manifest encryption round-trip', () => {
+  const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+  const IV_LENGTH = 12;
+  const AUTH_TAG_LENGTH = 16;
+
+  // Mirror the encryption functions from rollbackManager
+  function encryptManifest(plaintext, key) {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+    let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
+    ciphertext += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+    return JSON.stringify({
+      encrypted: true,
+      version: 1,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      ciphertext
+    });
+  }
+
+  function decryptManifest(envelope, key) {
+    const iv = Buffer.from(envelope.iv, 'hex');
+    const authTag = Buffer.from(envelope.authTag, 'hex');
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+    let plaintext = decipher.update(envelope.ciphertext, 'hex', 'utf8');
+    plaintext += decipher.final('utf8');
+    return plaintext;
+  }
+
+  const testKey = crypto.randomBytes(32);
+
+  it('round-trips manifest data through encrypt/decrypt', () => {
+    const manifest = JSON.stringify({
+      operationId: 'test-op-123',
+      operations: [
+        { fileName: 'a.jpg', originalPath: '/photos/a.jpg', currentPath: '/photos/Batch_001/a.jpg' },
+        { fileName: 'b.raw', originalPath: '/photos/b.raw', currentPath: '/photos/Batch_001/b.raw' },
+      ]
+    });
+    const encrypted = encryptManifest(manifest, testKey);
+    const parsed = JSON.parse(encrypted);
+    expect(parsed.encrypted).toBe(true);
+    expect(parsed.version).toBe(1);
+    const decrypted = decryptManifest(parsed, testKey);
+    expect(decrypted).toBe(manifest);
+    expect(JSON.parse(decrypted).operations).toHaveLength(2);
+  });
+
+  it('produces unique ciphertext for same data (random IV)', () => {
+    const plaintext = JSON.stringify({ operationId: 'test', operations: [] });
+    const enc1 = JSON.parse(encryptManifest(plaintext, testKey));
+    const enc2 = JSON.parse(encryptManifest(plaintext, testKey));
+    expect(enc1.iv).not.toBe(enc2.iv);
+    expect(enc1.ciphertext).not.toBe(enc2.ciphertext);
+  });
+
+  it('fails decryption with wrong key', () => {
+    const plaintext = JSON.stringify({ operationId: 'test', operations: [] });
+    const encrypted = JSON.parse(encryptManifest(plaintext, testKey));
+    const wrongKey = crypto.randomBytes(32);
+    expect(() => decryptManifest(encrypted, wrongKey)).toThrow();
+  });
+
+  it('fails decryption with tampered ciphertext', () => {
+    const plaintext = JSON.stringify({ operationId: 'test', operations: [] });
+    const encrypted = JSON.parse(encryptManifest(plaintext, testKey));
+    encrypted.ciphertext = 'ff' + encrypted.ciphertext.slice(2);
+    expect(() => decryptManifest(encrypted, testKey)).toThrow();
+  });
+
+  it('detects legacy plaintext manifests (no encrypted flag)', () => {
+    // Simulate a pre-encryption manifest
+    const legacy = { operationId: 'old-op', operations: [{ fileName: 'test.jpg' }] };
+    const parsed = legacy; // As if JSON.parse returned this
+    expect(parsed.encrypted).toBeUndefined();
+    // The reader should handle this as plaintext
+    expect(parsed.operations).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// ROLLBACK CRASH RECOVERY TESTS
+// ============================================================================
+
+describe('Rollback crash recovery state tracking', () => {
+  it('builds correct rollback progress state', () => {
+    const state = {
+      operationId: 'test-rollback-123',
+      totalFiles: 100,
+      restoredFiles: 42,
+      restoredFileNames: Array.from({ length: 42 }, (_, i) => `file_${i}.jpg`),
+      sourceFolder: '/photos/originals',
+      outputFolder: '/photos/originals',
+      batchFolders: ['Batch_001', 'Batch_002'],
+    };
+
+    expect(state.operationId).toBe('test-rollback-123');
+    expect(state.restoredFileNames).toHaveLength(42);
+    expect(state.totalFiles - state.restoredFiles).toBe(58);
+  });
+
+  it('filters remaining operations from restored set', () => {
+    const allOperations = Array.from({ length: 100 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+      originalPath: `/photos/file_${i}.jpg`,
+      currentPath: `/batch/file_${i}.jpg`,
+    }));
+
+    // Simulate 42 files already restored
+    const restoredSet = new Set(
+      Array.from({ length: 42 }, (_, i) => `file_${i}.jpg`)
+    );
+
+    const remainingOps = allOperations.filter(op => !restoredSet.has(op.fileName));
+    expect(remainingOps).toHaveLength(58);
+    expect(remainingOps[0].fileName).toBe('file_42.jpg');
+  });
+
+  it('handles empty restored set (crash at start)', () => {
+    const allOperations = Array.from({ length: 50 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+    }));
+
+    const restoredSet = new Set([]);
+    const remainingOps = allOperations.filter(op => !restoredSet.has(op.fileName));
+    expect(remainingOps).toHaveLength(50);
+  });
+
+  it('handles fully restored set (crash at end)', () => {
+    const allOperations = Array.from({ length: 50 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+    }));
+
+    const restoredSet = new Set(
+      Array.from({ length: 50 }, (_, i) => `file_${i}.jpg`)
+    );
+
+    const remainingOps = allOperations.filter(op => !restoredSet.has(op.fileName));
+    expect(remainingOps).toHaveLength(0);
+  });
+
+  it('tracks restored file names incrementally', () => {
+    const restoredFileNames = [];
+    const operations = [
+      { fileName: 'a.jpg' },
+      { fileName: 'b.jpg' },
+      { fileName: 'c.jpg' },
+    ];
+
+    // Simulate processing
+    for (const op of operations) {
+      restoredFileNames.push(op.fileName);
+    }
+
+    expect(restoredFileNames).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    expect(restoredFileNames).toHaveLength(3);
+  });
+});
+
+describe('Validation logic (scaled sampling)', () => {
+  it('validates file existence with proportional sampling (5% up to 50)', async () => {
     const operations = Array.from({ length: 100 }, (_, i) => ({
       fileName: `file_${i}.jpg`,
       currentPath: `/batch/file_${i}.jpg`,
       originalPath: `/photos/file_${i}.jpg`,
     }));
 
-    // Simulate checking a sample of 10
-    const sampleSize = Math.min(10, operations.length);
-    const step = Math.max(1, Math.floor(operations.length / sampleSize));
+    // 5% of 100 = 5, but minimum is 10
+    const sampleSize = Math.min(50, Math.max(10, Math.ceil(operations.length * 0.05)));
+    const actualSample = Math.min(sampleSize, operations.length);
+    const step = Math.max(1, Math.floor(operations.length / actualSample));
     let checked = 0;
 
-    for (let i = 0; i < operations.length && checked < sampleSize; i += step) {
+    for (let i = 0; i < operations.length && checked < actualSample; i += step) {
       checked++;
     }
 
-    expect(checked).toBe(10);
+    expect(checked).toBe(10); // min(50, max(10, ceil(100*0.05))) = 10
     expect(checked).toBeLessThan(operations.length);
   });
 
@@ -579,14 +746,72 @@ describe('Validation logic', () => {
       currentPath: `/batch/file_${i}.jpg`,
     }));
 
-    const sampleSize = Math.min(10, operations.length);
-    const step = Math.max(1, Math.floor(operations.length / sampleSize));
+    const sampleSize = Math.min(50, Math.max(10, Math.ceil(operations.length * 0.05)));
+    const actualSample = Math.min(sampleSize, operations.length);
+    const step = Math.max(1, Math.floor(operations.length / actualSample));
     let checked = 0;
 
-    for (let i = 0; i < operations.length && checked < sampleSize; i += step) {
+    for (let i = 0; i < operations.length && checked < actualSample; i += step) {
       checked++;
     }
 
-    expect(checked).toBe(5);
+    expect(checked).toBe(5); // all 5 checked since total < min sample
+  });
+
+  it('scales up to 50 for very large manifests', () => {
+    const operations = Array.from({ length: 10000 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+      currentPath: `/batch/file_${i}.jpg`,
+    }));
+
+    // 5% of 10000 = 500, capped at 50
+    const sampleSize = Math.min(50, Math.max(10, Math.ceil(operations.length * 0.05)));
+    const actualSample = Math.min(sampleSize, operations.length);
+    const step = Math.max(1, Math.floor(operations.length / actualSample));
+    let checked = 0;
+
+    for (let i = 0; i < operations.length && checked < actualSample; i += step) {
+      checked++;
+    }
+
+    expect(checked).toBe(50); // capped at 50
+  });
+
+  it('checks at least 10 for medium manifests (200 files)', () => {
+    const operations = Array.from({ length: 200 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+      currentPath: `/batch/file_${i}.jpg`,
+    }));
+
+    // 5% of 200 = 10, max(10, 10) = 10, min(50, 10) = 10
+    const sampleSize = Math.min(50, Math.max(10, Math.ceil(operations.length * 0.05)));
+    const actualSample = Math.min(sampleSize, operations.length);
+    const step = Math.max(1, Math.floor(operations.length / actualSample));
+    let checked = 0;
+
+    for (let i = 0; i < operations.length && checked < actualSample; i += step) {
+      checked++;
+    }
+
+    expect(checked).toBe(10);
+  });
+
+  it('checks 25 for 500 files (5% = 25)', () => {
+    const operations = Array.from({ length: 500 }, (_, i) => ({
+      fileName: `file_${i}.jpg`,
+      currentPath: `/batch/file_${i}.jpg`,
+    }));
+
+    // 5% of 500 = 25, max(10, 25) = 25, min(50, 25) = 25
+    const sampleSize = Math.min(50, Math.max(10, Math.ceil(operations.length * 0.05)));
+    const actualSample = Math.min(sampleSize, operations.length);
+    const step = Math.max(1, Math.floor(operations.length / actualSample));
+    let checked = 0;
+
+    for (let i = 0; i < operations.length && checked < actualSample; i += step) {
+      checked++;
+    }
+
+    expect(checked).toBe(25);
   });
 });

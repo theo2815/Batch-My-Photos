@@ -22,6 +22,10 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
   // Undo complete result (shown after any undo finishes — session or history)
   const [undoCompleteResult, setUndoCompleteResult] = useState(null);
 
+  // Interrupted rollback state (crash recovery)
+  const [showResumeRollbackModal, setShowResumeRollbackModal] = useState(false);
+  const [interruptedRollback, setInterruptedRollback] = useState(null);
+
   // ============================================================================
   // SESSION-LEVEL ROLLBACK (backward compatible)
   // ============================================================================
@@ -262,6 +266,76 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
     return { valid: false, error: 'API not available' };
   }, []);
 
+  // ============================================================================
+  // INTERRUPTED ROLLBACK RECOVERY (crash recovery)
+  // ============================================================================
+
+  /** Check for interrupted rollback on mount (called from parent) */
+  const checkInterruptedRollback = useCallback(async () => {
+    if (window.electronAPI?.checkInterruptedRollback) {
+      const info = await window.electronAPI.checkInterruptedRollback();
+      if (info) {
+        setInterruptedRollback(info);
+        setShowResumeRollbackModal(true);
+      }
+    }
+  }, []);
+
+  /** Resume an interrupted rollback */
+  const handleResumeRollback = useCallback(async () => {
+    setShowResumeRollbackModal(false);
+    setIsRollingBack(true);
+    setAppState(STATES.EXECUTING);
+    setProgress({ current: interruptedRollback?.restoredFiles || 0, total: interruptedRollback?.totalFiles || 0 });
+
+    let cleanupProgress = null;
+    if (window.electronAPI?.onRollbackProgress) {
+      cleanupProgress = window.electronAPI.onRollbackProgress((progressData) => {
+        setProgress({
+          current: progressData.restoredFiles || progressData.current || 0,
+          total: progressData.total || interruptedRollback?.totalFiles || 0,
+        });
+      });
+    }
+
+    try {
+      const result = await window.electronAPI.resumeRollback();
+      if (result.success) {
+        setExecutionResults(null);
+        setUndoCompleteResult({
+          restoredFiles: result.restoredFiles,
+          totalFiles: result.totalFiles,
+          sourceFolder: result.sourceFolder,
+          deletedFolders: result.deletedFolders,
+        });
+        setAppState(STATES.COMPLETE);
+      } else {
+        setError(result.error || 'Rollback resume failed');
+        setAppState(STATES.ERROR);
+      }
+    } catch (err) {
+      setError(err.message);
+      setAppState(STATES.ERROR);
+    } finally {
+      if (cleanupProgress) cleanupProgress();
+      setIsRollingBack(false);
+      setInterruptedRollback(null);
+    }
+  }, [interruptedRollback, setAppState, setError, setProgress, setExecutionResults]);
+
+  /** Discard interrupted rollback */
+  const handleDiscardRollback = useCallback(async () => {
+    setShowResumeRollbackModal(false);
+    setInterruptedRollback(null);
+    try {
+      if (window.electronAPI?.clearInterruptedRollback) {
+        await window.electronAPI.clearInterruptedRollback();
+      }
+    } catch (err) {
+      console.error('Failed to discard rollback progress:', err);
+    }
+  }, []);
+
   /**
    * Clear the undo complete result and return to idle.
    */
@@ -295,5 +369,11 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
     // Undo complete
     undoCompleteResult,
     clearUndoComplete,
+    // Interrupted rollback recovery
+    checkInterruptedRollback,
+    showResumeRollbackModal,
+    interruptedRollback,
+    handleResumeRollback,
+    handleDiscardRollback,
   };
 }

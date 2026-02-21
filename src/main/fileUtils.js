@@ -17,12 +17,24 @@ const logger = require('../utils/logger');
  * @param {string} destPath - Destination file path
  * @returns {Promise<boolean>} True if same drive/filesystem
  */
-async function isSameDrive(sourcePath, destPath) {
+/**
+ * Synchronous fast path for Windows (pure string comparison, no I/O).
+ * Returns null on non-Windows platforms to signal caller should use async path.
+ * @param {string} sourcePath
+ * @param {string} destPath
+ * @returns {boolean|null} true/false on Windows, null on other platforms
+ */
+function isSameDriveSync(sourcePath, destPath) {
   if (process.platform === 'win32') {
-    const sourceDrive = path.parse(sourcePath).root.toUpperCase();
-    const destDrive = path.parse(destPath).root.toUpperCase();
-    return sourceDrive === destDrive;
+    return path.parse(sourcePath).root.toUpperCase() === path.parse(destPath).root.toUpperCase();
   }
+  return null; // Unknown — caller must use async version
+}
+
+async function isSameDrive(sourcePath, destPath) {
+  // Fast synchronous path for Windows (no I/O needed)
+  const syncResult = isSameDriveSync(sourcePath, destPath);
+  if (syncResult !== null) return syncResult;
   
   // On Unix, compare device IDs to detect cross-filesystem mounts
   try {
@@ -205,6 +217,7 @@ const SPACE_BUFFER_MULTIPLIER = 1.1; // 10% buffer
 
 module.exports = {
   isSameDrive,
+  isSameDriveSync,
   collectFileStats,
   getDiskSpace,
   testWritePermission,

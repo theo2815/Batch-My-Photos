@@ -21,11 +21,13 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
+const zlib = require('zlib');
 const config = require('./config');
 const logger = require('../utils/logger');
 
 // Progress file location
 const PROGRESS_FILE_NAME = 'batch_progress.json';
+const PROGRESS_CHECKPOINT_NAME = 'batch_progress_checkpoint.json';
 const INTEGRITY_KEY_FILE = '.integrity_key';
 
 // Encryption constants
@@ -181,13 +183,31 @@ function serializeForDisk(data) {
  */
 function deserializeFromDisk(raw) {
   const parsed = JSON.parse(raw);
-  
+
   // Detect encrypted format
   if (parsed.encrypted === true && parsed.iv && parsed.authTag && parsed.ciphertext) {
     const plaintext = decryptData(parsed);
+    // Decrypted content may be compressed (base64-encoded gzip)
+    try {
+      const buf = Buffer.from(plaintext, 'base64');
+      // Check for gzip magic bytes (0x1f, 0x8b)
+      if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+        const decompressed = zlib.gunzipSync(buf).toString('utf8');
+        return JSON.parse(decompressed);
+      }
+    } catch {
+      // Not compressed — treat as plain JSON
+    }
     return JSON.parse(plaintext);
   }
-  
+
+  // Detect compressed (non-encrypted) format
+  if (parsed.compressed === true && parsed.data) {
+    const buf = Buffer.from(parsed.data, 'base64');
+    const decompressed = zlib.gunzipSync(buf).toString('utf8');
+    return JSON.parse(decompressed);
+  }
+
   // Plaintext format: verify HMAC integrity
   if (parsed.integrity) {
     const calculatedHash = calculateHash(parsed);
@@ -197,7 +217,7 @@ function deserializeFromDisk(raw) {
   } else {
     logger.warn('⚠️ [SECURITY] Progress file missing integrity hash. Proceeding but marking for update.');
   }
-  
+
   return parsed;
 }
 
@@ -208,6 +228,15 @@ function deserializeFromDisk(raw) {
 function getProgressFilePath() {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, PROGRESS_FILE_NAME);
+}
+
+/**
+ * Get the path to the lightweight checkpoint file
+ * @returns {string} Absolute path to checkpoint file
+ */
+function getCheckpointFilePath() {
+  const userDataPath = app.getPath('userData');
+  return path.join(userDataPath, PROGRESS_CHECKPOINT_NAME);
 }
 
 // In-memory progress state (source of truth during operation)
@@ -251,10 +280,16 @@ async function startProgress(params) {
     lastUpdated: new Date().toISOString()
   };
   
-  // Write initial state to disk (encrypted or with HMAC integrity)
+  // Write initial state to disk (compressed + encrypted or with HMAC integrity).
+  // The full manifest can be 30-50MB for 100K files. Gzip typically achieves 5-10x
+  // compression on path-heavy JSON, reducing initial write latency significantly.
   const progressPath = getProgressFilePath();
-  const serialized = serializeForDisk(currentProgress);
-  
+  const jsonStr = JSON.stringify(currentProgress);
+  const compressed = zlib.gzipSync(jsonStr);
+  const serialized = config.features.ENCRYPTION_ENABLED
+    ? encryptData(compressed.toString('base64'))
+    : JSON.stringify({ compressed: true, data: compressed.toString('base64') });
+
   await fsPromises.writeFile(progressPath, serialized, 'utf8');
   
   logger.log('💾 [PROGRESS] Started tracking progress:', operationId);
@@ -338,30 +373,38 @@ async function saveProgressToDisk() {
   saveInProgress = true;
   
   try {
-    const progressPath = getProgressFilePath();
-    const tempPath = progressPath + '.tmp';
+    // PERFORMANCE: Write only a count-based checkpoint (no processedFileNames array).
+    // The full manifest was already written by startProgress() and is immutable.
+    // On resume, processed files are derived by checking filesystem state (destPath exists)
+    // rather than storing the entire array — this keeps checkpoint I/O tiny and constant-size.
+    const checkpointPath = getCheckpointFilePath();
+    const tempPath = checkpointPath + '.tmp';
+
+    const checkpoint = {
+      operationId: currentProgress.operationId,
+      processedFiles: currentProgress.processedFiles,
+      lastUpdated: currentProgress.lastUpdated
+    };
     
-    // Write to temp file first (atomic write pattern)
-    const serialized = serializeForDisk(currentProgress);
+    const serialized = serializeForDisk(checkpoint);
     
     await fsPromises.writeFile(tempPath, serialized, 'utf8');
     
     // Check if progress was cleared while writing (race condition)
     if (!currentProgress) {
-      // Clean up temp file if it exists
       try { await fsPromises.unlink(tempPath); } catch { /* Temp file may not exist -- ignore */ }
       return;
     }
     
     // Rename temp to actual (atomic on most file systems)
-    await fsPromises.rename(tempPath, progressPath);
+    await fsPromises.rename(tempPath, checkpointPath);
     
   } catch (error) {
     // Ignore ENOENT errors during save if progress was cleared (benign race condition)
     if (error.code === 'ENOENT' && !currentProgress) {
       return;
     }
-    logger.error('💾 [PROGRESS] Failed to save progress:', error.message);
+    logger.error('💾 [PROGRESS] Failed to save checkpoint:', error.message);
   } finally {
     saveInProgress = false;
     
@@ -380,6 +423,7 @@ async function saveProgressToDisk() {
  */
 async function loadProgress() {
   const progressPath = getProgressFilePath();
+  const checkpointPath = getCheckpointFilePath();
   
   try {
     const raw = await fsPromises.readFile(progressPath, 'utf8');
@@ -395,7 +439,30 @@ async function loadProgress() {
       }
       // Delete corrupted/tampered file as safety measure
       await fsPromises.unlink(progressPath);
+      try { await fsPromises.unlink(checkpointPath); } catch { /* ignore */ }
       return null;
+    }
+    
+    // Merge checkpoint data if it exists (contains latest processedFiles count)
+    try {
+      const checkpointRaw = await fsPromises.readFile(checkpointPath, 'utf8');
+      const checkpoint = deserializeFromDisk(checkpointRaw);
+
+      // Only merge if checkpoint belongs to same operation and is newer
+      if (checkpoint.operationId === progress.operationId &&
+          checkpoint.processedFiles > progress.processedFiles) {
+        progress.processedFiles = checkpoint.processedFiles;
+        // Checkpoint may include processedFileNames (legacy) or just a count (current).
+        // The resume handler derives processed files from filesystem state, so the
+        // count alone is sufficient for new checkpoints.
+        if (checkpoint.processedFileNames) {
+          progress.processedFileNames = checkpoint.processedFileNames;
+        }
+        progress.lastUpdated = checkpoint.lastUpdated;
+        logger.log('💾 [PROGRESS] Merged checkpoint — restored', checkpoint.processedFiles, 'processed files');
+      }
+    } catch {
+      // No checkpoint file or invalid — use manifest data as-is
     }
     
     // Store in memory for potential resume
@@ -430,23 +497,19 @@ async function loadProgress() {
  */
 async function clearProgress() {
   const progressPath = getProgressFilePath();
+  const checkpointPath = getCheckpointFilePath();
   currentProgress = null;
   
-  try {
-    await fsPromises.unlink(progressPath);
-    logger.log('💾 [PROGRESS] Cleared progress file');
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      logger.error('💾 [PROGRESS] Failed to clear progress:', error.message);
-    }
-  }
+  // Clean up all progress files in parallel
+  const cleanups = [
+    fsPromises.unlink(progressPath).catch(e => { if (e.code !== 'ENOENT') logger.error('💾 [PROGRESS] Failed to clear progress:', e.message); }),
+    fsPromises.unlink(checkpointPath).catch(() => {}),
+    fsPromises.unlink(progressPath + '.tmp').catch(() => {}),
+    fsPromises.unlink(checkpointPath + '.tmp').catch(() => {}),
+  ];
+  await Promise.all(cleanups);
   
-  // Also clean up any temp file
-  try {
-    await fsPromises.unlink(progressPath + '.tmp');
-  } catch (_err) {
-    // Temp file may not exist — ignore
-  }
+  logger.log('💾 [PROGRESS] Cleared progress files');
 }
 
 /**
