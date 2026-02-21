@@ -39,7 +39,9 @@ const PrivacyPolicy = () => {
               <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>What we collect</h4>
               <ul className="space-y-1.5 text-sm text-slate-400">
                 <li>• <strong className="text-slate-300">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
-                <li>• <strong className="text-slate-300">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity) to improve the app. This never includes file names, photo content, or personal data.</li>
+                <li>• <strong className="text-slate-300">Device identifiers</strong> — We store a hashed hardware ID to enforce per-plan device limits. We do not collect your device name, model, or operating system.</li>
+                <li>• <strong className="text-slate-300">Subscription & payment data</strong> — Plan type, payment status, and PayMongo transaction references. We never store full card numbers.</li>
+                <li>• <strong className="text-slate-300">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity, batch counts) to improve the app. This never includes file names, photo content, or personal data.</li>
                 <li>• <strong className="text-slate-300">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
               </ul>
             </div>
@@ -52,12 +54,31 @@ const PrivacyPolicy = () => {
               </ul>
             </div>
             <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data handling & retention</h4>
+              <ul className="space-y-1.5 text-sm text-slate-400">
+                <li>• <strong className="text-slate-300">Photos</strong> — All photo processing happens entirely on your local device. No images are ever uploaded to our servers.</li>
+                <li>• <strong className="text-slate-300">Account data</strong> — Your email, subscription status, and device bindings are stored securely in our database (hosted by Supabase) for as long as your account is active.</li>
+                <li>• <strong className="text-slate-300">Payment records</strong> — Transaction references are retained for accounting and dispute resolution purposes.</li>
+                <li>• <strong className="text-slate-300">Deletion</strong> — When you delete your account, all associated data (account info, device bindings, usage history, and transaction records) is permanently removed from our systems.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Cookies & local storage</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">We only use <strong className="text-slate-300">essential cookies and local storage</strong> required for authentication (keeping you logged in). We do not use any third-party tracking cookies, advertising cookies, or analytics cookies. Because we only use essential cookies, no consent banner is required.</p>
+            </div>
+            <div>
               <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Third-party services</h4>
               <p className="text-sm text-slate-400 leading-relaxed">We use Supabase for authentication and Paymongo for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
             </div>
             <div>
               <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Your rights</h4>
-              <p className="text-sm text-slate-400 leading-relaxed">You can request deletion of your account and all associated data at any time by emailing <a href="mailto:batchmyphotos@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">batchmyphotos@gmail.com</a>.</p>
+              <ul className="space-y-1.5 text-sm text-slate-400">
+                <li>• <strong className="text-slate-300">Access</strong> — You can request a copy of all personal data we hold about you.</li>
+                <li>• <strong className="text-slate-300">Correction</strong> — You can ask us to correct any inaccurate data.</li>
+                <li>• <strong className="text-slate-300">Deletion</strong> — You can request deletion of your account and all associated data at any time.</li>
+                <li>• <strong className="text-slate-300">Portability</strong> — You can request your data in a portable format.</li>
+              </ul>
+              <p className="text-sm text-slate-400 leading-relaxed mt-2">To exercise any of these rights, email <a href="mailto:batchmyphotos@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">batchmyphotos@gmail.com</a>. We will respond within 30 days.</p>
             </div>
             <div className="pt-3 border-t border-white/6">
               <p className="text-xs text-slate-600">Last updated: February 2026</p>
