@@ -276,7 +276,14 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               </button>
             </div>
           </div>
-          <p className={`text-xs text-center mt-6 ${isDark ? 'text-indigo-300/60' : 'text-indigo-400'} relative z-10`}>Subscription billed monthly. Cancel anytime.</p>
+          <div className={`text-center mt-6 relative z-10 ${isDark ? 'text-indigo-300/60' : 'text-indigo-400'}`}>
+            <p className="text-xs font-semibold">Manual monthly payment.</p>
+            <p className="text-[11px] mt-1 leading-relaxed">Your subscription will not auto-renew. When your Pro access expires, you can manually renew anytime.</p>
+            <div className="flex items-center justify-center gap-4 mt-2">
+              <span className="flex items-center gap-1 text-[11px]"><Check className="w-3 h-3" /> No automatic charges</span>
+              <span className="flex items-center gap-1 text-[11px]"><Check className="w-3 h-3" /> Full control over payments</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

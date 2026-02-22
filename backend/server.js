@@ -9,6 +9,7 @@ const { createClient } = require('@supabase/supabase-js')
 const { authenticateUser } = require('./middleware/auth')
 const paymongoRoutes = require('./routes/paymongo')
 const devicesRoutes = require('./routes/devices')
+const adminRoutes = require('./routes/admin')
 const { initCronJobs } = require('./services/cronService')
 
 const app = express()
@@ -92,6 +93,19 @@ app.use('/api/checkout', sensitiveApiLimiter)
 app.use('/api/verify-payment', sensitiveApiLimiter)
 app.use('/api/cancel-subscription', sensitiveApiLimiter)
 app.use('/api/validate-coupon', sensitiveApiLimiter)
+
+// Per-user rate limiter for coupon validation (prevents brute-force code guessing)
+// Layered on top of sensitiveApiLimiter: 5 attempts per user per 15 minutes
+const couponUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.user?.id || 'anon',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many coupon attempts. Please wait before trying again.' },
+  validate: { xForwardedForHeader: false },
+})
+app.use('/api/validate-coupon', couponUserLimiter)
 
 // Webhook rate limiter (higher threshold, protects against flood)
 const webhookLimiter = rateLimit({
@@ -293,6 +307,10 @@ app.use('/api', paymongoRoutes)
 // ── Device Management Routes ────────────────────────────────────────────────
 // HWID binding, heartbeat, device CRUD — auth handled per-route
 app.use('/api', devicesRoutes)
+
+// ── Admin Routes ────────────────────────────────────────────────────────────
+// Referral coupon management — admin email allowlist enforced per-route
+app.use('/api/admin', adminRoutes)
 
 // ── Website Static Files ────────────────────────────────────────────────────
 // Serve the built React website from the same server.

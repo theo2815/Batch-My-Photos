@@ -18,6 +18,8 @@ import DesktopCallback from './pages/DesktopCallback'
 import ConnectApp from './pages/ConnectApp'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
+import AdminCoupons from './pages/AdminCoupons'
+import AdminRoute from './components/AdminRoute'
 
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from './components/PageTransition'
@@ -62,6 +64,7 @@ const AppContent = () => {
           <Route path="/terms" element={<PageTransition><TermsOfService /></PageTransition>} />
           <Route path="/forgot-password" element={<PageTransition><ForgotPassword /></PageTransition>} />
           <Route path="/update-password" element={<PageTransition><ProtectedRoute><UpdatePassword /></ProtectedRoute></PageTransition>} />
+          <Route path="/admin/coupons" element={<PageTransition><AdminRoute><AdminCoupons /></AdminRoute></PageTransition>} />
           <Route path="*" element={
             <PageTransition>
               <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">

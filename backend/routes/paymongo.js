@@ -27,6 +27,66 @@ const COUPONS = {
   },
 }
 
+/**
+ * Look up a referral coupon from the database.
+ * Returns { discountedPriceCentavos, description, expiresAt, id, code } or null.
+ */
+async function lookupReferralCoupon(supabase, code) {
+  const { data } = await supabase
+    .from('referral_coupons')
+    .select('*')
+    .eq('code', code.toUpperCase().trim())
+    .eq('is_active', true)
+    .single()
+
+  if (!data) return null
+
+  return {
+    id: data.id,
+    code: data.code,
+    discountedPriceCentavos: data.discounted_price_centavos,
+    description: data.description,
+    expiresAt: new Date(data.expires_at),
+    isReferral: true,
+  }
+}
+
+/**
+ * Record referral coupon usage after a successful payment.
+ * Idempotent — skips if the user already has a usage record for this coupon.
+ */
+async function recordReferralUsage(supabase, couponCode, userId) {
+  try {
+    // Look up coupon ID
+    const { data: coupon } = await supabase
+      .from('referral_coupons')
+      .select('id')
+      .eq('code', couponCode)
+      .single()
+
+    if (!coupon) return
+
+    // Idempotent insert — ignore unique violation (23505) if already recorded
+    const { error } = await supabase
+      .from('referral_usage')
+      .insert({
+        coupon_id: coupon.id,
+        user_id: userId,
+        coupon_code: couponCode,
+        used_at: new Date().toISOString(),
+      })
+
+    if (error && error.code !== '23505') {
+      console.error('Record referral usage error:', error)
+    } else if (!error) {
+      console.log(`📊 Referral usage recorded: ${couponCode} → user ${userId}`)
+    }
+  } catch (err) {
+    // Non-critical — log but don't fail the payment
+    console.error('Record referral usage error:', err)
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Base64-encoded secret key for PayMongo Authorization header */
@@ -77,7 +137,14 @@ router.post('/validate-coupon', authenticateUser, async (req, res) => {
       return res.json({ valid: false, reason: 'Please enter a coupon code.' })
     }
 
-    const coupon = COUPONS[code.toUpperCase().trim()]
+    const cleanCode = code.toUpperCase().trim()
+    const supabase = req.app.locals.supabaseAdmin
+
+    // Step 1: Try hardcoded coupons first, then fallback to database referral coupons
+    let coupon = COUPONS[cleanCode]
+      ? { ...COUPONS[cleanCode], code: cleanCode, isReferral: false }
+      : await lookupReferralCoupon(supabase, cleanCode)
+
     if (!coupon) {
       return res.json({ valid: false, reason: 'Invalid coupon code.' })
     }
@@ -88,7 +155,6 @@ router.post('/validate-coupon', authenticateUser, async (req, res) => {
     }
 
     // Check if user already used any coupon (check transactions for coupon_code in metadata)
-    const supabase = req.app.locals.supabaseAdmin
     const { data: prevTx } = await supabase
       .from('transactions')
       .select('id')
@@ -115,7 +181,7 @@ router.post('/validate-coupon', authenticateUser, async (req, res) => {
 
     res.json({
       valid: true,
-      code: code.toUpperCase().trim(),
+      code: cleanCode,
       originalPrice: PLAN_PRICE_CENTAVOS,
       discountedPrice: coupon.discountedPriceCentavos,
       description: coupon.description,
@@ -140,10 +206,16 @@ router.post('/checkout', authenticateUser, async (req, res) => {
     let validatedCoupon = null
 
     if (coupon_code && typeof coupon_code === 'string') {
-      const coupon = COUPONS[coupon_code.toUpperCase().trim()]
+      const cleanCode = coupon_code.toUpperCase().trim()
+      const supabaseAdmin = req.app.locals.supabaseAdmin
+
+      // Try hardcoded coupons first, then fallback to database referral coupons
+      const coupon = COUPONS[cleanCode]
+        ? { ...COUPONS[cleanCode], code: cleanCode, isReferral: false }
+        : await lookupReferralCoupon(supabaseAdmin, cleanCode)
+
       if (coupon && new Date() <= coupon.expiresAt) {
         // Check one-time usage per user (transactions + active subscription with coupon)
-        const supabaseAdmin = req.app.locals.supabaseAdmin
         const { data: prevTx } = await supabaseAdmin
           .from('transactions')
           .select('id')
@@ -169,7 +241,7 @@ router.post('/checkout', authenticateUser, async (req, res) => {
         } else if (!prevTx || prevTx.length === 0) {
           finalAmount = coupon.discountedPriceCentavos
           finalDescription = `${PLAN_DESCRIPTION} (${coupon.description})`
-          validatedCoupon = coupon_code.toUpperCase().trim()
+          validatedCoupon = cleanCode
           console.log(`Coupon ${validatedCoupon} applied for user ${user.id}: ₱${finalAmount / 100}`)
         } else {
           console.log(`Coupon rejected for user ${user.id}: already used a coupon`)
@@ -536,7 +608,11 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     // Determine actual amount paid (may be discounted via coupon)
     const verifyMeta = attrs?.metadata || {}
     const verifyCouponCode = verifyMeta.coupon_code || null
-    const verifyCouponDef = verifyCouponCode ? COUPONS[verifyCouponCode] : null
+    let verifyCouponDef = verifyCouponCode ? COUPONS[verifyCouponCode] : null
+    // Fallback: check database referral coupons
+    if (!verifyCouponDef && verifyCouponCode) {
+      verifyCouponDef = await lookupReferralCoupon(supabase, verifyCouponCode)
+    }
     const verifyAmount = verifyCouponDef ? verifyCouponDef.discountedPriceCentavos : PLAN_PRICE_CENTAVOS
 
     const { error: upsertError } = await supabase
@@ -586,6 +662,11 @@ router.post('/verify-payment', authenticateUser, async (req, res) => {
     }
 
     console.log(`✅ Payment verified & subscription activated for user ${user.id}${verifyCouponCode ? ` (coupon: ${verifyCouponCode})` : ''}`)
+
+    // Record referral coupon usage (if applicable)
+    if (verifyCouponCode && verifyCouponDef?.isReferral) {
+      await recordReferralUsage(supabase, verifyCouponCode, user.id)
+    }
 
     // Fire-and-forget payment confirmation email
     sendPaymentConfirmation({
@@ -713,7 +794,11 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
 
       // Determine actual amount paid (may be discounted via coupon)
       const couponCode = metadata.coupon_code || null
-      const couponDef = couponCode ? COUPONS[couponCode] : null
+      let couponDef = couponCode ? COUPONS[couponCode] : null
+      // Fallback: check database referral coupons
+      if (!couponDef && couponCode) {
+        couponDef = await lookupReferralCoupon(supabase, couponCode)
+      }
       const actualAmount = couponDef ? couponDef.discountedPriceCentavos : PLAN_PRICE_CENTAVOS
 
       const { error: upsertError } = await supabase
@@ -763,6 +848,11 @@ router.post('/webhooks/paymongo', express.raw({ type: 'application/json' }), asy
       }
 
       console.log(`✅ Subscription activated for user ${userId} until ${expiresAt.toISOString()}${couponCode ? ` (coupon: ${couponCode})` : ''}`)
+
+      // Record referral coupon usage (if applicable)
+      if (couponCode && couponDef?.isReferral) {
+        await recordReferralUsage(supabase, couponCode, userId)
+      }
 
       // Fire-and-forget payment confirmation email
       const userEmail = metadata.user_email
