@@ -546,6 +546,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
 
+  /**
+   * Open the Microsoft Store page for BatchMyPhotos
+   * Uses a hardcoded deep link — no URL injection risk
+   * @returns {Promise<Object>} { success }
+   */
+  openStoreUrl: () => ipcRenderer.invoke('open-store-url'),
+
   // ============================================================================
   // EXPORT REPORT APIs
   // ============================================================================

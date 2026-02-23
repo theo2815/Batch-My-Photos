@@ -1799,11 +1799,13 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
         latestVersion: latest,
         downloadUrl: data.downloadUrl || '',
         releaseDate: data.releaseDate || '',
+        storeUrl: data.storeUrl || '',
+        isWindowsStore: !!process.windowsStore,
       };
     } catch (err) {
       // Network error, timeout, offline — silently skip
       logger.log('[VERSION] Check failed (offline?):', err.message);
-      return { updateAvailable: false, currentVersion };
+      return { updateAvailable: false, currentVersion, isWindowsStore: !!process.windowsStore };
     }
   });
 
@@ -1827,6 +1829,21 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: true };
     } catch (err) {
       return { success: false, error: sanitizeError(err, 'open-external-url') };
+    }
+  });
+
+  /**
+   * Handler: Open the Microsoft Store page for BatchMyPhotos.
+   * Uses a hardcoded ms-windows-store:// deep link so there is no
+   * URL-injection risk (unlike open-external-url which accepts user input).
+   */
+  handle(ipcMain, 'open-store-url', async () => {
+    try {
+      await shell.openExternal('ms-windows-store://pdp/?productid=9N1KKMV4NX4J');
+      return { success: true };
+    } catch (err) {
+      logger.error('[STORE] Failed to open Store page:', err.message);
+      return { success: false, error: 'Failed to open Microsoft Store' };
     }
   });
 

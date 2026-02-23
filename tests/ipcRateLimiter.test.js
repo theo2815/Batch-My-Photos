@@ -37,6 +37,7 @@ const CHANNEL_TIERS = {
   'check-interrupted-progress': 'RELAXED',
   'check-interrupted-rollback': 'RELAXED',
   'check-app-version':      'RELAXED',
+  'open-store-url':          'RELAXED',
   'get-operation-history':  'RELAXED',
   'cancel-batch':           'RELAXED',
 };

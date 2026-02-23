@@ -16,7 +16,9 @@ export function useUpdateCheck() {
     currentVersion: '',
     latestVersion: '',
     downloadUrl: '',
+    storeUrl: '',
     releaseDate: '',
+    isWindowsStore: false,
   });
   const [dismissed, setDismissed] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -49,10 +51,22 @@ export function useUpdateCheck() {
     setDismissed(true);
   }, []);
 
+  // Handler for opening the update page (Store or download URL)
+  // Prioritize storeUrl if available — works in both dev and production Store builds.
+  // Falls back to downloadUrl for direct-download (non-Store) distributions.
+  const handleUpdateClick = useCallback(() => {
+    if (updateInfo.storeUrl && window.electronAPI?.openStoreUrl) {
+      window.electronAPI.openStoreUrl();
+    } else if (updateInfo.downloadUrl && window.electronAPI?.openExternalUrl) {
+      window.electronAPI.openExternalUrl(updateInfo.downloadUrl);
+    }
+  }, [updateInfo.storeUrl, updateInfo.downloadUrl]);
+
   return {
     ...updateInfo,
     dismissed,
     dismiss,
     showBanner: updateInfo.updateAvailable && !dismissed,
+    handleUpdateClick,
   };
 }

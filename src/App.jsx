@@ -99,7 +99,7 @@ function App() {
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
 
   // Version update check
-  const { showBanner, latestVersion, downloadUrl, dismiss: dismissUpdate } = useUpdateCheck();
+  const { showBanner, latestVersion, updateAvailable, handleUpdateClick, dismiss: dismissUpdate } = useUpdateCheck();
 
   const batch = useBatchExecution({ setAppState, setError });
   const {
@@ -500,7 +500,7 @@ function App() {
       {showBanner && (
         <UpdateBanner
           latestVersion={latestVersion}
-          downloadUrl={downloadUrl}
+          onUpdateClick={handleUpdateClick}
           onDismiss={dismissUpdate}
         />
       )}
@@ -515,6 +515,9 @@ function App() {
             onViewProfile={handleViewProfile}
             onUpgrade={handleUpgrade}
             onManageDevices={() => setShowDeviceManagerModal(true)}
+            updateAvailable={updateAvailable}
+            latestVersion={latestVersion}
+            onUpdateClick={handleUpdateClick}
           />
           <div className="header-icons">
             {operationHistory.length > 0 && (

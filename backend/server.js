@@ -160,6 +160,7 @@ app.get('/api/version', (req, res) => {
     latestVersion: process.env.LATEST_APP_VERSION || '1.0.1',
     downloadUrl: process.env.APP_DOWNLOAD_URL || 'https://www.batchmyphotos.com/#pricing',
     releaseDate: process.env.APP_RELEASE_DATE || '2026-02-18',
+    storeUrl: process.env.MS_STORE_URL || 'ms-windows-store://pdp/?productid=9N1KKMV4NX4J',
   })
 })
 
