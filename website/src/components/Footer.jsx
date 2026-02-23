@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
-import { Camera, Heart, ShieldCheck, Mail } from 'lucide-react'
+import { Camera, Heart, ShieldCheck, Mail, Facebook } from 'lucide-react'
 import InfoModal from './modals/InfoModal'
 
 // ─── Footer ─────────────────────────────────────────────────────────────────
@@ -31,7 +31,13 @@ export default function Footer() {
               </p>
               <div className="flex items-center gap-3 mt-5">
                 <a href="mailto:batchmyphotos@gmail.com" className={`w-8 h-8 rounded-lg ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-slate-500 hover:text-white' : 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-all`} aria-label="Email us">
-                  <Mail className="w-4 h-4" />
+                  <img src="/gmail.png" alt="Email" className="w-4 h-4 object-contain opacity-70 hover:opacity-100 transition-opacity" />
+                </a>
+                <a href="https://www.facebook.com/people/Batch-My-Photos/61588309656493/" target="_blank" rel="noopener noreferrer" className={`w-8 h-8 rounded-lg ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-slate-500 hover:text-white' : 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-all`} aria-label="Facebook">
+                  <img src="/facebook.png" alt="Facebook" className="w-4 h-4 object-contain opacity-70 hover:opacity-100 transition-opacity" />
+                </a>
+                <a href="https://www.tiktok.com/@batchmyphotos5" target="_blank" rel="noopener noreferrer" className={`w-8 h-8 rounded-lg ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-slate-500 hover:text-white' : 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-all`} aria-label="TikTok">
+                  <img src="/tik-tok.png" alt="TikTok" className="w-4 h-4 object-contain opacity-70 hover:opacity-100 transition-opacity" />
                 </a>
               </div>
             </div>
