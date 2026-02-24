@@ -751,18 +751,18 @@ export default function LandingPage() {
                     <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
                     <div className="w-3 h-3 rounded-full bg-[#28c840]" />
                   </div>
-                  <span className="text-xs text-text-muted font-medium ml-2">Batch My Photos</span>
+                  <span className="text-xs text-text-muted font-medium ml-2">BatchMyPhotos</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  {['Marathon — Batch 1', 'Marathon — Batch 2', 'Marathon — Batch 3'].map((name, i) => (
+                  {['Marathon — Batch 1', 'Marathon — Batch 2', 'Marathon — Batch 3', 'Marathon — Batch 4', 'Marathon — Batch 5', 'Marathon — Batch 6'].map((name, i) => (
                     <div key={i} className="rounded-lg bg-white/[0.04] border border-white/[0.06] p-3 text-left">
                       <div className="flex items-center gap-2 mb-2">
                         <Folder className="w-4 h-4 text-accent" />
                         <span className="text-xs font-medium text-white truncate">{name}</span>
                       </div>
-                      <div className="text-[11px] text-text-muted">{500 - i * 12} photos</div>
+                      <div className="text-[11px] text-text-muted">500 photos</div>
                       <div className="mt-2 h-1 rounded-full bg-white/[0.06] overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-[#2E5BFF] to-[#00D1FF]" style={{ width: `${100 - i * 15}%` }} />
+                        <div className="h-full rounded-full bg-gradient-to-r from-[#2E5BFF] to-[#00D1FF]" style={{ width: `100%` }} />
                       </div>
                     </div>
                   ))}
