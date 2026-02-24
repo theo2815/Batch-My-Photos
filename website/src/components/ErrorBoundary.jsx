@@ -22,13 +22,13 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-bg-main px-4">
           <div className="text-center max-w-md">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-error/10 border border-error/20 flex items-center justify-center">
               <span className="text-2xl">⚠</span>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">Something went wrong</h1>
-            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+            <h1 className="text-xl font-bold text-text-primary mb-2">Something went wrong</h1>
+            <p className="text-sm text-text-secondary mb-6 leading-relaxed">
               An unexpected error occurred. Please try refreshing the page.
             </p>
             <button
@@ -36,7 +36,7 @@ export default class ErrorBoundary extends Component {
                 this.setState({ hasError: false })
                 window.location.reload()
               }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:brightness-110 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-primary/35 hover:brightness-110 transition-all cursor-pointer"
             >
               Refresh page
             </button>

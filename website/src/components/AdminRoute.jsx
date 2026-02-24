@@ -41,13 +41,13 @@ export default function AdminRoute({ children }) {
 
   if (state === 'loading') {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
+      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-10 h-10">
-            <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20" />
-            <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
-          <p className={`text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'} tracking-wide`}>Loading…</p>
+          <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'} tracking-wide`}>Loading…</p>
         </div>
       </div>
     )
@@ -60,10 +60,10 @@ export default function AdminRoute({ children }) {
   // Non-admin users see a 404 page (don't reveal admin routes)
   if (state === 'denied') {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex flex-col items-center justify-center gap-4 px-4 text-center`}>
-        <h1 className="text-6xl font-bold text-indigo-500">404</h1>
-        <p className={`text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Page not found</p>
-        <a href="/" className="mt-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">← Back to home</a>
+      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex flex-col items-center justify-center gap-4 px-4 text-center`}>
+        <h1 className="text-6xl font-bold text-primary">404</h1>
+        <p className={`text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>Page not found</p>
+        <a href="/" className="mt-2 text-sm font-medium text-accent hover:text-accent transition-colors">← Back to home</a>
       </div>
     )
   }

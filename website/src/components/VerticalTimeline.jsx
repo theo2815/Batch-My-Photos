@@ -34,8 +34,8 @@ export default function VerticalTimeline({ content }) {
         style={{
           height: '100%',
           scaleY: scrollYProgress,
-          background: 'linear-gradient(180deg, #6366f1 0%, #a855f7 50%, #6366f1 100%)',
-          filter: 'drop-shadow(0 0 8px rgba(99,102,241,0.5))',
+          background: 'linear-gradient(180deg, #2E5BFF 0%, #00D1FF 50%, #2E5BFF 100%)',
+          filter: 'drop-shadow(0 0 8px rgba(46,91,255,0.5))',
         }}
       />
 
@@ -64,17 +64,17 @@ export default function VerticalTimeline({ content }) {
                 {/* Glow ring */}
                 <div
                   className={`absolute -inset-3 rounded-full transition-all duration-700 ${
-                    isActive ? 'bg-indigo-500/20' : 'bg-transparent'
+                    isActive ? 'bg-primary/20' : 'bg-transparent'
                   }`}
                 />
                 {/* Solid circle */}
                 <div
                   className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
                     isActive
-                      ? 'bg-indigo-500 border-indigo-400 shadow-[0_0_16px_rgba(99,102,241,0.7)]'
+                      ? 'bg-primary border-primary shadow-[0_0_16px_rgba(46,91,255,0.7)]'
                       : isPast
-                        ? 'bg-indigo-500/80 border-indigo-500/60'
-                        : isDark ? 'bg-slate-900 border-slate-600' : 'bg-white border-gray-300'
+                        ? 'bg-primary/80 border-primary/60'
+                        : isDark ? 'bg-bg-surface border-text-muted' : 'bg-white border-gray-300'
                   }`}
                 />
               </motion.div>
@@ -84,7 +84,7 @@ export default function VerticalTimeline({ content }) {
             <div className="absolute left-2 top-1/2 -translate-y-1/2 lg:hidden">
               <div
                 className={`w-2.5 h-2.5 rounded-full transition-all duration-500 ${
-                  isPast || isActive ? 'bg-indigo-500' : isDark ? 'bg-slate-700' : 'bg-gray-300'
+                  isPast || isActive ? 'bg-primary' : isDark ? 'bg-text-muted' : 'bg-gray-300'
                 }`}
               />
             </div>
@@ -127,14 +127,14 @@ function TimelineText({ item, index, align, slideFrom, className = '' }) {
       transition={{ duration: 0.6, ease: 'easeOut' }}
       viewport={{ once: false, amount: 0.3 }}
     >
-      <span className="text-xs font-bold tracking-widest uppercase text-indigo-400 mb-3">
+      <span className="text-xs font-bold tracking-widest uppercase text-accent mb-3">
         Step {index + 1}
       </span>
-      <h3 className={`text-2xl sm:text-3xl font-bold mb-4 leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+      <h3 className={`text-2xl sm:text-3xl font-bold mb-4 leading-tight ${isDark ? 'text-text-primary' : 'text-text-primary-light'}`}>
         {item.title.replace(/^\d+\.\s*/, '')}
       </h3>
       <p
-        className={`text-base sm:text-lg leading-relaxed max-w-md ${isDark ? 'text-slate-400' : 'text-gray-600'} ${
+        className={`text-base sm:text-lg leading-relaxed max-w-md ${isDark ? 'text-text-secondary' : 'text-text-secondary-light'} ${
           align === 'right' ? 'lg:ml-auto' : ''
         }`}
       >

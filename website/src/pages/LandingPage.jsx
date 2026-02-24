@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, useInView } from 'framer-motion'
 import { useTheme } from '../context/ThemeContext'
 import { Zap, FolderOpen, Folder, Settings, ScanEye, CheckCircle, Copy, ArrowDownAZ, Trash2, Save, Info, Package, ChevronRight, ChevronDown, XCircle, RotateCcw, Undo2, History, ArrowLeft, Grid3x3, List, Play, Layers, Eye, Droplets, Lock, Sparkles, Camera, Upload, WifiOff, ShieldCheck, SlidersHorizontal, Heart, Monitor, ArrowRight, ArrowUp, Download } from 'lucide-react'
 import VerticalTimeline from '../components/VerticalTimeline'
@@ -20,7 +20,7 @@ const MockSettingsPanel = () => {
   return (
     <div className="w-full h-full bg-[#2d2d2d] rounded-xl border border-[rgba(255,255,255,0.05)] p-6 font-sans text-sm flex flex-col shadow-2xl relative overflow-hidden">
         {/* Settings Header */}
-        <div className="flex items-center text-slate-400 mb-6">
+        <div className="flex items-center text-text-secondary mb-6">
             <Settings className="w-4 h-4 mr-2" />
             <span className="font-semibold text-base text-slate-200">Settings</span>
         </div>
@@ -30,14 +30,14 @@ const MockSettingsPanel = () => {
             <div className="flex items-center justify-between group relative">
                 <div className="flex items-center text-[#a1a1aa]">
                     <span>Presets:</span>
-                    <Info className="w-3 h-3 ml-1 text-slate-600 cursor-help" />
+                    <Info className="w-3 h-3 ml-1 text-text-muted cursor-help" />
                 </div>
                 <div
                     className="flex-1 ml-4 bg-[#383838] hover:bg-[#1e1e1e] rounded p-2 flex justify-between items-center text-slate-200 cursor-pointer transition-colors border border-transparent hover:border-[#3b82f6]"
                     onClick={() => setIsPresetOpen(!isPresetOpen)}
                 >
                     <span>{preset}</span>
-                    <Settings className="w-3 h-3 text-slate-500" />
+                    <Settings className="w-3 h-3 text-text-muted" />
                 </div>
                 {/* Preset Dropdown Mock */}
                 {isPresetOpen && (
@@ -45,7 +45,7 @@ const MockSettingsPanel = () => {
                         {['Default', 'Running preset', 'Sports Mode', 'Portraits'].map(p => (
                             <div
                                 key={p}
-                                className="px-3 py-2 hover:bg-[#1e1e1e] text-slate-300 cursor-pointer"
+                                className="px-3 py-2 hover:bg-[#1e1e1e] text-text-secondary cursor-pointer"
                                 onClick={() => { setPreset(p); setIsPresetOpen(false); }}
                             >
                                 {p}
@@ -123,7 +123,7 @@ const MockSettingsPanel = () => {
                             onClick={() => setShowSensitivityModal(true)}
                         >
                             <span className="text-sm text-slate-200 font-medium capitalize">{sensitivity}</span>
-                            <ChevronDown className="w-3 h-3 text-slate-500 group-hover:text-[#3b82f6]" />
+                            <ChevronDown className="w-3 h-3 text-text-muted group-hover:text-[#3b82f6]" />
                         </button>
                     </motion.div>
                 )}
@@ -135,7 +135,7 @@ const MockSettingsPanel = () => {
                     <div className="bg-[#2d2d2d] border border-[rgba(255,255,255,0.1)] p-6 rounded-xl w-72 shadow-2xl text-center">
                         <ScanEye className="w-8 h-8 mx-auto mb-3 text-[#3b82f6]" />
                         <h4 className="text-slate-200 font-semibold text-lg mb-1">Blur Detection Sensitivity</h4>
-                        <p className="text-slate-400 text-xs mb-4">Choose how aggressively blurry photos are detected.</p>
+                        <p className="text-text-secondary text-xs mb-4">Choose how aggressively blurry photos are detected.</p>
                         <div className="space-y-2 text-left">
                             {[
                                 { val: 'strict', desc: 'Catches most blurry photos.' },
@@ -182,7 +182,7 @@ const MockSettingsPanel = () => {
                      </button>
                  </div>
              </div>
-             <p className="text-[10px] text-slate-500 italic mt-2 flex items-center">
+             <p className="text-[10px] text-text-muted italic mt-2 flex items-center">
                  {batchMode === 'move' ? (
                      <><Zap className="w-3 h-3 mr-1 text-yellow-500" /> Files will be moved instantly (same drive).</>
                  ) : (
@@ -195,12 +195,12 @@ const MockSettingsPanel = () => {
 };
 
 const MockWindow = ({ children, title }) => (
-    <div className="w-full h-full bg-slate-900 flex flex-col font-sans">
+    <div className="w-full h-full bg-bg-surface flex flex-col font-sans">
         <div className="h-8 bg-slate-800 flex items-center px-4 space-x-2 border-b border-slate-700">
             <div className="w-3 h-3 rounded-full bg-red-500"/>
             <div className="w-3 h-3 rounded-full bg-yellow-500"/>
             <div className="w-3 h-3 rounded-full bg-green-500"/>
-            <span className="ml-4 text-xs text-slate-400 font-medium">{title}</span>
+            <span className="ml-4 text-xs text-text-secondary font-medium">{title}</span>
         </div>
         <div className="flex-1 p-6 overflow-hidden relative">
             {children}
@@ -362,11 +362,11 @@ const MockFileExplorer = () => {
             <div className="h-8 bg-[#27272a] flex items-center justify-between px-3 border-b border-[rgba(255,255,255,0.06)] shrink-0">
                 <div className="flex items-center gap-2">
                     <Folder className="w-3.5 h-3.5 text-[#fbbf24]" />
-                    <span className="text-xs text-slate-300 font-medium truncate">
+                    <span className="text-xs text-text-secondary font-medium truncate">
                         {currentBatch ? currentBatch.name : 'Sample photos'}
                     </span>
                 </div>
-                <button className="text-slate-500 hover:text-white transition-colors" onClick={goToRoot}>
+                <button className="text-text-muted hover:text-white transition-colors" onClick={goToRoot}>
                     <XCircle className="w-3.5 h-3.5" />
                 </button>
             </div>
@@ -374,7 +374,7 @@ const MockFileExplorer = () => {
             {/* ── Toolbar ── */}
             <div className="h-9 bg-[#27272a] flex items-center gap-2 px-3 border-b border-[rgba(255,255,255,0.06)] shrink-0">
                 <button
-                    className={`p-1 rounded transition-colors ${currentBatch ? 'text-slate-400 hover:text-white hover:bg-[#383838]' : 'text-slate-700 cursor-default'}`}
+                    className={`p-1 rounded transition-colors ${currentBatch ? 'text-text-secondary hover:text-white hover:bg-[#383838]' : 'text-slate-700 cursor-default'}`}
                     onClick={goToRoot}
                     disabled={!currentBatch}
                 >
@@ -383,12 +383,12 @@ const MockFileExplorer = () => {
 
                 {/* Breadcrumb */}
                 <div className="flex items-center gap-1 text-xs flex-1 min-w-0">
-                    <button className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${!currentBatch ? 'text-white bg-[#383838]' : 'text-slate-400 hover:text-white hover:bg-[#383838]'}`} onClick={goToRoot}>
+                    <button className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${!currentBatch ? 'text-white bg-[#383838]' : 'text-text-secondary hover:text-white hover:bg-[#383838]'}`} onClick={goToRoot}>
                         <Folder className="w-3 h-3 text-[#fbbf24]" /> Sample photos
                     </button>
                     {currentBatch && (
                         <>
-                            <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                            <ChevronRight className="w-3 h-3 text-text-muted shrink-0" />
                             <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-white bg-[#383838]">
                                 <FolderOpen className="w-3 h-3 text-[#fbbf24]" /> {currentBatch.name}
                             </span>
@@ -399,13 +399,13 @@ const MockFileExplorer = () => {
                 {/* View toggle */}
                 <div className="flex gap-0.5">
                     <button
-                        className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'text-white bg-[#383838]' : 'text-slate-500 hover:text-white'}`}
+                        className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'text-white bg-[#383838]' : 'text-text-muted hover:text-white'}`}
                         onClick={() => setViewMode('grid')}
                     >
                         <Grid3x3 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                        className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'text-white bg-[#383838]' : 'text-slate-500 hover:text-white'}`}
+                        className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'text-white bg-[#383838]' : 'text-text-muted hover:text-white'}`}
                         onClick={() => setViewMode('list')}
                     >
                         <List className="w-3.5 h-3.5" />
@@ -425,8 +425,8 @@ const MockFileExplorer = () => {
                                 onClick={() => openFolder(b)}
                             >
                                 <Folder className="w-10 h-10 text-[#fbbf24] group-hover:scale-105 transition-transform" />
-                                <span className="text-[11px] text-slate-300 text-center leading-tight truncate w-full">{b.name}</span>
-                                <span className="text-[10px] text-slate-600">{b.count} photos</span>
+                                <span className="text-[11px] text-text-secondary text-center leading-tight truncate w-full">{b.name}</span>
+                                <span className="text-[10px] text-text-muted">{b.count} photos</span>
                             </button>
                         ))}
                     </div>
@@ -439,12 +439,12 @@ const MockFileExplorer = () => {
                                     className="w-full aspect-[4/3] rounded group-hover:ring-2 ring-[#3b82f6] transition-all"
                                     style={{ background: thumbGradient(f.name) }}
                                 />
-                                <span className="text-[10px] text-slate-400 truncate w-full text-center">{f.name}</span>
+                                <span className="text-[10px] text-text-secondary truncate w-full text-center">{f.name}</span>
                             </div>
                         ))}
                         {remaining > 0 && (
                             <button
-                                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed border-[rgba(255,255,255,0.1)] text-slate-500 hover:text-white hover:border-[#3b82f6] transition-colors cursor-pointer aspect-[4/3]"
+                                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed border-[rgba(255,255,255,0.1)] text-text-muted hover:text-white hover:border-[#3b82f6] transition-colors cursor-pointer aspect-[4/3]"
                                 onClick={() => setFilesShown(p => p + EXPLORER_FILES_PER_PAGE)}
                             >
                                 <span className="text-[10px]">+{remaining} more</span>
@@ -454,21 +454,21 @@ const MockFileExplorer = () => {
                 ) : (
                     /* File List */
                     <div className="space-y-0">
-                        <div className="grid grid-cols-[24px_1fr_60px_70px_80px] gap-2 px-2 py-1 text-[10px] text-slate-600 font-semibold uppercase tracking-wider border-b border-[rgba(255,255,255,0.06)]">
+                        <div className="grid grid-cols-[24px_1fr_60px_70px_80px] gap-2 px-2 py-1 text-[10px] text-text-muted font-semibold uppercase tracking-wider border-b border-[rgba(255,255,255,0.06)]">
                             <span /><span>Name</span><span>Size</span><span>Dims</span><span>Date</span>
                         </div>
                         {visibleFiles.map((f, i) => (
                             <div key={i} className="grid grid-cols-[24px_1fr_60px_70px_80px] gap-2 px-2 py-1.5 items-center hover:bg-[rgba(255,255,255,0.03)] rounded cursor-pointer group">
                                 <div className="w-5 h-4 rounded-sm" style={{ background: thumbGradient(f.name) }} />
-                                <span className="text-[11px] text-slate-300 truncate">{f.name}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">{f.size}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">{f.dimensions}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">{f.date}</span>
+                                <span className="text-[11px] text-text-secondary truncate">{f.name}</span>
+                                <span className="text-[10px] text-text-muted font-mono">{f.size}</span>
+                                <span className="text-[10px] text-text-muted font-mono">{f.dimensions}</span>
+                                <span className="text-[10px] text-text-muted font-mono">{f.date}</span>
                             </div>
                         ))}
                         {remaining > 0 && (
                             <button
-                                className="w-full py-2 mt-1 text-[11px] text-slate-500 hover:text-white hover:bg-[rgba(255,255,255,0.04)] rounded transition-colors cursor-pointer"
+                                className="w-full py-2 mt-1 text-[11px] text-text-muted hover:text-white hover:bg-[rgba(255,255,255,0.04)] rounded transition-colors cursor-pointer"
                                 onClick={() => setFilesShown(p => p + EXPLORER_FILES_PER_PAGE)}
                             >
                                 Load {Math.min(remaining, EXPLORER_FILES_PER_PAGE)} more ({remaining} remaining)
@@ -480,10 +480,10 @@ const MockFileExplorer = () => {
 
             {/* ── Status Bar ── */}
             <div className="h-7 bg-[#27272a] flex items-center justify-between px-3 border-t border-[rgba(255,255,255,0.06)] shrink-0">
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-text-muted">
                     {currentBatch ? `${currentBatch.count} items` : `${EXPLORER_BATCHES.length} folders`}
                 </span>
-                <span className="text-[10px] text-slate-600">
+                <span className="text-[10px] text-text-muted">
                     {currentBatch ? `${(currentBatch.count * 3.8).toFixed(1)} MB` : '20.0 GB'}
                 </span>
             </div>
@@ -535,17 +535,17 @@ const FaqItem = ({ item, isOpen, onToggle }) => {
       className="w-full flex items-center justify-between py-5 text-left cursor-pointer group"
       onClick={onToggle}
     >
-      <span className={`text-base font-medium transition-colors ${isOpen ? (isDark ? 'text-white' : 'text-gray-900') : isDark ? 'text-slate-300 group-hover:text-white' : 'text-gray-600 group-hover:text-gray-900'}`}>
+      <span className={`text-base font-medium transition-colors ${isOpen ? (isDark ? 'text-white' : 'text-text-primary-light') : isDark ? 'text-text-secondary group-hover:text-white' : 'text-text-secondary-light group-hover:text-text-primary-light'}`}>
         {item.q}
       </span>
       <ChevronDown
-        className={`w-5 h-5 shrink-0 ml-4 transition-all duration-300 ${isOpen ? 'rotate-180 text-indigo-400' : isDark ? 'text-slate-600 group-hover:text-slate-400' : 'text-gray-400 group-hover:text-gray-500'}`}
+        className={`w-5 h-5 shrink-0 ml-4 transition-all duration-300 ${isOpen ? 'rotate-180 text-accent' : isDark ? 'text-text-muted group-hover:text-text-secondary' : 'text-gray-400 group-hover:text-gray-500'}`}
       />
     </button>
     <div
       className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-40 pb-5' : 'max-h-0'}`}
     >
-      <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed pr-10`}>{item.a}</p>
+      <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-text-secondary-light'} leading-relaxed pr-10`}>{item.a}</p>
     </div>
   </div>
   )
@@ -583,7 +583,7 @@ const ScrollToTop = () => {
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="Back to top"
-      className={`fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 flex items-center justify-center transition-all duration-300 cursor-pointer ${
+      className={`fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 flex items-center justify-center transition-all duration-300 cursor-pointer ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
       }`}
     >
@@ -592,36 +592,109 @@ const ScrollToTop = () => {
   )
 }
 
+// ─── Animated Counter (counts up on scroll into view) ───────────────────────
+const AnimatedCounter = ({ target, suffix = '', prefix = '', duration = 1.8 }) => {
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, amount: 0.5 })
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!isInView) return
+    let startTime = performance.now()
+    let animationFrameId
+    const step = (now) => {
+      const progress = Math.min((now - startTime) / (duration * 1000), 1)
+      const eased = 1 - Math.pow(1 - progress, 3) // easeOutCubic
+      setCount(Math.floor(eased * target))
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(step)
+      }
+    }
+    animationFrameId = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(animationFrameId)
+  }, [isInView, target, duration])
+
+  return (
+    <span ref={ref}>
+      {prefix}{count.toLocaleString()}{suffix}
+    </span>
+  )
+}
+
+// ─── Section Reveal wrapper (scroll-triggered fade-up) ──────────────────────
+const SectionReveal = ({ children, className = '', delay = 0 }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 30 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, amount: 0.15 }}
+    transition={{ duration: 0.6, ease: 'easeOut', delay }}
+    className={className}
+  >
+    {children}
+  </motion.div>
+)
+
 export default function LandingPage() {
   const { isDark } = useTheme()
   return (
-    <div className={isDark ? 'bg-slate-950' : 'bg-white'}>
-      {/* Hero Section */}
-      <div className="relative isolate overflow-hidden">
-        {/* Animated background orbs */}
-        <div className="absolute inset-0 -z-10" aria-hidden="true">
-          <div className={`hero-orb-1 absolute top-20 left-1/4 w-96 h-96 rounded-full ${isDark ? 'bg-indigo-500/20' : 'bg-indigo-200/40'} blur-3xl`} />
-          <div className={`hero-orb-2 absolute bottom-10 right-1/4 w-80 h-80 rounded-full ${isDark ? 'bg-purple-500/15' : 'bg-purple-200/30'} blur-3xl`} />
-          <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.12),transparent)]' : 'bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.06),transparent)]'}`} />
-        </div>
+    <div className={`relative ${isDark ? 'bg-bg-main' : 'bg-bg-main-light'}`}>
+      {/* ── Page-wide Mesh Gradient Background ── */}
+      <div className="hero-mesh" aria-hidden="true">
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+        <div className="hero-mesh-blob" />
+      </div>
+      {/* ── Page-wide Floating Particles (rise from bottom to top) ── */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 1 }} aria-hidden="true">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div
+            key={i}
+            className="hero-particle"
+            style={{
+              width: `${2.5 + (i % 4) * 1.5}px`,
+              height: `${2.5 + (i % 4) * 1.5}px`,
+              left: `${1 + (i * 2.85) % 97}%`,
+              bottom: `${(i * 2.5) % 40}%`,
+              animation: `particleDrift ${14 + (i % 8) * 2}s ease-in-out ${(i * 0.8) % 10}s infinite`,
+            }}
+          />
+        ))}
+      </div>
 
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl pt-32 sm:pt-44 lg:pt-52 pb-24 sm:pb-32 text-center">
+      {/* Hero Section */}
+      <div className="relative isolate overflow-hidden" style={{ zIndex: 2 }}>
+        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(46,91,255,0.08),transparent)]' : 'bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(46,91,255,0.04),transparent)]'}`} />
+
+        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+            className="mx-auto max-w-3xl pt-32 sm:pt-44 lg:pt-52 pb-24 sm:pb-32 text-center"
+          >
 
             {/* Badge */}
-            <div className={`inline-flex items-center gap-2 rounded-full border ${isDark ? 'border-indigo-500/20 bg-indigo-500/10' : 'border-indigo-200 bg-indigo-50'} px-4 py-1.5 mb-8`}>
-              <Zap className="w-3.5 h-3.5 text-indigo-400" />
-              <span className={`text-xs font-semibold tracking-wide ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>100% local · No uploads · No cloud</span>
+            <div className={`inline-flex items-center gap-2 rounded-full border ${isDark ? 'border-primary/20 bg-primary/10' : 'border-primary/20 bg-primary/5'} px-4 py-1.5 mb-8`}>
+              <Zap className="w-3.5 h-3.5 text-accent" />
+              <span className={`text-xs font-semibold tracking-wide ${isDark ? 'text-accent' : 'text-primary'}`}>100% local · No uploads · No cloud</span>
             </div>
 
             {/* Headline */}
             <h1 className={`text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'} leading-[1.1]`}>
-              Batch My Photos — Sort thousands of photos{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">in seconds.</span>
+              BatchMyPhotos — Sort thousands of photos{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2E5BFF] to-[#00D1FF]">in seconds.</span>
             </h1>
 
             {/* Sub-headline */}
-            <p className={`mt-6 text-lg sm:text-xl leading-8 ${isDark ? 'text-slate-400' : 'text-gray-500'} max-w-2xl mx-auto`}>
+            <p className={`mt-6 text-lg sm:text-xl leading-8 ${isDark ? 'text-text-secondary' : 'text-text-secondary-light'} max-w-2xl mx-auto`}>
               Drag a folder in, tweak your settings, and let Batch My Photos organize everything into clean, labeled batches right on your machine.
             </p>
 
@@ -631,7 +704,7 @@ export default function LandingPage() {
                 href="/demo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-base font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
+                className="group inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-primary hover:bg-primary-hover text-white text-base font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all"
               >
                 <Play className="w-5 h-5" /> Try the Live Demo
               </a>
@@ -639,71 +712,121 @@ export default function LandingPage() {
                   href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
+                  className="inline-flex items-center hover:-translate-y-1 transition-transform"
+                  aria-label="Get it from Microsoft Store"
                 >
-                  <Download className="w-5 h-5" /> Get it on Microsoft Store
+                  {/* Official Microsoft Store Badge */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="58" viewBox="0 0 200 58">
+                    <defs><linearGradient id="ms-badge-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={isDark ? '#2a2a2a' : '#111'}/><stop offset="100%" stopColor={isDark ? '#1a1a1a' : '#000'}/></linearGradient></defs>
+                    <rect width="200" height="58" rx="8" fill="url(#ms-badge-bg)" stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
+                    <text x="68" y="22" fill="#ccc" fontSize="10" fontFamily="Segoe UI, sans-serif" fontWeight="400">Get it from</text>
+                    <text x="68" y="40" fill="#fff" fontSize="16" fontFamily="Segoe UI, sans-serif" fontWeight="600">Microsoft Store</text>
+                    {/* Windows logo */}
+                    <g transform="translate(18,14)">
+                      <rect x="0" y="0" width="13" height="13" rx="1.5" fill="#F25022"/>
+                      <rect x="15" y="0" width="13" height="13" rx="1.5" fill="#7FBA00"/>
+                      <rect x="0" y="15" width="13" height="13" rx="1.5" fill="#00A4EF"/>
+                      <rect x="15" y="15" width="13" height="13" rx="1.5" fill="#FFB900"/>
+                    </g>
+                  </svg>
                 </a>
               </div>
 
             {/* Trust indicators */}
-            <div className={`mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-              <span className="flex items-center gap-1.5"><ShieldCheck className={`w-4 h-4 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} /> Private &amp; offline</span>
-              <span className={`hidden sm:inline ${isDark ? 'text-slate-700' : 'text-gray-300'}`}>·</span>
-              <span className="flex items-center gap-1.5"><Undo2 className={`w-4 h-4 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} /> Fully reversible</span>
-              <span className={`hidden sm:inline ${isDark ? 'text-slate-700' : 'text-gray-300'}`}>·</span>
-              <span className="flex items-center gap-1.5"><Zap className={`w-4 h-4 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} /> Handles 20,000+ photos</span>
+            <div className={`mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm ${isDark ? 'text-text-muted' : 'text-text-secondary-light'}`}>
+              <span className="flex items-center gap-1.5"><ShieldCheck className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} /> Private &amp; offline</span>
+              <span className={`hidden sm:inline ${isDark ? 'text-text-muted' : 'text-gray-300'}`}>·</span>
+              <span className="flex items-center gap-1.5"><Undo2 className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} /> Fully reversible</span>
+              <span className={`hidden sm:inline ${isDark ? 'text-text-muted' : 'text-gray-300'}`}>·</span>
+              <span className="flex items-center gap-1.5"><Zap className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} /> Handles 20,000+ photos</span>
             </div>
 
             {/* Mini preview illustration */}
             <div className="mt-16 relative">
               <div className="hero-shimmer absolute -inset-4 rounded-2xl" />
-              <div className={`relative rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-sm shadow-2xl shadow-black/40' : 'border-gray-200 bg-slate-900 shadow-2xl shadow-gray-300/30'} p-6 sm:p-8`}>
+              <div className={`relative rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-sm shadow-2xl shadow-black/40' : 'border-gray-200 bg-bg-surface shadow-2xl shadow-gray-300/30'} p-6 sm:p-8`}>
                 <div className="flex items-center gap-3 mb-5">
                   <div className="flex gap-1.5">
                     <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
                     <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
                     <div className="w-3 h-3 rounded-full bg-[#28c840]" />
                   </div>
-                  <span className="text-xs text-slate-500 font-medium ml-2">Batch My Photos</span>
+                  <span className="text-xs text-text-muted font-medium ml-2">Batch My Photos</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {['Marathon — Batch 1', 'Marathon — Batch 2', 'Marathon — Batch 3'].map((name, i) => (
                     <div key={i} className="rounded-lg bg-white/[0.04] border border-white/[0.06] p-3 text-left">
                       <div className="flex items-center gap-2 mb-2">
-                        <Folder className="w-4 h-4 text-indigo-400" />
+                        <Folder className="w-4 h-4 text-accent" />
                         <span className="text-xs font-medium text-white truncate">{name}</span>
                       </div>
-                      <div className="text-[11px] text-slate-500">{500 - i * 12} photos</div>
+                      <div className="text-[11px] text-text-muted">{500 - i * 12} photos</div>
                       <div className="mt-2 h-1 rounded-full bg-white/[0.06] overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: `${100 - i * 15}%` }} />
+                        <div className="h-full rounded-full bg-gradient-to-r from-[#2E5BFF] to-[#00D1FF]" style={{ width: `${100 - i * 15}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
+        </div>
+      </div>
+      {/* ══ Animated Stats Counter ══ */}
+      <div className={`${isDark ? 'bg-bg-main' : 'bg-bg-main-light'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
+        <div className="mx-auto max-w-5xl px-6 lg:px-8 py-16 sm:py-20">
+          <SectionReveal>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+              {[
+                { target: 20000, suffix: '+', label: 'Photos handled per session', icon: <Layers className="w-5 h-5" /> },
+                { target: 3, suffix: 's', label: 'Average batch time', icon: <Zap className="w-5 h-5" /> },
+                { target: 100, suffix: '%', label: 'Offline & private', icon: <ShieldCheck className="w-5 h-5" /> },
+                { target: null, label: 'Unlimited undo', icon: <Undo2 className="w-5 h-5" /> },
+              ].map((stat, i) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.5 }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="text-center group"
+                >
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${isDark ? 'bg-primary/10' : 'bg-primary/5'} mb-4 group-hover:bg-primary/20 transition-colors`}>
+                    <span className="text-accent">{stat.icon}</span>
+                  </div>
+                  <div className={`text-3xl sm:text-4xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>
+                    {stat.target !== null ? (
+                      <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                    ) : (
+                      <span>∞</span>
+                    )}
+                  </div>
+                  <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>{stat.label}</p>
+                </motion.div>
+              ))}
+            </div>
+          </SectionReveal>
         </div>
       </div>
 
       {/* Timeline Features Section */}
-      <div id="features" className={`relative ${isDark ? 'bg-slate-950' : 'bg-white'} overflow-hidden`}>
-        <div className="mx-auto max-w-2xl text-center pt-24 sm:pt-32 pb-8 px-6">
-          <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">How It Works</span>
+      <div id="features" className={`relative ${isDark ? 'bg-bg-main' : 'bg-white'} overflow-hidden`}>
+        <SectionReveal className="mx-auto max-w-2xl text-center pt-24 sm:pt-32 pb-8 px-6">
+          <span className="text-xs font-bold tracking-widest uppercase text-accent">How It Works</span>
           <h2 className={`mt-4 text-3xl sm:text-5xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>From folder to done in 6&nbsp;steps</h2>
-          <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Scroll through each step to see how Batch My Photos organizes thousands of photos effortlessly.</p>
-        </div>
+          <p className={`mt-4 text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>Scroll through each step to see how Batch My Photos organizes thousands of photos effortlessly.</p>
+        </SectionReveal>
         <VerticalTimeline content={content} />
 
         {/* ── CTA after timeline ── */}
         <div className="relative mx-auto max-w-3xl text-center px-6 pt-20 pb-32">
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-            <div className="w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl" />
+            <div className="w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
           </div>
           <h3 className={`relative text-3xl sm:text-4xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-4`}>
             See it in action no download needed
           </h3>
-          <p className={`relative text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} mb-10 max-w-xl mx-auto`}>
+          <p className={`relative text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'} mb-10 max-w-xl mx-auto`}>
             Try the full workflow right in your browser. Drag a folder, tweak settings, preview batches, and watch them process all in our interactive demo.
           </p>
           <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -711,7 +834,7 @@ export default function LandingPage() {
               href="/demo"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-base font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
+              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-primary hover:bg-primary-hover text-white text-base font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all"
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
@@ -719,251 +842,211 @@ export default function LandingPage() {
               href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
               target="_blank"
               rel="noopener noreferrer"
-              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
+              className="inline-flex items-center hover:-translate-y-1 transition-transform"
+              aria-label="Get it from Microsoft Store"
             >
-              <Download className="w-5 h-5" /> Get it on Microsoft Store
+              <svg xmlns="http://www.w3.org/2000/svg" width="200" height="58" viewBox="0 0 200 58">
+                <defs><linearGradient id="ms-badge-bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={isDark ? '#2a2a2a' : '#111'}/><stop offset="100%" stopColor={isDark ? '#1a1a1a' : '#000'}/></linearGradient></defs>
+                <rect width="200" height="58" rx="8" fill="url(#ms-badge-bg2)" stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
+                <text x="68" y="22" fill="#ccc" fontSize="10" fontFamily="Segoe UI, sans-serif" fontWeight="400">Get it from</text>
+                <text x="68" y="40" fill="#fff" fontSize="16" fontFamily="Segoe UI, sans-serif" fontWeight="600">Microsoft Store</text>
+                <g transform="translate(18,14)">
+                  <rect x="0" y="0" width="13" height="13" rx="1.5" fill="#F25022"/>
+                  <rect x="15" y="0" width="13" height="13" rx="1.5" fill="#7FBA00"/>
+                  <rect x="0" y="15" width="13" height="13" rx="1.5" fill="#00A4EF"/>
+                  <rect x="15" y="15" width="13" height="13" rx="1.5" fill="#FFB900"/>
+                </g>
+              </svg>
             </a>
           </div>
         </div>
       </div>
 
       {/* ══ Features Section ══ */}
-      <div className={`${isDark ? 'bg-slate-950' : 'bg-gray-50'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
+      <div className={`${isDark ? 'bg-bg-main' : 'bg-gray-50'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-24 sm:py-32">
 
           {/* Section header */}
-          <div className="mx-auto max-w-2xl text-center mb-16">
-            <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">Built for Real Workflows</span>
+          <SectionReveal className="mx-auto max-w-2xl text-center mb-16">
+            <span className="text-xs font-bold tracking-widest uppercase text-accent">Built for Real Workflows</span>
             <h2 className={`mt-4 text-3xl sm:text-5xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Features that actually save you time</h2>
-            <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Everything you need to go from a messy photo dump to perfectly organized batches without the headache.</p>
-          </div>
+            <p className={`mt-4 text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>Everything you need to go from a messy photo dump to perfectly organized batches without the headache.</p>
+          </SectionReveal>
 
           {/* Feature cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-
-            {/* ── Card 1: Batch Photo Processing ── */}
-            <div className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]' : 'border-gray-200 bg-white hover:bg-gray-50 shadow-sm'} p-8 hover:border-indigo-500/30 transition-all duration-300`}>
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="relative">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 mb-5 group-hover:bg-indigo-500/20 transition-colors">
-                  <Layers className="w-6 h-6 text-indigo-400" />
-                </div>
-                <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>Batch Photo Processing</h3>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Automatically split thousands of photos into clean, manageable batches based on your limits. Set a max per folder to 500, 1000, whatever you need, and we handle the rest.</p>
-              </div>
-            </div>
-
-            {/* ── Card 2: Blurry Photo Detection ── */}
-            <div className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]' : 'border-gray-200 bg-white hover:bg-gray-50 shadow-sm'} p-8 hover:border-amber-500/30 transition-all duration-300`}>
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="relative">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 mb-5 group-hover:bg-amber-500/20 transition-colors">
-                  <Eye className="w-6 h-6 text-amber-400" />
-                </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Blurry Photo Detection</h3>
-                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20">Coming Soon</span>
-                </div>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Flag blurry images before they waste your time. Choose strict, moderate, or lenient sensitivity to catch exactly the level of blur you care about.</p>
-              </div>
-            </div>
-
-            {/* ── Card 3: Watermarking (Coming Soon) ── */}
-            <div className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]' : 'border-gray-200 bg-white hover:bg-gray-50 shadow-sm'} p-8 hover:border-cyan-500/30 transition-all duration-300`}>
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="relative">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-cyan-500/10 mb-5 group-hover:bg-cyan-500/20 transition-colors">
-                  <Droplets className="w-6 h-6 text-cyan-400" />
-                </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Watermarking</h3>
-                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 ring-1 ring-cyan-500/20">Coming Soon</span>
-                </div>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>Apply a custom watermark to every photo in a batch, automatically. Toggle it on or off per batch your brand, your terms, zero manual work.</p>
-              </div>
-            </div>
-
-            {/* ── Card 4: More Features Coming Soon ── */}
-            <div className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]' : 'border-gray-200 bg-white hover:bg-gray-50 shadow-sm'} p-8 hover:border-purple-500/30 transition-all duration-300`}>
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="relative">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-purple-500/10 mb-5 group-hover:bg-purple-500/20 transition-colors">
-                  <Sparkles className="w-6 h-6 text-purple-400" />
-                </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>More Features Coming Soon!</h3>
-                  <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20">Stay Tuned</span>
-                </div>
-                <p className={`${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>We're constantly improving Batch My Photos. Exciting new features are on the way — stay tuned for updates!</p>
-              </div>
-            </div>
+            {[
+              { icon: Layers, color: 'primary', title: 'Batch Photo Processing', desc: 'Automatically split thousands of photos into clean, manageable batches based on your limits. Set a max per folder to 500, 1000, whatever you need, and we handle the rest.' },
+              { icon: Eye, color: 'amber', title: 'Blurry Photo Detection', desc: 'Flag blurry images before they waste your time. Choose strict, moderate, or lenient sensitivity to catch exactly the level of blur you care about.', badge: 'Coming Soon' },
+              { icon: Droplets, color: 'cyan', title: 'Watermarking', desc: 'Apply a custom watermark to every photo in a batch, automatically. Toggle it on or off per batch — your brand, your terms, zero manual work.', badge: 'Coming Soon' },
+              { icon: Sparkles, color: 'purple', title: 'More Features Coming Soon!', desc: "We're constantly improving Batch My Photos. Exciting new features are on the way — stay tuned for updates!", badge: 'Stay Tuned' },
+            ].map((card, i) => {
+              const Icon = card.icon
+              const colorMap = { primary: 'primary', amber: 'amber-500', cyan: 'cyan-500', purple: 'purple-500' }
+              const c = colorMap[card.color]
+              return (
+                <motion.div
+                  key={card.title}
+                  initial={{ opacity: 0, y: 25 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className={`group relative rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-8 hover:border-${c}/30 hover:-translate-y-1 hover:shadow-xl ${isDark ? 'hover:shadow-primary/5' : 'hover:shadow-gray-200/60'} transition-all duration-300`}
+                >
+                  <div className={`absolute -inset-px rounded-2xl bg-gradient-to-br from-${c}/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
+                  <div className="relative">
+                    <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-${c}/10 mb-5 group-hover:bg-${c}/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                      <Icon className={`w-6 h-6 text-${card.color === 'primary' ? 'accent' : c.replace('-500','') + '-400'}`} />
+                    </div>
+                    {card.badge ? (
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{card.title}</h3>
+                        <span className={`text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-${c}/10 text-${card.color === 'primary' ? 'accent' : c.replace('-500','') + '-400'} ring-1 ring-${c}/20`}>{card.badge}</span>
+                      </div>
+                    ) : (
+                      <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>{card.title}</h3>
+                    )}
+                    <p className={`${isDark ? 'text-text-secondary' : 'text-gray-500'} leading-relaxed`}>{card.desc}</p>
+                  </div>
+                </motion.div>
+              )
+            })}
           </div>
 
           {/* Bottom trust bar */}
           <div className={`flex flex-wrap items-center justify-center gap-x-8 gap-y-4 mt-16 pt-10 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
-            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
               <Lock className="w-4 h-4" /> 100% Local Processing
             </div>
-            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
               <Zap className="w-4 h-4" /> No Uploads Required
             </div>
-            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
               <Sparkles className="w-4 h-4" /> Free to Use
             </div>
           </div>
         </div>
       </div>
 
+
       {/* ══ Who It's For / Why It Works ══ */}
-      <div className={isDark ? 'bg-slate-950' : 'bg-white'}>
+      <div className={`${isDark ? 'bg-bg-main' : 'bg-white'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-24 sm:py-32">
 
           {/* ── Two-column layout ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24">
 
             {/* Left: Who It's For */}
-            <div>
-              <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">Who It's For</span>
-              <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Built for people who deal with <em className="not-italic text-indigo-400">way too many photos</em></h2>
-              <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>If you've ever stared at a folder with 10,000 unsorted images and thought "where do I even start?" this is for you.</p>
+            <SectionReveal>
+              <span className="text-xs font-bold tracking-widest uppercase text-accent">Who It's For</span>
+              <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Built for people who deal with <em className="not-italic text-accent">way too many photos</em></h2>
+              <p className={`mt-4 text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'} leading-relaxed`}>If you've ever stared at a folder with 10,000 unsorted images and thought "where do I even start?" — this is for you.</p>
 
-              <div className="mt-10 space-y-6">
-                {/* Persona 1 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                      <Camera className="w-5 h-5 text-indigo-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Wedding &amp; Event Photographers</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>You shoot 5,000–20,000 photos per event. You need them split into clean, deliverable batches fast. No second-guessing, no miscounts.</p>
-                  </div>
-                </div>
-
-                {/* Persona 2 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                      <Upload className="w-5 h-5 text-amber-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Content Creators &amp; Social Managers</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>You upload to multiple platforms with strict file limits. Batch My Photos splits your library into ready-to-upload folders so you never hit a cap mid-upload again.</p>
-                  </div>
-                </div>
-
-                {/* Persona 3 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <Heart className="w-5 h-5 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Anyone Tired of Manual Sorting</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Maybe you're organizing family vacations, school events, or personal archives. If you've ever spent an evening dragging files into folders one by one, those days are over.</p>
-                  </div>
-                </div>
+              <div className="mt-10 space-y-4">
+                {[
+                  { icon: Camera, color: 'primary', title: 'Wedding & Event Photographers', desc: 'You shoot 5,000–20,000 photos per event. You need them split into clean, deliverable batches — fast.' },
+                  { icon: Upload, color: 'amber-500', title: 'Content Creators & Social Managers', desc: 'You upload to multiple platforms with strict file limits. Split your library into ready-to-upload folders.' },
+                  { icon: Heart, color: 'emerald-500', title: 'Anyone Tired of Manual Sorting', desc: "Organizing family vacations, school events, or personal archives? Those late-night sorting sessions are over." },
+                  { icon: Monitor, color: 'cyan-500', title: 'Schools & Organizations', desc: 'Yearbook teams, school events, company archives — batch thousands of photos into clean deliverables for your team.' },
+                ].map((persona, i) => {
+                  const Icon = persona.icon
+                  return (
+                    <motion.div
+                      key={persona.title}
+                      initial={{ opacity: 0, x: -20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true, amount: 0.3 }}
+                      transition={{ duration: 0.5, delay: i * 0.1 }}
+                      className={`group flex gap-4 p-4 rounded-xl border ${isDark ? 'border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.02]' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'} transition-all duration-300`}
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <div className={`w-10 h-10 rounded-xl bg-${persona.color === 'primary' ? 'primary' : persona.color}/10 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                          <Icon className={`w-5 h-5 text-${persona.color === 'primary' ? 'accent' : persona.color.replace('-500', '') + '-400'}`} />
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{persona.title}</h4>
+                        <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'} mt-1 leading-relaxed`}>{persona.desc}</p>
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </div>
-            </div>
+            </SectionReveal>
 
             {/* Right: Why It Works */}
-            <div>
-              <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">Why It Works</span>
-              <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Because it was built by someone who <em className="not-italic text-indigo-400">actually needed it</em></h2>
-              <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed`}>This isn't a generic file tool with a photo skin. Every feature exists because real workflows demanded it.</p>
+            <SectionReveal delay={0.15}>
+              <span className="text-xs font-bold tracking-widest uppercase text-accent">Why It Works</span>
+              <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Because it was built by someone who <em className="not-italic text-accent">actually needed it</em></h2>
+              <p className={`mt-4 text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'} leading-relaxed`}>This isn't a generic file tool with a photo skin. Every feature exists because real workflows demanded it.</p>
 
-              <div className="mt-10 space-y-6">
-                {/* Reason 1 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                      <Layers className="w-5 h-5 text-indigo-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Handles Real-World Scale</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Designed for 5,000 to 20,000+ photos per session. Batch sizes, folder names, and sort order are all under your control, no arbitrary limits.</p>
-                  </div>
-                </div>
-
-                {/* Reason 2 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                      <ShieldCheck className="w-5 h-5 text-amber-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Preview Before You Commit</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>See exactly how your batches will look before a single file moves. Check counts, review file lists, and confirm everything is right. No surprises.</p>
-                  </div>
-                </div>
-
-                {/* Reason 3 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <WifiOff className="w-5 h-5 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>100% Offline. Your Files Stay Yours.</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Nothing gets uploaded. Nothing leaves your machine. The app works entirely on your local file system, fast, private, and always available.</p>
-                  </div>
-                </div>
-
-                {/* Reason 4 */}
-                <div className="flex gap-4">
-                  <div className="shrink-0 mt-1">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                      <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Transparent &amp; Fully In Your Control</h4>
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-1 leading-relaxed`}>Every setting is visible. Every batch is previewable. Undo anything. This tool works with you, not behind your back.</p>
-                  </div>
-                </div>
+              <div className="mt-10 space-y-4">
+                {[
+                  { icon: Layers, color: 'primary', title: 'Handles Real-World Scale', desc: 'Designed for 5,000 to 20,000+ photos per session. Batch sizes, folder names, and sort order — all under your control.' },
+                  { icon: ShieldCheck, color: 'amber-500', title: 'Preview Before You Commit', desc: 'See exactly how your batches will look before a single file moves. No surprises.' },
+                  { icon: WifiOff, color: 'emerald-500', title: '100% Offline. Your Files Stay Yours.', desc: 'Nothing gets uploaded. The app works entirely on your local file system — fast, private, always available.' },
+                  { icon: SlidersHorizontal, color: 'cyan-500', title: 'Transparent & Fully In Your Control', desc: 'Every setting is visible. Every batch is previewable. Undo anything. This tool works with you.' },
+                ].map((reason, i) => {
+                  const Icon = reason.icon
+                  return (
+                    <motion.div
+                      key={reason.title}
+                      initial={{ opacity: 0, x: 20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true, amount: 0.3 }}
+                      transition={{ duration: 0.5, delay: i * 0.1 }}
+                      className={`group flex gap-4 p-4 rounded-xl border ${isDark ? 'border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.02]' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'} transition-all duration-300`}
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <div className={`w-10 h-10 rounded-xl bg-${reason.color === 'primary' ? 'primary' : reason.color}/10 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                          <Icon className={`w-5 h-5 text-${reason.color === 'primary' ? 'accent' : reason.color.replace('-500', '') + '-400'}`} />
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{reason.title}</h4>
+                        <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'} mt-1 leading-relaxed`}>{reason.desc}</p>
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </div>
-            </div>
+            </SectionReveal>
           </div>
 
           {/* Bottom pull quote */}
-          <div className={`mt-20 pt-12 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'} text-center`}>
+          <SectionReveal className={`mt-20 pt-12 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'} text-center`}>
             <p className={`text-xl sm:text-2xl font-medium ${isDark ? 'text-white' : 'text-gray-900'} italic max-w-2xl mx-auto leading-relaxed`}>
               "I just need my photos sorted into folders. That's it."
             </p>
-            <p className="mt-3 text-sm text-indigo-400 font-semibold">That's exactly what this does. Nothing more, nothing less.</p>
-          </div>
+            <p className="mt-3 text-sm text-accent font-semibold">That's exactly what this does. Nothing more, nothing less.</p>
+          </SectionReveal>
         </div>
       </div>
 
       {/* ══ FAQ Section ══ */}
-      <div id="faq" className={`${isDark ? 'bg-slate-950' : 'bg-gray-50'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
+      <div id="faq" className={`${isDark ? 'bg-bg-main' : 'bg-gray-50'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
         <div className="mx-auto max-w-3xl px-6 lg:px-8 py-24 sm:py-32">
 
-          <div className="text-center mb-14">
-            <span className="text-xs font-bold tracking-widest uppercase text-indigo-400">FAQ</span>
+          <SectionReveal className="text-center mb-14">
+            <span className="text-xs font-bold tracking-widest uppercase text-accent">FAQ</span>
             <h2 className={`mt-4 text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Questions before you start</h2>
-            <p className={`mt-3 text-base ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Quick answers to the things most people ask first.</p>
-          </div>
+            <p className={`mt-3 text-base ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>Quick answers to the things most people ask first.</p>
+          </SectionReveal>
 
           <FaqAccordion />
         </div>
       </div>
 
       {/* ══ Final CTA ══ */}
-      <div className={`${isDark ? 'bg-slate-950' : 'bg-white'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
+      <div className={`${isDark ? 'bg-bg-main' : 'bg-white'} border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-200'}`}>
         <div className="mx-auto max-w-3xl px-6 lg:px-8 py-28 sm:py-36 text-center">
+          <SectionReveal>
 
-          <p className="text-sm font-semibold text-indigo-400 mb-4">Ready when you are</p>
+          <p className="text-sm font-semibold text-accent mb-4">Ready when you are</p>
           <h2 className={`text-3xl sm:text-4xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Your photos deserve better than manual sorting.
           </h2>
-          <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-gray-500'} max-w-xl mx-auto leading-relaxed`}>
+          <p className={`mt-4 text-lg ${isDark ? 'text-text-secondary' : 'text-gray-500'} max-w-xl mx-auto leading-relaxed`}>
             Batch My Photos handles the tedious part so you can get back to what matters. Try it in your browser first, no account, no install, no risk.
           </p>
 
@@ -972,7 +1055,7 @@ export default function LandingPage() {
               href="/demo"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-base font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
+              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-primary hover:bg-primary-hover text-white text-base font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all"
             >
               <Play className="w-5 h-5" /> Try the Live Demo
             </a>
@@ -980,13 +1063,26 @@ export default function LandingPage() {
               href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
               target="_blank"
               rel="noopener noreferrer"
-              className={`inline-flex items-center gap-2 px-8 py-4 rounded-xl border ${isDark ? 'border-white/10 bg-white/[0.06] hover:bg-white/[0.1] text-white' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-900'} text-base font-semibold transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-md`}
+              className="inline-flex items-center hover:-translate-y-1 transition-transform"
+              aria-label="Get it from Microsoft Store"
             >
-              <Download className="w-5 h-5" /> Get it on Microsoft Store
+              <svg xmlns="http://www.w3.org/2000/svg" width="200" height="58" viewBox="0 0 200 58">
+                <defs><linearGradient id="ms-badge-bg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={isDark ? '#2a2a2a' : '#111'}/><stop offset="100%" stopColor={isDark ? '#1a1a1a' : '#000'}/></linearGradient></defs>
+                <rect width="200" height="58" rx="8" fill="url(#ms-badge-bg3)" stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
+                <text x="68" y="22" fill="#ccc" fontSize="10" fontFamily="Segoe UI, sans-serif" fontWeight="400">Get it from</text>
+                <text x="68" y="40" fill="#fff" fontSize="16" fontFamily="Segoe UI, sans-serif" fontWeight="600">Microsoft Store</text>
+                <g transform="translate(18,14)">
+                  <rect x="0" y="0" width="13" height="13" rx="1.5" fill="#F25022"/>
+                  <rect x="15" y="0" width="13" height="13" rx="1.5" fill="#7FBA00"/>
+                  <rect x="0" y="15" width="13" height="13" rx="1.5" fill="#00A4EF"/>
+                  <rect x="15" y="15" width="13" height="13" rx="1.5" fill="#FFB900"/>
+                </g>
+              </svg>
             </a>
           </div>
 
-          <p className={`mt-8 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Free to start · No credit card · Cancel anytime</p>
+          <p className={`mt-8 text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>Free to start · No credit card · Cancel anytime</p>
+          </SectionReveal>
         </div>
       </div>
 

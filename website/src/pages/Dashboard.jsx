@@ -19,7 +19,7 @@ const getDashModals = () => ({
   managePlan: {
     title: 'Manage Your Plan',
     icon: CreditCard,
-    color: 'text-indigo-400',
+    color: 'text-accent',
     body: null, // Placeholder — content will be injected dynamically
   },
 })
@@ -40,7 +40,7 @@ function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className={`relative w-full max-w-lg max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
+        className={`relative w-full max-w-lg max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-bg-surface shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-white/[0.06]' : 'border-gray-200'} shrink-0`}>
@@ -50,7 +50,7 @@ function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
             </div>
             <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{content.title}</h3>
           </div>
-          <button onClick={onClose} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
+          <button onClick={onClose} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-text-muted hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -249,13 +249,13 @@ export default function Dashboard() {
   // Only show full loading screen on initial load. 
   // If subLoading is true but we have old data (sub exists), keep showing the dashboard (optimistic/stale UI)
   if (loading || (subLoading && !sub)) return (
-    <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
+    <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-10 h-10">
-          <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20" />
-          <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+          <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         </div>
-        <p className={`text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'} tracking-wide`}>Loading your dashboard…</p>
+        <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'} tracking-wide`}>Loading your dashboard…</p>
       </div>
     </div>
   )
@@ -269,13 +269,13 @@ export default function Dashboard() {
   const greeting    = new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'
 
   return (
-    <div className={`relative min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} overflow-hidden`}>
+    <div className={`relative min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} overflow-hidden`}>
 
       {/* ── Ambient background (matches auth pages) ── */}
       <div className="pointer-events-none absolute inset-0">
-        <div className={`hero-orb-1 absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full ${isDark ? 'bg-indigo-600/8' : 'bg-indigo-200/30'} blur-3xl`} />
-        <div className={`hero-orb-2 absolute -bottom-32 -right-32 w-[420px] h-[420px] rounded-full ${isDark ? 'bg-purple-600/8' : 'bg-purple-200/30'} blur-3xl`} />
-        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.04)_0%,transparent_60%)]' : 'bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.03)_0%,transparent_60%)]'}`} />
+        <div className={`hero-orb-1 absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full ${isDark ? 'bg-primary/8' : 'bg-primary/10'} blur-3xl`} />
+        <div className={`hero-orb-2 absolute -bottom-32 -right-32 w-[420px] h-[420px] rounded-full ${isDark ? 'bg-purple-600/8' : 'bg-accent/10'} blur-3xl`} />
+        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(ellipse_at_top,rgba(46,91,255,0.04)_0%,transparent_60%)]' : 'bg-[radial-gradient(ellipse_at_top,rgba(46,91,255,0.03)_0%,transparent_60%)]'}`} />
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-24 pb-20">
@@ -285,7 +285,7 @@ export default function Dashboard() {
           <div className={`mb-6 rounded-xl px-5 py-4 text-sm flex items-center gap-3 animate-[footerModalIn_0.2s_ease-out] ${
             paymentMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
             : paymentMsg.type === 'error'   ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-            : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300'
+            : 'bg-primary/10 border border-primary/20 text-accent'
           }`}>
             <span>{paymentMsg.text}</span>
           </div>
@@ -300,7 +300,7 @@ export default function Dashboard() {
             {/* Left: greeting */}
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shadow-md shadow-indigo-500/20">
+                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-lg font-bold text-white shadow-md shadow-primary/20">
                   {initials}
                 </div>
                 <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 ${isDark ? 'border-slate-950' : 'border-gray-50'}`} title="Online" />
@@ -309,7 +309,7 @@ export default function Dashboard() {
                 <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} leading-tight`}>
                   Good {greeting}, {firstName}
                 </h1>
-                <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'} mt-0.5`}>Welcome back to your BatchMyPhotos account</p>
+                <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-500'} mt-0.5`}>Welcome back to your BatchMyPhotos account</p>
               </div>
             </div>
 
@@ -317,9 +317,9 @@ export default function Dashboard() {
             <div className="flex items-center gap-3 shrink-0">
               <Link
                 to="/demo"
-                className={`hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-600'} text-sm font-medium transition-colors`}
+                className={`hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-text-secondary' : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-600'} text-sm font-medium transition-colors`}
               >
-                <Play className="w-3.5 h-3.5 text-indigo-400" /> Try Demo
+                <Play className="w-3.5 h-3.5 text-accent" /> Try Demo
               </Link>
             </div>
           </div>
@@ -331,43 +331,52 @@ export default function Dashboard() {
         <section className="auth-card-in mb-8" style={{ animationDelay: '0.05s' }}>
           <div className={`relative group rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} overflow-hidden`}>
             {/* Gradient shimmer on hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/[0.04] to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="absolute top-0 right-0 w-72 h-72 bg-indigo-500/[0.03] rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/4" />
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/[0.04] to-accent/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute top-0 right-0 w-72 h-72 bg-primary/[0.03] rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/4" />
 
             <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
               {/* App icon */}
-              <div className={`shrink-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-gradient-to-br ${isDark ? 'from-slate-800 to-slate-900 border border-white/[0.08] shadow-xl shadow-black/30' : 'from-gray-100 to-gray-200 border border-gray-200 shadow-lg shadow-gray-200/50'} flex items-center justify-center`}>
+              <div className={`shrink-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-gradient-to-br ${isDark ? 'from-bg-surface to-bg-main border border-white/[0.08] shadow-xl shadow-black/30' : 'from-gray-100 to-gray-200 border border-gray-200 shadow-lg shadow-gray-200/50'} flex items-center justify-center`}>
                 <img src="/app_icon.png" alt="BatchMyPhotos" className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg" />
               </div>
 
               {/* Text */}
               <div className="flex-1 min-w-0">
                 <h2 className={`text-lg sm:text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>Download BatchMyPhotos</h2>
-                <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} leading-relaxed max-w-lg`}>
+                <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'} leading-relaxed max-w-lg`}>
                   Organize, rename, and batch-process thousands of photos in seconds.
                   Everything runs locally, your files never leave your machine.
                 </p>
               </div>
 
               {/* CTA */}
-              <div className="shrink-0 flex flex-col gap-2.5">
+              <div className="shrink-0 flex flex-col items-center gap-2">
                 <a
                   href="https://apps.microsoft.com/detail/9N1KKMV4NX4J"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
+                  className="inline-flex items-center hover:-translate-y-1 transition-transform"
+                  aria-label="Get it from Microsoft Store"
                 >
-                  <Download className="w-4 h-4" />
-                  <div className="flex flex-col items-center leading-none">
-                    <span>Get it on Microsoft Store</span>
-                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="58" viewBox="0 0 200 58">
+                    <defs><linearGradient id="ms-badge-dash" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={isDark ? '#2a2a2a' : '#111'}/><stop offset="100%" stopColor={isDark ? '#1a1a1a' : '#000'}/></linearGradient></defs>
+                    <rect width="200" height="58" rx="8" fill="url(#ms-badge-dash)" stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
+                    <text x="68" y="22" fill="#ccc" fontSize="10" fontFamily="Segoe UI, sans-serif" fontWeight="400">Get it from</text>
+                    <text x="68" y="40" fill="#fff" fontSize="16" fontFamily="Segoe UI, sans-serif" fontWeight="600">Microsoft Store</text>
+                    <g transform="translate(18,14)">
+                      <rect x="0" y="0" width="13" height="13" rx="1.5" fill="#F25022"/>
+                      <rect x="15" y="0" width="13" height="13" rx="1.5" fill="#7FBA00"/>
+                      <rect x="0" y="15" width="13" height="13" rx="1.5" fill="#00A4EF"/>
+                      <rect x="15" y="15" width="13" height="13" rx="1.5" fill="#FFB900"/>
+                    </g>
+                  </svg>
                 </a>
-                <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center`}>Windows 10 / 11</span>
+                <span className={`text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>Windows 10 / 11</span>
               </div>
             </div>
 
             {/* Trust strip */}
-            <div className={`relative px-6 sm:px-8 py-3 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-100'} flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+            <div className={`relative px-6 sm:px-8 py-3 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-100'} flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
               <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> 100% offline processing</span>
               <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> No cloud uploads</span>
               <span className="inline-flex items-center gap-1"><Monitor className="w-3 h-3" /> Runs on your device</span>
@@ -387,15 +396,15 @@ export default function Dashboard() {
               {/* Header row */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                    <Crown className="w-4 h-4 text-indigo-400" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Crown className="w-4 h-4 text-accent" />
                   </div>
                   <h3 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Your Plan</h3>
                 </div>
                 <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full ${
                   sub?.status === 'active'  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
                 : sub?.status === 'past_due'? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20'
-                :                            'bg-slate-800 text-slate-500 ring-1 ring-slate-700'
+                :                            'bg-bg-elevated text-text-muted ring-1 ring-slate-700'
                 }`}>
                   {sub?.status === 'active' ? 'Active' : sub?.status === 'past_due' ? 'Past Due' : sub?.status === 'trialing' ? 'Trial' : isFree ? 'Free' : 'Unknown'}
                 </span>
@@ -403,14 +412,14 @@ export default function Dashboard() {
 
               {/* Plan name + badge */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/15 to-purple-500/15 border border-indigo-500/10 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/15 to-accent/15 border border-primary/10 flex items-center justify-center">
                   {isFree
-                    ? <Sparkles className="w-5 h-5 text-indigo-400" />
+                    ? <Sparkles className="w-5 h-5 text-accent" />
                     : <Crown  className="w-5 h-5 text-amber-400" />}
                 </div>
                 <div>
                   <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} tracking-tight`}>{isFree ? 'Free' : 'Pro'}</p>
-                  <p className={`text-[13px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                  <p className={`text-[13px] ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>
                     {isFree ? 'Free forever · core features included' : sub?.expires_at ? `Active until ${new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'Pro plan active'}
                   </p>
                 </div>
@@ -424,8 +433,8 @@ export default function Dashboard() {
                   { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 2} batches`, full: true },
                 ].map(d => (
                   <div key={d.label} className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
-                    <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-0.5`}>{d.label}</p>
-                    <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{d.value}</p>
+                    <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-text-muted' : 'text-gray-400'} mb-0.5`}>{d.label}</p>
+                    <p className={`text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'}`}>{d.value}</p>
                   </div>
                 ))}
               </div>
@@ -433,12 +442,12 @@ export default function Dashboard() {
               {/* License key (Pro only) */}
               {sub?.licenseKey && (
                 <div className={`rounded-xl ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'} px-4 py-3 mb-6`}>
-                  <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-slate-600' : 'text-gray-400'} mb-1.5 flex items-center gap-1.5`}>
+                  <p className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-text-muted' : 'text-gray-400'} mb-1.5 flex items-center gap-1.5`}>
                     <Key className="w-3 h-3" /> License Key
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className={`flex-1 text-sm font-mono text-indigo-300 ${isDark ? 'bg-slate-900/60' : 'bg-indigo-50'} rounded-lg px-3 py-1.5 truncate select-all`}>{sub.licenseKey}</code>
-                    <button onClick={copyKey} className={`shrink-0 p-2 rounded-lg ${isDark ? 'hover:bg-white/[0.05] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} transition-colors cursor-pointer`}>
+                    <code className={`flex-1 text-sm font-mono text-accent ${isDark ? 'bg-bg-surface/60' : 'bg-primary/5'} rounded-lg px-3 py-1.5 truncate select-all`}>{sub.licenseKey}</code>
+                    <button onClick={copyKey} className={`shrink-0 p-2 rounded-lg ${isDark ? 'hover:bg-white/[0.05] text-text-muted hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} transition-colors cursor-pointer`}>
                       {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
@@ -451,19 +460,19 @@ export default function Dashboard() {
                   <div className="flex flex-col gap-1.5">
                     <button
                       onClick={() => setActiveModal('pricing')}
-                      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all cursor-pointer`}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer`}
                     >
-                      <Sparkles className="w-4 h-4 text-indigo-100" /> Upgrade to Pro
+                      <Sparkles className="w-4 h-4 text-white" /> Upgrade to Pro
                     </button>
-                    {/* <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'} text-center italic`}>Under review</span> */}
+                    {/* <span className={`text-[10px] ${isDark ? 'text-text-muted' : 'text-gray-400'} text-center italic`}>Under review</span> */}
                   </div>
                 ) : (
-                  <button onClick={() => setActiveModal('managePlan')} className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
+                  <button onClick={() => setActiveModal('managePlan')} className={`px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-text-secondary' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
                     Manage Plan
                   </button>
                 )}
-                <button onClick={() => navigate('/billing')} className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-slate-300' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
-                  <CreditCard className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} /> Billing History
+                <button onClick={() => navigate('/billing')} className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-text-secondary' : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}>
+                  <CreditCard className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} /> Billing History
                 </button>
               </div>
             </div>
@@ -475,21 +484,21 @@ export default function Dashboard() {
 
               {/* Header */}
               <div className="flex items-center gap-2.5 mb-5">
-                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                  <User className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-bg-elevated' : 'bg-gray-100'} flex items-center justify-center`}>
+                  <User className={`w-4 h-4 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
                 </div>
                 <h3 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Account</h3>
               </div>
 
               {/* Avatar row */}
               <div className="flex items-center gap-3.5 mb-5">
-                <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-base font-bold text-white shadow-md shadow-indigo-500/20 shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-base font-bold text-white shadow-md shadow-primary/20 shrink-0">
                   {initials}
                 </div>
                 <div className="min-w-0">
                   <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'} truncate`}>{displayName}</p>
-                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'} truncate`}>{user?.email}</p>
-                  <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} mt-0.5`}>Member since {memberSince}</p>
+                  <p className={`text-xs ${isDark ? 'text-text-muted' : 'text-gray-500'} truncate`}>{user?.email}</p>
+                  <p className={`text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'} mt-0.5`}>Member since {memberSince}</p>
                 </div>
               </div>
 
@@ -500,11 +509,11 @@ export default function Dashboard() {
                   { icon: Lock, label: 'Change Password', path: '/settings#password' },
                   { icon: Settings, label: 'Preferences', path: '/settings#preferences' },
                 ].map(({ icon: Icon, label, path }) => (
-                  <button key={label} onClick={() => navigate(path)} className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/[0.04] text-slate-400 hover:text-slate-200' : 'hover:bg-gray-50 text-gray-500 hover:text-gray-700'} text-sm transition-colors cursor-pointer group`}>
+                  <button key={label} onClick={() => navigate(path)} className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/[0.04] text-text-secondary hover:text-slate-200' : 'hover:bg-gray-50 text-gray-500 hover:text-gray-700'} text-sm transition-colors cursor-pointer group`}>
                     <span className="flex items-center gap-2.5">
-                      <Icon className={`w-3.5 h-3.5 ${isDark ? 'text-slate-600 group-hover:text-slate-400' : 'text-gray-400 group-hover:text-gray-500'} transition-colors`} /> {label}
+                      <Icon className={`w-3.5 h-3.5 ${isDark ? 'text-text-muted group-hover:text-text-secondary' : 'text-gray-400 group-hover:text-gray-500'} transition-colors`} /> {label}
                     </span>
-                    <ArrowRight className={`w-3 h-3 ${isDark ? 'text-slate-700 group-hover:text-slate-500' : 'text-gray-300 group-hover:text-gray-400'} group-hover:translate-x-0.5 transition-all`} />
+                    <ArrowRight className={`w-3 h-3 ${isDark ? 'text-slate-700 group-hover:text-text-muted' : 'text-gray-300 group-hover:text-gray-400'} group-hover:translate-x-0.5 transition-all`} />
                   </button>
                 ))}
               </div>
@@ -513,7 +522,7 @@ export default function Dashboard() {
               <div className={`mt-5 pt-4 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-100'}`}>
                 <div className="flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-500/70 shrink-0 mt-0.5" />
-                  <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} leading-relaxed`}>
+                  <p className={`text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'} leading-relaxed`}>
                     We only store your email &amp; plan — never your photos, file names, or anything from your device.
                   </p>
                 </div>
@@ -529,14 +538,14 @@ export default function Dashboard() {
               {/* Header */}
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                    <Monitor className="w-4 h-4 text-indigo-400" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Monitor className="w-4 h-4 text-accent" />
                   </div>
                   <h3 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Authorized Devices</h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{devices.length} / {deviceLimit} used</span>
-                  <button onClick={fetchDevices} className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/[0.05] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} transition-colors cursor-pointer`} title="Refresh">
+                  <span className={`text-xs font-medium ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>{devices.length} / {deviceLimit} used</span>
+                  <button onClick={fetchDevices} className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/[0.05] text-text-muted hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} transition-colors cursor-pointer`} title="Refresh">
                     <RefreshCw className={`w-4 h-4 ${devicesLoading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
@@ -545,13 +554,13 @@ export default function Dashboard() {
               {/* Usage bar */}
               <div className={`w-full h-2 rounded-full ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'} mb-4 overflow-hidden`}>
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
                   style={{ width: `${Math.min((devices.length / Math.max(deviceLimit, 1)) * 100, 100)}%` }}
                 />
               </div>
 
               {/* Removal limits info */}
-              <div className={`flex items-center justify-between mb-4 text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+              <div className={`flex items-center justify-between mb-4 text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
                 <span className={`flex items-center gap-1 ${atRemovalLimit ? (isDark ? 'text-red-400' : 'text-red-500') : ''}`}>
                   <Trash2 className="w-3 h-3" />
                   {removalsUsed} / {removalsLimit} removals used this month
@@ -592,9 +601,9 @@ export default function Dashboard() {
                 <div className={`mb-4 rounded-xl p-4 ${isDark ? 'bg-amber-500/5 border border-amber-500/15' : 'bg-amber-50 border border-amber-200'}`}>
                   <div className="flex items-start gap-2.5 mb-3">
                     <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
-                    <div className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                    <div className={`text-xs leading-relaxed ${isDark ? 'text-text-secondary' : 'text-gray-700'}`}>
                       <p className="font-semibold mb-1">Remove &ldquo;{confirmRemoveDevice.label}&rdquo;?</p>
-                      <ul className={`list-disc pl-4 space-y-0.5 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                      <ul className={`list-disc pl-4 space-y-0.5 ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>
                         <li>A <strong>24-hour cooldown</strong> will start &mdash; no new devices can be added.</li>
                         <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left this month.</li>
                         <li>Re-adding the same device later will bypass the cooldown.</li>
@@ -604,7 +613,7 @@ export default function Dashboard() {
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => setConfirmRemoveDevice(null)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${isDark ? 'text-slate-400 hover:bg-white/[0.05] border border-white/[0.08]' : 'text-gray-500 hover:bg-gray-100 border border-gray-200'} transition-colors cursor-pointer`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${isDark ? 'text-text-secondary hover:bg-white/[0.05] border border-white/[0.08]' : 'text-gray-500 hover:bg-gray-100 border border-gray-200'} transition-colors cursor-pointer`}
                     >
                       Cancel
                     </button>
@@ -622,12 +631,12 @@ export default function Dashboard() {
               {devicesLoading && devices.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="relative w-8 h-8">
-                    <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20" />
-                    <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                    <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+                    <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   </div>
                 </div>
               ) : devices.length === 0 ? (
-                <div className={`text-center py-8 text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                <div className={`text-center py-8 text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>
                   <Smartphone className="w-8 h-8 mx-auto mb-2 opacity-40" />
                   No devices registered yet. Open the desktop app to bind this device.
                 </div>
@@ -640,28 +649,28 @@ export default function Dashboard() {
                       <div key={device.id} className={`flex items-center justify-between rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.02] border border-white/[0.04]' : 'bg-gray-50 border border-gray-200'}`}>
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative shrink-0">
-                            <Monitor className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                            <Monitor className={`w-5 h-5 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
                             {isActive && (
                               <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-inherit" style={{ borderColor: isDark ? '#0f172a' : '#f9fafb' }} />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'} truncate`}>
+                            <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-700'} truncate`}>
                               {device.device_label || 'Unknown device'}
                             </p>
-                            <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} font-mono truncate`}>
+                            <p className={`text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'} font-mono truncate`}>
                               {device.hwid_hash ? `${device.hwid_hash.substring(0, 8)}…${device.hwid_hash.substring(device.hwid_hash.length - 4)}` : '—'}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-3">
-                          <span className={`text-[11px] ${isActive ? 'text-emerald-400' : isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                          <span className={`text-[11px] ${isActive ? 'text-emerald-400' : isDark ? 'text-text-muted' : 'text-gray-400'}`}>
                             {isActive ? 'Active now' : device.last_seen_at ? `Last seen ${new Date(device.last_seen_at).toLocaleDateString()}` : 'Never seen'}
                           </span>
                           <button
                             onClick={() => promptRemoveDevice(device.id, device.device_label)}
                             disabled={!canRemove}
-                            className={`p-2 rounded-lg ${isDark ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
+                            className={`p-2 rounded-lg ${isDark ? 'hover:bg-red-500/10 text-text-muted hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
                             title={atRemovalLimit ? 'Monthly removal limit reached' : removingDeviceId === device.id ? 'Removing…' : 'Remove device'}
                           >
                             {removingDeviceId === device.id ? (
@@ -679,7 +688,7 @@ export default function Dashboard() {
 
               {/* Footer note */}
               <div className={`mt-4 pt-4 border-t ${isDark ? 'border-white/[0.04]' : 'border-gray-100'}`}>
-                <p className={`text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'} leading-relaxed`}>
+                <p className={`text-[11px] ${isDark ? 'text-text-muted' : 'text-gray-400'} leading-relaxed`}>
                   Your Pro plan allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per billing month.
                 </p>
               </div>
@@ -698,11 +707,11 @@ export default function Dashboard() {
               ].map(({ icon: Icon, label, desc, href, modal }) => {
                 const inner = (
                   <>
-                    <div className={`w-9 h-9 rounded-xl ${isDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'} flex items-center justify-center mb-3.5 group-hover:border-indigo-500/20 group-hover:bg-indigo-500/5 transition-colors`}>
-                      <Icon className={`w-4 h-4 ${isDark ? 'text-slate-500' : 'text-gray-400'} group-hover:text-indigo-400 transition-colors`} />
+                    <div className={`w-9 h-9 rounded-xl ${isDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'} flex items-center justify-center mb-3.5 group-hover:border-primary/20 group-hover:bg-primary-hover/5 transition-colors`}>
+                      <Icon className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'} group-hover:text-accent transition-colors`} />
                     </div>
-                    <p className={`text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-gray-700'} mb-0.5`}>{label}</p>
-                    <p className={`text-[12px] ${isDark ? 'text-slate-600' : 'text-gray-400'} leading-snug`}>{desc}</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-700'} mb-0.5`}>{label}</p>
+                    <p className={`text-[12px] ${isDark ? 'text-text-muted' : 'text-gray-400'} leading-snug`}>{desc}</p>
                   </>
                 )
                 return href ? (
@@ -757,18 +766,18 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => { setActiveModal(null); setConfirmCancel(false) }}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className={`relative w-full max-w-md max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
+            className={`relative w-full max-w-md max-h-[85vh] rounded-2xl border ${isDark ? 'border-white/[0.08] bg-bg-surface shadow-2xl shadow-black/50' : 'border-gray-200 bg-white shadow-2xl shadow-gray-300/50'} flex flex-col animate-[footerModalIn_0.2s_ease-out]`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-white/[0.06]' : 'border-gray-200'} shrink-0`}>
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'} flex items-center justify-center text-indigo-400`}>
+                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-primary/10' : 'bg-primary/5'} flex items-center justify-center text-accent`}>
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Manage Your Plan</h3>
               </div>
-              <button onClick={() => { setActiveModal(null); setConfirmCancel(false) }} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
+              <button onClick={() => { setActiveModal(null); setConfirmCancel(false) }} className={`w-8 h-8 rounded-lg ${isDark ? 'hover:bg-white/[0.06] text-text-muted hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'} flex items-center justify-center transition-colors cursor-pointer`} aria-label="Close">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -790,7 +799,7 @@ export default function Dashboard() {
                   <div className="flex gap-3 pt-2">
                     <button
                       onClick={() => setConfirmCancel(false)}
-                      className={`flex-1 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-slate-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}
+                      className={`flex-1 py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-text-secondary' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer`}
                     >
                       Keep Plan
                     </button>
@@ -821,15 +830,15 @@ export default function Dashboard() {
                 // Standard Management View
                 <>
                   {/* Current Plan Badge */}
-                  <div className={`rounded-xl p-4 ${isDark ? 'bg-indigo-500/[0.06] border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-100'}`}>
+                  <div className={`rounded-xl p-4 ${isDark ? 'bg-primary/[0.06] border border-primary/20' : 'bg-primary/5 border border-primary/10'}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>Current Plan</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-accent' : 'text-primary'}`}>Current Plan</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-primary to-accent text-white">
                         {sub?.plan === 'pro' ? 'Pro' : 'Free'}
                       </span>
                     </div>
                     <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {sub?.plan === 'pro' ? '₱299' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/month</span>
+                      {sub?.plan === 'pro' ? '₱299' : '₱0'}<span className={`text-sm font-normal ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>/month</span>
                     </p>
                   </div>
 
@@ -842,22 +851,22 @@ export default function Dashboard() {
                       { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 5 used` },
                     ].map((item) => (
                       <div key={item.label} className={`flex items-center justify-between py-2.5 px-3 rounded-lg ${isDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
-                        <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.label}</span>
-                        <span className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{item.value}</span>
+                        <span className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>{item.label}</span>
+                        <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-800'}`}>{item.value}</span>
                       </div>
                     ))}
                   </div>
 
                   {/* Features list */}
                   <div className={`rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gray-50'} p-4`}>
-                    <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Included Features</p>
+                    <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>Included Features</p>
                     <ul className="space-y-2.5 text-sm">
                       {[
                         { text: 'Unlimited batches', included: sub?.plan === 'pro' },
                         { text: 'Custom watermarks', included: sub?.plan === 'pro' },
                         { text: 'Blur detection', included: sub?.plan === 'pro' },
                       ].map((f) => (
-                        <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-slate-600' : 'text-gray-400')}`}>
+                        <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-text-muted' : 'text-gray-400')}`}>
                           {f.included
                             ? <Check className="w-4 h-4 shrink-0 text-emerald-400" />
                             : <X className="w-4 h-4 shrink-0 opacity-50" />
@@ -872,7 +881,7 @@ export default function Dashboard() {
                   <div className="flex flex-col gap-2.5 pt-1">
                     <button
                       onClick={() => { setActiveModal(null); navigate('/billing') }}
-                      className={`w-full py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-slate-300' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2`}
+                      className={`w-full py-2.5 rounded-xl border ${isDark ? 'border-white/[0.08] hover:bg-white/[0.04] text-text-secondary' : 'border-gray-200 hover:bg-gray-50 text-gray-700'} text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2`}
                     >
                       <CreditCard className="w-4 h-4" /> View Billing History
                     </button>

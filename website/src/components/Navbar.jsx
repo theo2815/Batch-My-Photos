@@ -188,8 +188,8 @@ export default function Navbar() {
         className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
           scrolled
             ? dark
-              ? 'bg-slate-950/80 backdrop-blur-xl shadow-lg shadow-black/20'
-              : 'bg-white/80 backdrop-blur-xl border-b border-gray-200 shadow-sm'
+              ? 'bg-bg-main/80 backdrop-blur-xl shadow-lg shadow-black/20'
+              : 'bg-bg-surface-light/80 backdrop-blur-xl border-b border-gray-200 shadow-sm'
             : 'bg-transparent'
         }`}
       >
@@ -203,7 +203,7 @@ export default function Navbar() {
                 alt="BatchMyPhotos"
                 className="w-8 h-8 rounded-lg group-hover:scale-105 transition-transform"
               />
-              <span className={`text-base font-bold tracking-tight transition-colors ${dark ? 'text-white' : 'text-slate-900'}`}>
+              <span className={`text-base font-bold tracking-tight transition-colors ${dark ? 'text-text-primary' : 'text-text-primary-light'}`}>
                 BatchMyPhotos
               </span>
             </Link>
@@ -217,8 +217,8 @@ export default function Navbar() {
                     onClick={() => setPricingOpen(true)}
                     className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                       dark
-                        ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     {link.label}
@@ -231,8 +231,8 @@ export default function Navbar() {
                     rel={link.href.startsWith('mailto') ? undefined : 'noopener noreferrer'}
                     className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                       dark
-                        ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     {link.label}
@@ -244,8 +244,8 @@ export default function Navbar() {
                     onClick={(e) => handleHashClick(e, link.href)}
                     className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                       dark
-                        ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     {link.label}
@@ -261,7 +261,7 @@ export default function Navbar() {
                   <Link
                     to="/dashboard"
                     className={`text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
-                      dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     Dashboard
@@ -270,7 +270,7 @@ export default function Navbar() {
                     onClick={handleLogout}
                     disabled={loggingOut}
                     className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                      dark ? 'text-slate-300 bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50' : 'text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50'
+                      dark ? 'text-text-secondary bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50' : 'text-text-secondary-light bg-bg-elevated-light hover:bg-gray-200 disabled:opacity-50'
                     }`}
                   >
                     {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
@@ -282,7 +282,7 @@ export default function Navbar() {
                   <Link
                     to="/login"
                     className={`text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
-                      dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     Login
@@ -291,7 +291,7 @@ export default function Navbar() {
                     href="/demo"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 hover:-translate-y-px transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-semibold shadow-md shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-px transition-all"
                   >
                     <Play className="w-3.5 h-3.5" /> Try Demo
                   </a>
@@ -303,7 +303,7 @@ export default function Navbar() {
             <button
               ref={hamburgerRef}
               className={`md:hidden p-2 rounded-lg transition-colors ${
-                dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
               }`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
@@ -321,7 +321,7 @@ export default function Navbar() {
           }`}
         >
           <div className={`px-6 pb-6 pt-2 space-y-1 ${
-            dark ? 'bg-slate-950/95 backdrop-blur-xl border-t border-white/[0.04]' : 'bg-white/95 backdrop-blur-xl border-t border-gray-100'
+            dark ? 'bg-bg-main/95 backdrop-blur-xl border-t border-white/[0.04]' : 'bg-bg-surface-light/95 backdrop-blur-xl border-t border-gray-100'
           }`}>
             {NAV_LINKS.map(link => (
               link.action === 'pricing' ? (
@@ -329,7 +329,7 @@ export default function Navbar() {
                   key={link.label}
                   onClick={() => { setPricingOpen(true); setMobileOpen(false) }}
                   className={`block w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
                 >
                   {link.label}
@@ -341,7 +341,7 @@ export default function Navbar() {
                   target={link.href.startsWith('mailto') ? undefined : '_blank'}
                   rel={link.href.startsWith('mailto') ? undefined : 'noopener noreferrer'}
                   className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
                   onClick={() => setMobileOpen(false)}
                 >
@@ -352,7 +352,7 @@ export default function Navbar() {
                   key={link.label}
                   href={link.href}
                   className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    dark ? 'text-slate-400 hover:text-white hover:bg-white/[0.06]' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
                   onClick={(e) => { handleHashClick(e, link.href); setMobileOpen(false) }}
                 >
@@ -361,15 +361,15 @@ export default function Navbar() {
               )
             ))}
 
-            <div className={`pt-3 border-t ${dark ? 'border-white/[0.04]' : 'border-gray-200'} space-y-2`}>
+            <div className={`pt-3 border-t ${dark ? 'border-white/[0.04]' : 'border-gray-200/80'} space-y-2`}>
               {user ? (
                 <>
-                  <Link to="/dashboard" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-slate-300' : 'text-gray-700'}`}>Dashboard</Link>
+                  <Link to="/dashboard" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}>Dashboard</Link>
                   <button 
                     onClick={handleLogout} 
                     disabled={loggingOut}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                      dark ? 'text-slate-400 hover:text-white disabled:opacity-50' : 'text-gray-600 hover:text-gray-900 disabled:opacity-50'
+                      dark ? 'text-text-secondary hover:text-white disabled:opacity-50' : 'text-text-secondary-light hover:text-text-primary-light disabled:opacity-50'
                     }`}
                   >
                     {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
@@ -378,12 +378,12 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <Link to="/login" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-slate-300' : 'text-gray-700'}`}>Login</Link>
+                  <Link to="/login" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}>Login</Link>
                   <a
                     href="/demo"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-colors"
                     onClick={() => setMobileOpen(false)}
                   >
                     <Play className="w-3.5 h-3.5" /> Try Demo

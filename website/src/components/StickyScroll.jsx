@@ -45,7 +45,7 @@ const StickyScroll = ({ content }) => {
   
   const linearGradients = [
     "linear-gradient(to bottom right, var(--cyan-500), var(--emerald-500))",
-    "linear-gradient(to bottom right, var(--pink-500), var(--indigo-500))",
+    "linear-gradient(to bottom right, var(--pink-500), var(--color-primary))",
     "linear-gradient(to bottom right, var(--orange-500), var(--yellow-500))",
   ];
 
@@ -53,7 +53,7 @@ const StickyScroll = ({ content }) => {
     <motion.div
       ref={ref}
       style={{ height: `${content.length * 100}vh` }}
-      className="relative flex justify-center space-x-10 rounded-md bg-slate-950 p-10"
+      className="relative flex justify-center space-x-10 rounded-md bg-bg-main p-10"
     >
       <div className="div relative flex items-start px-4">
         <div className="max-w-2xl">
@@ -62,14 +62,14 @@ const StickyScroll = ({ content }) => {
               <motion.h2
                 initial={{ opacity: 0 }}
                 animate={{ opacity: activeCard === index ? 1 : 0.3 }}
-                className="text-2xl font-bold text-slate-100"
+                className="text-2xl font-bold text-text-primary"
               >
                 {item.title}
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: activeCard === index ? 1 : 0.3 }}
-                className="text-lg text-slate-300 max-w-sm mt-10"
+                className="text-lg text-text-secondary max-w-sm mt-10"
               >
                 {item.description}
               </motion.p>
@@ -83,7 +83,7 @@ const StickyScroll = ({ content }) => {
           background: linearGradients[activeCard % linearGradients.length],
         }}
         className={cn(
-          "hidden lg:block h-80 w-[30rem] lg:h-[30rem] lg:w-[40rem] rounded-xl bg-white sticky top-1/2 -translate-y-1/2 overflow-hidden shadow-2xl border border-slate-800",
+          "hidden lg:block h-80 w-[30rem] lg:h-[30rem] lg:w-[40rem] rounded-xl bg-white sticky top-1/2 -translate-y-1/2 overflow-hidden shadow-2xl border border-white/[0.06]",
           content[activeCard].contentClassName
         )}
       >

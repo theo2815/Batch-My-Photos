@@ -199,23 +199,23 @@ export default function AdminCoupons() {
 
   // ── Reusable Styles ────────────────────────────────────────────────────────
   const card = isDark
-    ? 'bg-gradient-to-br from-slate-900/80 to-slate-900/40 border-slate-800/50 backdrop-blur-sm'
+    ? 'bg-gradient-to-br from-slate-900/80 to-bg-main/40 border-slate-800/50 backdrop-blur-sm'
     : 'bg-white border-gray-200 shadow-sm'
   const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none transition-all duration-200 ${isDark
-    ? 'bg-slate-800/80 border-slate-700/60 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30'
-    : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30'
+    ? 'bg-bg-elevated/80 border-white/[0.08]/60 text-white placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary/30'
+    : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30'
   }`
-  const labelClass = `block text-xs font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`
+  const labelClass = `block text-xs font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen ${isDark ? 'bg-bg-main text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-8 sm:pb-12">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between mb-10">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
-              <Ticket className="w-6 h-6 text-indigo-500" />
+            <div className={`p-2.5 rounded-xl ${isDark ? 'bg-primary/10' : 'bg-primary/5'}`}>
+              <Ticket className="w-6 h-6 text-primary" />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -223,7 +223,7 @@ export default function AdminCoupons() {
                   Referral Coupons
                 </span>
               </h1>
-              <p className={`text-sm mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+              <p className={`text-sm mt-0.5 ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>
                 Create and manage referral discount codes
               </p>
             </div>
@@ -232,8 +232,8 @@ export default function AdminCoupons() {
             onClick={() => setShowCreate(!showCreate)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
               showCreate
-                ? isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40'
+                ? isDark ? 'bg-bg-elevated text-text-secondary hover:bg-slate-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                : 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/25 hover:shadow-primary/40'
             }`}
           >
             {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -269,8 +269,8 @@ export default function AdminCoupons() {
         {showCreate && (
           <div className={`mb-8 p-6 rounded-2xl border transition-all duration-300 ${card}`}>
             <div className="flex items-center gap-2.5 mb-5">
-              <div className={`p-1.5 rounded-lg ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
-                <Plus className="w-4 h-4 text-indigo-500" />
+              <div className={`p-1.5 rounded-lg ${isDark ? 'bg-primary/10' : 'bg-primary/5'}`}>
+                <Plus className="w-4 h-4 text-primary" />
               </div>
               <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Create New Coupon</h2>
             </div>
@@ -329,7 +329,7 @@ export default function AdminCoupons() {
                   type="button"
                   onClick={() => setShowCreate(false)}
                   className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    isDark ? 'text-text-secondary hover:text-white hover:bg-bg-elevated' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   Cancel
@@ -337,7 +337,7 @@ export default function AdminCoupons() {
                 <button
                   type="submit"
                   disabled={createLoading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
                 >
                   {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {createLoading ? 'Creating…' : 'Create Coupon'}
@@ -360,7 +360,7 @@ export default function AdminCoupons() {
                   <stat.icon className={`w-4 h-4 text-${stat.color}-400`} />
                 </div>
                 <div>
-                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{stat.label}</p>
+                  <p className={`text-xs ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>{stat.label}</p>
                   <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{stat.value}</p>
                 </div>
               </div>
@@ -371,16 +371,16 @@ export default function AdminCoupons() {
         {/* ── Coupons List ────────────────────────────────────────────────── */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-            <p className={`text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Loading coupons…</p>
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>Loading coupons…</p>
           </div>
         ) : coupons.length === 0 ? (
           <div className={`text-center py-24 rounded-2xl border ${card}`}>
-            <div className={`inline-flex p-4 rounded-2xl mb-4 ${isDark ? 'bg-slate-800/60' : 'bg-gray-100'}`}>
-              <Ticket className={`w-8 h-8 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} />
+            <div className={`inline-flex p-4 rounded-2xl mb-4 ${isDark ? 'bg-bg-elevated/60' : 'bg-gray-100'}`}>
+              <Ticket className={`w-8 h-8 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
             </div>
-            <p className={`font-semibold ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>No referral coupons yet</p>
-            <p className={`text-sm mt-1 ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Click "New Coupon" to create your first referral code</p>
+            <p className={`font-semibold ${isDark ? 'text-text-secondary' : 'text-gray-600'}`}>No referral coupons yet</p>
+            <p className={`text-sm mt-1 ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>Click "New Coupon" to create your first referral code</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -392,14 +392,14 @@ export default function AdminCoupons() {
                 <div
                   key={coupon.id}
                   className={`group p-5 rounded-2xl border transition-all duration-200 ${card} ${
-                    isEditing ? 'ring-2 ring-indigo-500/30' : 'hover:border-slate-700/80'
+                    isEditing ? 'ring-2 ring-primary/30' : 'hover:border-white/[0.1]'
                   }`}
                 >
                   {isEditing ? (
                     /* ── Edit Mode ── */
                     <div>
                       <div className="flex items-center gap-2 mb-4">
-                        <Pencil className="w-4 h-4 text-indigo-400" />
+                        <Pencil className="w-4 h-4 text-accent" />
                         <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Editing {coupon.code}</h3>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -429,7 +429,7 @@ export default function AdminCoupons() {
                           <button
                             onClick={() => { setEditingId(null); setEditForm({}) }}
                             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-colors ${
-                              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                              isDark ? 'text-text-secondary hover:text-white hover:bg-bg-elevated' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                           >
                             <X className="w-3.5 h-3.5" /> Cancel
@@ -437,7 +437,7 @@ export default function AdminCoupons() {
                           <button
                             onClick={() => handleUpdate(coupon.id)}
                             disabled={editLoading}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-50"
                           >
                             {editLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                             {editLoading ? 'Saving…' : 'Save Changes'}
@@ -459,7 +459,7 @@ export default function AdminCoupons() {
                             {status.text}
                           </span>
                         </div>
-                        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
                           <span className="inline-flex items-center gap-1.5">
                             <User className="w-3.5 h-3.5" /> {coupon.referrer_name}
                           </span>
@@ -474,7 +474,7 @@ export default function AdminCoupons() {
                           </span>
                         </div>
                         {coupon.description && (
-                          <p className={`text-xs mt-1.5 italic ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>{coupon.description}</p>
+                          <p className={`text-xs mt-1.5 italic ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>{coupon.description}</p>
                         )}
                       </div>
 
@@ -484,7 +484,7 @@ export default function AdminCoupons() {
                           <button
                             onClick={() => handleViewUsage(coupon)}
                             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                              isDark ? 'text-text-secondary hover:text-white hover:bg-bg-elevated/80' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                             title="View usage"
                           >
@@ -503,7 +503,7 @@ export default function AdminCoupons() {
                             })
                           }}
                           className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                            isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                            isDark ? 'text-text-secondary hover:text-white hover:bg-bg-elevated/80' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                           }`}
                           title="Edit"
                         >
@@ -524,7 +524,7 @@ export default function AdminCoupons() {
                         <button
                           onClick={() => handleDelete(coupon)}
                           className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                            isDark ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                            isDark ? 'text-text-muted hover:text-red-400 hover:bg-red-500/10' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                           }`}
                           title="Delete"
                         >
@@ -545,19 +545,19 @@ export default function AdminCoupons() {
             <div className={`w-full max-w-lg rounded-2xl border p-6 ${card}`} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-lg ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
-                    <BarChart3 className="w-4 h-4 text-indigo-400" />
+                  <div className={`p-1.5 rounded-lg ${isDark ? 'bg-primary/10' : 'bg-primary/5'}`}>
+                    <BarChart3 className="w-4 h-4 text-accent" />
                   </div>
                   <div>
                     <h3 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Usage History</h3>
-                    <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                      <span className="font-mono text-indigo-400">{usageCoupon.code}</span> — {usageCoupon.usage_count} total use{usageCoupon.usage_count !== 1 ? 's' : ''}
+                    <p className={`text-xs ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>
+                      <span className="font-mono text-accent">{usageCoupon.code}</span> — {usageCoupon.usage_count} total use{usageCoupon.usage_count !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => { setUsageCoupon(null); setUsageData(null) }}
-                  className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-500 hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-900'}`}
+                  className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-bg-elevated text-text-muted hover:text-white' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-900'}`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -565,19 +565,19 @@ export default function AdminCoupons() {
 
               {usageLoading ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
                 </div>
               ) : usageData && usageData.length > 0 ? (
                 <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                   {usageData.map((u, i) => (
-                    <div key={u.id || i} className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl ${isDark ? 'bg-slate-800/60' : 'bg-gray-50'}`}>
+                    <div key={u.id || i} className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl ${isDark ? 'bg-bg-elevated/60' : 'bg-gray-50'}`}>
                       <div className="flex items-center gap-2">
-                        <User className={`w-3.5 h-3.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                        <span className={`text-sm font-mono ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{u.user_id?.slice(0, 8)}…</span>
+                        <User className={`w-3.5 h-3.5 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                        <span className={`text-sm font-mono ${isDark ? 'text-text-secondary' : 'text-gray-700'}`}>{u.user_id?.slice(0, 8)}…</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Clock className={`w-3 h-3 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} />
-                        <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{formatDate(u.used_at)}</span>
+                        <Clock className={`w-3 h-3 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                        <span className={`text-xs ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>{formatDate(u.used_at)}</span>
                       </div>
                     </div>
                   ))}
@@ -585,7 +585,7 @@ export default function AdminCoupons() {
               ) : (
                 <div className="text-center py-10">
                   <BarChart3 className={`w-6 h-6 mx-auto mb-2 ${isDark ? 'text-slate-700' : 'text-gray-300'}`} />
-                  <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>No usage recorded yet</p>
+                  <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>No usage recorded yet</p>
                 </div>
               )}
             </div>

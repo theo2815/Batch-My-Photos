@@ -31,7 +31,7 @@ const AppContent = () => {
   // Scroll to hash element after navigation (e.g. /#faq from /dashboard)
   useEffect(() => {
     if (location.hash) {
-      // Delay needs to be longer than the page transition (250ms + render)
+      // Delay needs to be longer than the page transition (400ms + render)
       const timer = setTimeout(() => {
         try {
           const el = document.querySelector(location.hash)
@@ -41,15 +41,13 @@ const AppContent = () => {
         }
       }, 500)
       return () => clearTimeout(timer)
-    } else {
-      window.scrollTo(0, 0)
     }
   }, [location.pathname, location.hash])
 
   return (
-    <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen font-sans ${isDark ? 'bg-bg-main text-white' : 'bg-gray-50 text-gray-900'}`}>
       {!isDemo && <Navbar />}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
@@ -68,9 +66,9 @@ const AppContent = () => {
           <Route path="*" element={
             <PageTransition>
               <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
-                <h1 className="text-6xl font-bold text-indigo-500">404</h1>
-                <p className="text-lg text-slate-400">Page not found</p>
-                <a href="/" className="mt-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">← Back to home</a>
+                <h1 className="text-6xl font-bold text-primary">404</h1>
+                <p className="text-lg text-text-secondary">Page not found</p>
+                <a href="/" className="mt-2 text-sm font-medium text-accent hover:text-accent transition-colors">← Back to home</a>
               </div>
             </PageTransition>
           } />

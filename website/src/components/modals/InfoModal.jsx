@@ -43,7 +43,7 @@ export default function InfoModal({ modalKey, content: contentProp, onClose }) {
 
       {/* Dialog */}
       <div
-        className="relative w-full max-w-lg max-h-[85vh] rounded-2xl border border-white/[0.08] bg-slate-900 shadow-2xl shadow-black/50 flex flex-col animate-[footerModalIn_0.2s_ease-out]"
+        className="relative w-full max-w-lg max-h-[85vh] rounded-2xl border border-white/[0.08] bg-bg-surface shadow-2xl shadow-black/50 flex flex-col animate-[footerModalIn_0.2s_ease-out]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -56,7 +56,7 @@ export default function InfoModal({ modalKey, content: contentProp, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-white/[0.06] flex items-center justify-center text-slate-500 hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-lg hover:bg-white/[0.06] flex items-center justify-center text-text-muted hover:text-white transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-4 h-4" />

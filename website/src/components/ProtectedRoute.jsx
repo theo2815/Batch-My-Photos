@@ -28,13 +28,13 @@ export default function ProtectedRoute({ children }) {
   // Still loading
   if (session === undefined) {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-gray-50'} flex items-center justify-center`}>
+      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-10 h-10">
-            <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20" />
-            <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
-          <p className={`text-sm ${isDark ? 'text-slate-600' : 'text-gray-400'} tracking-wide`}>Loading…</p>
+          <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'} tracking-wide`}>Loading…</p>
         </div>
       </div>
     )

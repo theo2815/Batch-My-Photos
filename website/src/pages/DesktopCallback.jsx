@@ -67,17 +67,17 @@ export default function DesktopCallback() {
   }
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-gray-50'} px-4`}>
+    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-bg-main' : 'bg-gray-50'} px-4`}>
       <div className={`w-full max-w-md rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/40' : 'border-gray-200 bg-white shadow-xl'} p-8 text-center`}>
         {status === 'loading' && (
           <>
             <div className="flex justify-center mb-6">
-              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-accent' : 'text-primary'}`} />
             </div>
             <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Preparing redirect...
             </h1>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
               Connecting to BatchMyPhotos desktop app
             </p>
           </>
@@ -86,12 +86,12 @@ export default function DesktopCallback() {
         {status === 'redirecting' && (
           <>
             <div className="flex justify-center mb-6">
-              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-accent' : 'text-primary'}`} />
             </div>
             <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Redirecting to app...
             </h1>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
               Opening BatchMyPhotos desktop app
             </p>
           </>
@@ -107,12 +107,12 @@ export default function DesktopCallback() {
             <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Authentication complete!
             </h1>
-            <p className={`text-sm mb-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm mb-6 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
               You can close this tab and return to the BatchMyPhotos app.
             </p>
             <button
               onClick={handleRetryDeepLink}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'text-indigo-400 hover:bg-white/[0.05]' : 'text-indigo-600 hover:bg-indigo-50'}`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'text-accent hover:bg-white/[0.05]' : 'text-primary hover:bg-primary/5'}`}
             >
               <ExternalLink className="w-4 h-4" />
               Click here if the app didn't open
@@ -130,12 +130,12 @@ export default function DesktopCallback() {
             <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Something went wrong
             </h1>
-            <p className={`text-sm mb-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm mb-6 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
               {error}
             </p>
             <a
               href="/login?desktop=true"
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-primary text-white hover:bg-primary-hover' : 'bg-primary text-white hover:bg-primary-hover'}`}
             >
               Try again
             </a>

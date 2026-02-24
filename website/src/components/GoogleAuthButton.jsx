@@ -38,12 +38,12 @@ export default function GoogleAuthButton({ text = "Sign in with Google", classNa
           disabled={loading}
           className={`relative w-full flex items-center justify-center gap-3 rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200
             ${isDark
-              ? 'border-white/[0.08] bg-white/[0.04] text-white hover:bg-white/[0.08] focus-visible:ring-indigo-500/50'
+              ? 'border-white/[0.08] bg-white/[0.04] text-white hover:bg-white/[0.08] focus-visible:ring-primary/50'
               : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus-visible:ring-gray-200'
             } focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
         >
           {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
           ) : (
             <>
              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
