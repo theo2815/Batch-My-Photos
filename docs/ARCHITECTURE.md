@@ -37,11 +37,11 @@ BatchMyPhotos is an Electron application with three isolated runtime contexts:
 
 ### Process Responsibilities
 
-| Process | Role | Can Access |
-|---------|------|------------|
-| **Main** | App lifecycle, filesystem I/O, security enforcement, IPC handlers | Node.js, Electron APIs, filesystem |
-| **Preload** | Secure bridge — exposes a whitelist of IPC calls to the renderer via `contextBridge` | `ipcRenderer.invoke`, `ipcRenderer.on` (no `send`) |
-| **Renderer** | UI rendering, user interaction, state management | Only `window.electronAPI` (sandboxed, no Node.js) |
+| Process      | Role                                                                                 | Can Access                                         |
+| ------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| **Main**     | App lifecycle, filesystem I/O, security enforcement, IPC handlers                    | Node.js, Electron APIs, filesystem                 |
+| **Preload**  | Secure bridge — exposes a whitelist of IPC calls to the renderer via `contextBridge` | `ipcRenderer.invoke`, `ipcRenderer.on` (no `send`) |
+| **Renderer** | UI rendering, user interaction, state management                                     | Only `window.electronAPI` (sandboxed, no Node.js)  |
 
 ---
 
@@ -139,14 +139,14 @@ User selects folder ──► IDLE
 
 Defined in `src/constants/appStates.js`:
 
-| State | Description |
-|-------|-------------|
-| `IDLE` | Waiting for folder selection (drag-drop or dialog) |
-| `SCANNING` | Reading folder contents, building file groups |
-| `READY` | Preview displayed, settings adjustable |
-| `EXECUTING` | Files being moved/copied with progress bar |
-| `COMPLETE` | Results shown, undo available (if move mode) |
-| `ERROR` | Error occurred, user can retry |
+| State       | Description                                        |
+| ----------- | -------------------------------------------------- |
+| `IDLE`      | Waiting for folder selection (drag-drop or dialog) |
+| `SCANNING`  | Reading folder contents, building file groups      |
+| `READY`     | Preview displayed, settings adjustable             |
+| `EXECUTING` | Files being moved/copied with progress bar         |
+| `COMPLETE`  | Results shown, undo available (if move mode)       |
+| `ERROR`     | Error occurred, user can retry                     |
 
 ---
 
@@ -155,54 +155,60 @@ Defined in `src/constants/appStates.js`:
 All IPC communication flows through `preload.js` → `ipcHandlers.js`. The handlers are organized into 6 groups:
 
 ### Group 1: Folder Selection & Registration
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `select-folder` | invoke | Open native folder dialog |
-| `select-output-folder` | invoke | Open output folder dialog (copy mode) |
-| `register-dropped-folder` | invoke | Register a drag-dropped path as allowed |
+
+| Channel                   | Direction | Purpose                                 |
+| ------------------------- | --------- | --------------------------------------- |
+| `select-folder`           | invoke    | Open native folder dialog               |
+| `select-output-folder`    | invoke    | Open output folder dialog (copy mode)   |
+| `register-dropped-folder` | invoke    | Register a drag-dropped path as allowed |
 
 ### Group 2: Core Operations
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `scan-folder` | invoke | Scan folder → file groups + stats |
-| `execute-batch` | invoke | Execute batch split (move or copy) |
-| `preview-batches` | invoke | Calculate batch preview (no file I/O) |
-| `cancel-batch` | invoke | Cancel in-progress operation |
-| `batch-progress` | send (main→renderer) | Progress updates during execution |
+
+| Channel           | Direction            | Purpose                               |
+| ----------------- | -------------------- | ------------------------------------- |
+| `scan-folder`     | invoke               | Scan folder → file groups + stats     |
+| `execute-batch`   | invoke               | Execute batch split (move or copy)    |
+| `preview-batches` | invoke               | Calculate batch preview (no file I/O) |
+| `cancel-batch`    | invoke               | Cancel in-progress operation          |
+| `batch-progress`  | send (main→renderer) | Progress updates during execution     |
 
 ### Group 3: File System Operations
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `open-folder` | invoke | Open folder in system explorer |
-| `get-cache-info` | invoke | Get cache size/path info |
-| `clear-cache` | invoke | Delete application cache |
-| `cleanup-recent-folders` | invoke | Remove stale entries from recents |
+
+| Channel                  | Direction | Purpose                           |
+| ------------------------ | --------- | --------------------------------- |
+| `open-folder`            | invoke    | Open folder in system explorer    |
+| `get-cache-info`         | invoke    | Get cache size/path info          |
+| `clear-cache`            | invoke    | Delete application cache          |
+| `cleanup-recent-folders` | invoke    | Remove stale entries from recents |
 
 ### Group 4: Preferences & Persistence
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `get-recent-folders` | invoke | Read recent folders list |
-| `add-recent-folder` | invoke | Add to recents |
-| `get-theme` / `set-theme` | invoke | Theme preference |
-| `get-presets` | invoke | Read saved presets |
-| `save-preset` | invoke | Save preset (validated + capped) |
-| `delete-preset` | invoke | Delete a preset |
+
+| Channel                   | Direction | Purpose                          |
+| ------------------------- | --------- | -------------------------------- |
+| `get-recent-folders`      | invoke    | Read recent folders list         |
+| `add-recent-folder`       | invoke    | Add to recents                   |
+| `get-theme` / `set-theme` | invoke    | Theme preference                 |
+| `get-presets`             | invoke    | Read saved presets               |
+| `save-preset`             | invoke    | Save preset (validated + capped) |
+| `delete-preset`           | invoke    | Delete a preset                  |
 
 ### Group 5: Batch Recovery
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `check-interrupted-progress` | invoke | Check for crashed session |
-| `clear-interrupted-progress` | invoke | Discard interrupted progress |
-| `resume-batch` | invoke | Resume from where it stopped |
+
+| Channel                      | Direction | Purpose                      |
+| ---------------------------- | --------- | ---------------------------- |
+| `check-interrupted-progress` | invoke    | Check for crashed session    |
+| `clear-interrupted-progress` | invoke    | Discard interrupted progress |
+| `resume-batch`               | invoke    | Resume from where it stopped |
 
 ### Group 6: Rollback
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `check-rollback-available` | invoke | Check if undo is possible |
-| `rollback-batch` | invoke | Move files back to original locations |
-| `clear-rollback-manifest` | invoke | Dismiss undo option |
-| `rollback-progress` | send (main→renderer) | Progress during rollback |
-| `get-thumbnails` | invoke | Generate preview thumbnails (Sharp) |
+
+| Channel                    | Direction            | Purpose                               |
+| -------------------------- | -------------------- | ------------------------------------- |
+| `check-rollback-available` | invoke               | Check if undo is possible             |
+| `rollback-batch`           | invoke               | Move files back to original locations |
+| `clear-rollback-manifest`  | invoke               | Dismiss undo option                   |
+| `rollback-progress`        | send (main→renderer) | Progress during rollback              |
+| `get-thumbnails`           | invoke               | Generate preview thumbnails (Sharp)   |
 
 ---
 
@@ -258,13 +264,14 @@ Main Process
 
 The `batchExecutor.js` module implements three strategies, selected automatically:
 
-| Strategy | When | How | Characteristics |
-|----------|------|-----|-----------------|
-| **Same-drive move** | `mode=move`, same drive | `fs.renameSync` in chunks | O(1) per file, synchronous, yields to event loop every `FILE_MOVE_CHUNK_SIZE` files |
-| **Cross-drive move** | `mode=move`, different drives | Async worker pool: `copyFile` → verify size → `unlink` | Parallel (up to `MAX_FILE_CONCURRENCY`), verified before delete |
-| **Copy** | `mode=copy` | Async worker pool: `copyFile` | Parallel, preserves originals |
+| Strategy             | When                          | How                                                    | Characteristics                                                                     |
+| -------------------- | ----------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Same-drive move**  | `mode=move`, same drive       | `fs.renameSync` in chunks                              | O(1) per file, synchronous, yields to event loop every `FILE_MOVE_CHUNK_SIZE` files |
+| **Cross-drive move** | `mode=move`, different drives | Async worker pool: `copyFile` → verify size → `unlink` | Parallel (up to `MAX_FILE_CONCURRENCY`), verified before delete                     |
+| **Copy**             | `mode=copy`                   | Async worker pool: `copyFile`                          | Parallel, preserves originals                                                       |
 
 All strategies:
+
 - Report progress every 2 seconds via `onProgress` callback
 - Persist progress to disk every 2 seconds via `onSaveProgress` callback
 - Track processed files via `onProcessedFiles` for crash recovery
@@ -277,30 +284,32 @@ All strategies:
 The app has two configuration layers:
 
 ### `src/main/constants.js` — Performance Tuning
+
 Pure numeric constants with no Electron dependency. Safe to import before `app` is ready.
 
-| Constant | Default | Purpose |
-|----------|---------|---------|
-| `UV_THREADPOOL_SIZE` | 64 | libuv thread pool size |
-| `MAX_FILE_CONCURRENCY` | 64 | Async file operation parallelism |
-| `STAT_CONCURRENCY` | 50 | Parallel fs.stat calls |
-| `FOLDER_CONCURRENCY` | 20 | Parallel mkdir calls |
-| `FILE_MOVE_CHUNK_SIZE` | 100 | Sync rename chunk size |
-| `THUMBNAIL_SIZE` | 40 | Preview thumbnail pixels |
-| `THUMBNAIL_CONCURRENCY` | 10 | Parallel Sharp operations |
-| `EXIF_CONCURRENCY` | 20 | Parallel EXIF extractions |
+| Constant                | Default | Purpose                          |
+| ----------------------- | ------- | -------------------------------- |
+| `UV_THREADPOOL_SIZE`    | 64      | libuv thread pool size           |
+| `MAX_FILE_CONCURRENCY`  | 64      | Async file operation parallelism |
+| `STAT_CONCURRENCY`      | 50      | Parallel fs.stat calls           |
+| `FOLDER_CONCURRENCY`    | 20      | Parallel mkdir calls             |
+| `FILE_MOVE_CHUNK_SIZE`  | 100     | Sync rename chunk size           |
+| `THUMBNAIL_SIZE`        | 40      | Preview thumbnail pixels         |
+| `THUMBNAIL_CONCURRENCY` | 10      | Parallel Sharp operations        |
+| `EXIF_CONCURRENCY`      | 20      | Parallel EXIF extractions        |
 
 ### `src/main/config.js` — Feature Flags & Limits
+
 Requires Electron `app` module. Supports `process.env` overrides (prefix: `BATCH_`).
 
-| Flag / Limit | Env Override | Default | Purpose |
-|---|---|---|---|
-| `features.ROLLBACK_ENABLED` | `BATCH_ROLLBACK_ENABLED` | `true` | Toggle undo feature |
-| `features.ENCRYPTION_ENABLED` | `BATCH_ENCRYPTION_ENABLED` | `true` | Toggle progress encryption |
-| `features.VERBOSE_LOGGING` | `BATCH_VERBOSE_LOGGING` | `false` | Debug logs in production |
-| `features.EXIF_SORTING_ENABLED` | `BATCH_EXIF_SORTING_ENABLED` | `true` | Toggle EXIF sorting |
-| `limits.MAX_PRESETS` | `BATCH_MAX_PRESETS` | 20 | Preset storage cap |
-| `limits.MAX_FILES_PER_BATCH_CEILING` | — | 10000 | DoS prevention |
+| Flag / Limit                         | Env Override                 | Default | Purpose                    |
+| ------------------------------------ | ---------------------------- | ------- | -------------------------- |
+| `features.ROLLBACK_ENABLED`          | `BATCH_ROLLBACK_ENABLED`     | `true`  | Toggle undo feature        |
+| `features.ENCRYPTION_ENABLED`        | `BATCH_ENCRYPTION_ENABLED`   | `true`  | Toggle progress encryption |
+| `features.VERBOSE_LOGGING`           | `BATCH_VERBOSE_LOGGING`      | `false` | Debug logs in production   |
+| `features.EXIF_SORTING_ENABLED`      | `BATCH_EXIF_SORTING_ENABLED` | `true`  | Toggle EXIF sorting        |
+| `limits.MAX_PRESETS`                 | `BATCH_MAX_PRESETS`          | 20      | Preset storage cap         |
+| `limits.MAX_FILES_PER_BATCH_CEILING` | —                            | 10000   | DoS prevention             |
 
 All config objects are `Object.freeze()`d to prevent accidental mutation.
 
@@ -433,6 +442,7 @@ BATCH_VERBOSE_LOGGING=true npm run start
 4. **DevTools** open automatically in development mode
 5. **Logs** are printed to the terminal (main process) and DevTools console (renderer)
 6. Set `BATCH_VERBOSE_LOGGING=true` to see debug logs in packaged builds
+
 ---
 
 ## 11. Testing & App Download
