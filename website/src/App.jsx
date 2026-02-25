@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import DemoPage from './pages/DemoPage'
@@ -52,6 +53,7 @@ const AppContent = () => {
           <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
           <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+          <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
           <Route path="/auth/desktop-callback" element={<PageTransition><DesktopCallback /></PageTransition>} />
           <Route path="/auth/connect-app" element={<PageTransition><ConnectApp /></PageTransition>} />
           <Route path="/dashboard" element={<PageTransition><ProtectedRoute><Dashboard /></ProtectedRoute></PageTransition>} />

@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { Mail, Lock, Eye, EyeOff, User, ShieldCheck, ArrowRight, Loader2, Sparkles } from 'lucide-react'
@@ -10,6 +10,7 @@ import InfoModal from '../components/modals/InfoModal'
 
 export default function Register() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const isDesktop = searchParams.get('desktop') === 'true'
   const [loading, setLoading] = useState(false)
@@ -17,10 +18,9 @@ export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(location.state?.error || null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [confirmEmail, setConfirmEmail] = useState(false)
   const [activeModal, setActiveModal] = useState(null)
   const { isDark } = useTheme()
 
@@ -41,6 +41,11 @@ export default function Register() {
       return
     }
 
+    // Navigate to verify page immediately for a snappy UX.
+    // The signUp call runs in the background — if it fails,
+    // we navigate back with the error message.
+    navigate('/verify-email', { state: { email, isDesktop } })
+
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -50,14 +55,14 @@ export default function Register() {
     })
 
     if (authError) {
-      setError(authError.message)
-    } else if (!data.session) {
-      // Email confirmation is required — user has no session yet
-      setConfirmEmail(true)
-    } else {
-      navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
+      navigate('/register', { state: { error: authError.message }, replace: true })
+    } else if (data?.user?.identities?.length === 0) {
+      navigate('/register', { state: { error: 'An account with this email address already exists.' }, replace: true })
+    } else if (data.session) {
+      // Email confirmation not required (e.g. Google) — go straight to dashboard
+      navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard', { replace: true })
     }
-    setLoading(false)
+    // If !data.session and no error → user is already on /verify-email, perfect.
   }
 
   const strength = getPasswordStrength(password)
@@ -107,22 +112,10 @@ export default function Register() {
             </div>
           )}
 
-          {/* Email confirmation notice */}
-          {confirmEmail && (
-            <div className={`mb-6 rounded-xl px-5 py-4 text-center ${isDark ? 'bg-primary/10 border border-primary/20' : 'bg-primary/5 border border-primary/20'}`}>
-              <Mail className={`w-8 h-8 mx-auto mb-3 ${isDark ? 'text-accent' : 'text-primary'}`} />
-              <h2 className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Check your email</h2>
-              <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
-                We sent a confirmation link to <strong className={isDark ? 'text-white' : 'text-gray-900'}>{email}</strong>. Click the link to activate your account.
-              </p>
-              <Link to="/login" className={`inline-block mt-4 text-sm font-semibold ${isDark ? 'text-accent hover:text-accent' : 'text-primary hover:text-primary-hover'} transition-colors`}>
-                Go to Sign In
-              </Link>
-            </div>
-          )}
+
 
           {/* Form */}
-          {!confirmEmail && <form onSubmit={handleRegister} className="space-y-5">
+          <form onSubmit={handleRegister} className="space-y-5">
             {/* Name */}
             <div>
               <label htmlFor="name" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
@@ -269,20 +262,19 @@ export default function Register() {
                 </>
               )}
             </button>
-          </form>}
+          </form>
 
-          {!confirmEmail && (<>
+          <>
           {/* Trust chips */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            {[
-              { icon: ShieldCheck, text: '100% private' },
-              { icon: Sparkles, text: 'Free demo included' },
-            ].map(({ icon: I, text }) => (
-              <span key={text} className={`inline-flex items-center gap-1.5 rounded-full ${isDark ? 'bg-white/[0.04] border border-white/[0.06] text-text-muted' : 'bg-gray-100 border border-gray-200 text-gray-500'} px-3 py-1 text-xs`}>
-                <I className="w-3 h-3" />
-                {text}
-              </span>
-            ))}
+            <span className={`inline-flex items-center gap-1.5 rounded-full ${isDark ? 'bg-white/[0.04] border border-white/[0.06] text-text-muted' : 'bg-gray-100 border border-gray-200 text-gray-500'} px-3 py-1 text-xs`}>
+              <ShieldCheck className="w-3 h-3" />
+              100% private
+            </span>
+            <span className={`inline-flex items-center gap-1.5 rounded-full ${isDark ? 'bg-white/[0.04] border border-white/[0.06] text-text-muted' : 'bg-gray-100 border border-gray-200 text-gray-500'} px-3 py-1 text-xs`}>
+              <Sparkles className="w-3 h-3" />
+              Free demo included
+            </span>
           </div>
 
           {/* Divider */}
@@ -299,7 +291,7 @@ export default function Register() {
               Sign in
             </Link>
           </p>
-          </>)}
+          </>
         </div>
 
         {/* Trust badge */}

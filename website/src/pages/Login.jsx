@@ -52,7 +52,17 @@ export default function Login() {
     })
 
     if (authError) {
-      setError(authError.message)
+      if (authError.message === 'Email not confirmed') {
+        // Try to resend a fresh code — don't block redirect if resend fails
+        try {
+          await supabase.auth.resend({ email, type: 'signup' })
+        } catch {
+          // Resend failed (rate limit, network) — user can still resend from the verify page
+        }
+        navigate('/verify-email', { state: { email, isDesktop } })
+      } else {
+        setError(authError.message)
+      }
     } else {
       navigate(isDesktop ? '/auth/desktop-callback' : '/dashboard')
     }
