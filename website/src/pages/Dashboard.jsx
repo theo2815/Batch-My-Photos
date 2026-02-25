@@ -74,7 +74,7 @@ export default function Dashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [confirmCancel, setConfirmCancel]   = useState(false)
   const [paymentMsg, setPaymentMsg] = useState(null)
-  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, cancelSubscription, validateCoupon } = useSubscription()
+  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, startFreeTrial, cancelSubscription, validateCoupon } = useSubscription()
   const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt, removalsResetAt } = useDevices()
   const [removingDeviceId, setRemovingDeviceId] = useState(null)
   const [confirmRemoveDevice, setConfirmRemoveDevice] = useState(null) // { id, label }
@@ -243,6 +243,13 @@ export default function Dashboard() {
       // Re-throw so PricingModal can display the error inline
       throw err
     }
+  }
+
+  const handleStartTrial = async () => {
+    await startFreeTrial()
+    setActiveModal(null)
+    setPaymentMsg({ type: 'success', text: '🎉 Your 30-day free trial is now active! Enjoy Pro features.' })
+    safeTimeout(() => setPaymentMsg(null), 6000)
   }
 
   /* ── Loading state ── */
@@ -462,7 +469,7 @@ export default function Dashboard() {
                       onClick={() => setActiveModal('pricing')}
                       className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer`}
                     >
-                      <Sparkles className="w-4 h-4 text-white" /> Upgrade to Pro
+                      <Sparkles className="w-4 h-4 text-white" /> {!sub?.free_trial_used ? 'Start Free Trial' : 'Upgrade to Pro'}
                     </button>
                     {/* <span className={`text-[10px] ${isDark ? 'text-text-muted' : 'text-gray-400'} text-center italic`}>Under review</span> */}
                   </div>
@@ -757,8 +764,13 @@ export default function Dashboard() {
         isOpen={activeModal === 'pricing'}
         onClose={() => setActiveModal(null)}
         onUpgrade={handleUpgrade}
+        onStartTrial={handleStartTrial}
         checkoutLoading={checkoutLoading}
         onValidateCoupon={validateCoupon}
+        isPro={sub?.plan === 'pro' && sub?.status === 'active'}
+        freeTrialUsed={!!sub?.free_trial_used}
+        subscriptionLoading={subLoading}
+        isTrialActive={!!sub?.free_trial_used && sub?.plan === 'pro' && sub?.status === 'active' && sub?.free_trial_end_at && new Date(sub.free_trial_end_at) >= new Date()}
       />
 
       {/* ── Manage Plan Modal ── */}

@@ -179,6 +179,33 @@ export function useSubscription() {
   }, [fetchSubscription])
 
   /**
+   * Starts the user's one-time free trial (30 days of Pro, no payment).
+   * Returns the trial result or throws on error.
+   */
+  const startFreeTrial = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const res = await fetch(`${API_BASE}/api/start-free-trial`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json()
+      throw new Error(errData.error || 'Failed to start free trial')
+    }
+
+    const result = await res.json()
+    await fetchSubscription()
+    return result
+  }, [fetchSubscription])
+
+  /**
    * Cancels the user's subscription immediately.
    */
   const cancelSubscription = useCallback(async () => {
@@ -226,5 +253,5 @@ export function useSubscription() {
     return res.json()
   }, [])
 
-  return { subscription, loading, error, refetch: fetchSubscription, createCheckout, verifyPayment, cancelSubscription, validateCoupon }
+  return { subscription, loading, error, refetch: fetchSubscription, createCheckout, verifyPayment, startFreeTrial, cancelSubscription, validateCoupon }
 }

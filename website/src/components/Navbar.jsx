@@ -22,6 +22,9 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pricingOpen, setPricingOpen] = useState(false)
   const [userPlan, setUserPlan] = useState(null) // 'free' | 'pro' | null
+  const [freeTrialUsed, setFreeTrialUsed] = useState(false)
+  const [freeTrialEndAt, setFreeTrialEndAt] = useState(null)
+  const [subLoading, setSubLoading] = useState(true)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const mobileMenuRef = useRef(null)
   const hamburgerRef = useRef(null)
@@ -98,10 +101,11 @@ export default function Navbar() {
 
   // Fetch user's plan as soon as they're logged in (so it's ready before modal opens)
   useEffect(() => {
-    if (!user) { setUserPlan(null); return }
+   if (!user) { setUserPlan(null); setSubLoading(false); return }
     let cancelled = false
     ;(async () => {
       try {
+        setSubLoading(true)
         const { data: { session } } = await supabase.auth.getSession()
         if (!session || cancelled) return
         const res = await fetch(`${API_BASE}/api/subscription`, {
@@ -109,9 +113,15 @@ export default function Navbar() {
         })
         if (!res.ok || cancelled) return
         const data = await res.json()
-        if (!cancelled) setUserPlan(data?.plan || 'free')
+        if (!cancelled) {
+          setUserPlan(data?.plan || 'free')
+          setFreeTrialUsed(!!data?.free_trial_used)
+          setFreeTrialEndAt(data?.free_trial_end_at || null)
+        }
       } catch {
         if (!cancelled) setUserPlan('free')
+      } finally {
+        if (!cancelled) setSubLoading(false)
       }
     })()
     return () => { cancelled = true }
@@ -158,6 +168,36 @@ export default function Navbar() {
       setCheckoutLoading(false)
       throw err // PricingModal will catch this and display the error inline
     }
+  }
+
+  // Free trial activation (no payment required)
+  const handleStartTrial = async () => {
+    if (!user) {
+      setPricingOpen(false)
+      navigate('/login')
+      return
+    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not authenticated')
+
+    const res = await fetch(`${API_BASE}/api/start-free-trial`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json()
+      throw new Error(errData.error || 'Failed to start free trial')
+    }
+
+    // Trial activated — close modal and update state
+    setPricingOpen(false)
+    setUserPlan('pro')
+    setFreeTrialUsed(true)
   }
 
   // Coupon validation for logged-in users
@@ -400,9 +440,13 @@ export default function Navbar() {
         isOpen={pricingOpen}
         onClose={() => { setPricingOpen(false); setCheckoutLoading(false) }}
         onUpgrade={handlePricingUpgrade}
+        onStartTrial={handleStartTrial}
         checkoutLoading={checkoutLoading}
         onValidateCoupon={user ? handleValidateCoupon : null}
         isPro={userPlan === 'pro'}
+        freeTrialUsed={freeTrialUsed}
+        subscriptionLoading={subLoading}
+        isTrialActive={freeTrialUsed && userPlan === 'pro' && freeTrialEndAt && new Date(freeTrialEndAt) >= new Date()}
       />
     </>
   )

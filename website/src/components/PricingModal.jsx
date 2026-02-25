@@ -3,8 +3,11 @@ import { useState } from 'react'
 import { Check, X, Sparkles, ArrowRight, Tag, Loader2 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
-export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoading, onValidateCoupon, isPro = false }) {
+export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial, checkoutLoading, onValidateCoupon, isPro = false, freeTrialUsed = false, subscriptionLoading = false, isTrialActive = false }) {
   const { isDark } = useTheme()
+
+  // Free trial is available only once data is loaded and user hasn't used it
+  const isTrialAvailable = !subscriptionLoading && !freeTrialUsed && !isPro
 
   // Coupon state
   const [couponInput, setCouponInput] = useState('')
@@ -12,9 +15,10 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
   const [couponResult, setCouponResult] = useState(null) // { valid, code, discountedPrice, ... } or { valid: false, reason }
   const [couponError, setCouponError] = useState('')
   const [checkoutError, setCheckoutError] = useState('')
+  const [trialLoading, setTrialLoading] = useState(false)
 
   const appliedCoupon = couponResult?.valid ? couponResult : null
-  const displayPrice = appliedCoupon ? appliedCoupon.discountedPrice / 100 : 299
+  const displayPrice = isTrialAvailable ? 0 : (appliedCoupon ? appliedCoupon.discountedPrice / 100 : 299)
 
   const handleApplyCoupon = async () => {
     const code = couponInput.trim().toUpperCase()
@@ -49,9 +53,16 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
   const handleUpgradeClick = async () => {
     setCheckoutError('')
     try {
-      await onUpgrade(appliedCoupon?.code || null)
+      if (isTrialAvailable && onStartTrial) {
+        setTrialLoading(true)
+        await onStartTrial()
+      } else {
+        await onUpgrade(appliedCoupon?.code || null)
+      }
     } catch (err) {
       setCheckoutError(err.message || 'Something went wrong. Please try again.')
+    } finally {
+      setTrialLoading(false)
     }
   }
 
@@ -118,14 +129,18 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
               
               <div className="flex items-center gap-2 mb-3 relative z-10">
                 {isPro ? (
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/30">Current Plan</span>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/30">{isTrialActive ? 'Current Plan (Free Trial)' : 'Current Plan'}</span>
                 ) : (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-primary to-accent text-white shadow-md shadow-primary/30">Recommended</span>
                 )}
               </div>
               <div className="flex items-baseline gap-1 mb-2 relative z-10">
                 <h3 className={`text-2xl font-bold ${isDark ? 'text-text-primary' : 'text-text-primary-light'}`}>Pro</h3>
-                {appliedCoupon ? (
+                {subscriptionLoading ? (
+                  <span className={`text-xl font-bold ${isDark ? 'text-accent' : 'text-primary'}`}>— ₱299/mo</span>
+                ) : isTrialAvailable ? (
+                  <span className={`text-xl font-bold ${isDark ? 'text-accent' : 'text-primary'}`}>— ₱0 <span className="text-sm font-normal opacity-60">for 30 days</span></span>
+                ) : appliedCoupon ? (
                   <span className={`text-xl font-bold ${isDark ? 'text-accent' : 'text-primary'}`}>
                     — <span className="line-through opacity-50">₱299</span> ₱{displayPrice}/mo
                   </span>
@@ -150,61 +165,65 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
 
               <div className="flex flex-col gap-3 mt-auto relative z-10">
                 {isPro ? (
-                  /* ── Already Pro: show "Current Plan" indicator ── */
+                  /* ── Already Pro (paid or trial): show "Current Plan" indicator ── */
                   <div className={`w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border ${isDark ? 'border-success/30 bg-success/10 text-success' : 'border-success/20 bg-success/5 text-success'}`}>
                     <Check className="w-4 h-4" />
-                    <span>Current Plan</span>
+                    <span>{isTrialActive ? 'Current Plan (Free Trial)' : 'Current Plan'}</span>
                   </div>
                 ) : (
-                  /* ── Not Pro: show coupon input + upgrade button ── */
+                  /* ── Not Pro: show coupon input (if not trial) + upgrade/trial button ── */
                   <>
-                    {/* Coupon input */}
-                    {!appliedCoupon ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Tag className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? 'text-primary/50' : 'text-primary/70'}`} />
-                            <input
-                              type="text"
-                              value={couponInput}
-                              onChange={(e) => { setCouponInput(e.target.value); setCouponError('') }}
-                              onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                              placeholder="Coupon code"
-                              className={`w-full pl-9 pr-3 py-2 text-xs rounded-lg border ${isDark ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-text-muted focus:border-primary/50' : 'border-gray-300 bg-white text-text-primary-light placeholder:text-gray-400 focus:border-primary'} outline-none transition-colors`}
-                              disabled={couponLoading}
-                            />
+                    {/* Coupon input — hidden when free trial is available */}
+                    {!isTrialAvailable && (
+                      <>
+                        {!appliedCoupon ? (
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <Tag className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? 'text-primary/50' : 'text-primary/70'}`} />
+                                <input
+                                  type="text"
+                                  value={couponInput}
+                                  onChange={(e) => { setCouponInput(e.target.value); setCouponError('') }}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                                  placeholder="Coupon code"
+                                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-lg border ${isDark ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-text-muted focus:border-primary/50' : 'border-gray-300 bg-white text-text-primary-light placeholder:text-gray-400 focus:border-primary'} outline-none transition-colors`}
+                                  disabled={couponLoading}
+                                />
+                              </div>
+                              <button
+                                onClick={handleApplyCoupon}
+                                disabled={couponLoading || !couponInput.trim()}
+                                className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${isDark ? 'bg-primary/20 text-accent hover:bg-primary/30 disabled:opacity-40' : 'bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40'} disabled:cursor-not-allowed flex items-center gap-1.5`}
+                              >
+                                {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
+                              </button>
+                            </div>
+                            {couponError && (
+                              <p className="text-[11px] text-red-400 px-1">{couponError}</p>
+                            )}
+                            <a
+                              href="https://web.facebook.com/people/Batch-My-Photos/61588309656493/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`text-[11px] px-1 transition-colors ${isDark ? 'text-accent hover:text-accent/80' : 'text-primary hover:text-primary-hover'} hover:underline`}
+                            >
+                              Claim your coupon here →
+                            </a>
                           </div>
-                          <button
-                            onClick={handleApplyCoupon}
-                            disabled={couponLoading || !couponInput.trim()}
-                            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${isDark ? 'bg-primary/20 text-accent hover:bg-primary/30 disabled:opacity-40' : 'bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40'} disabled:cursor-not-allowed flex items-center gap-1.5`}
-                          >
-                            {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
-                          </button>
-                        </div>
-                        {couponError && (
-                          <p className="text-[11px] text-red-400 px-1">{couponError}</p>
+                        ) : (
+                          <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'border-success/30 bg-success/10' : 'border-success/20 bg-success/5'}`}>
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className={`text-xs font-semibold ${isDark ? 'text-success' : 'text-success'}`}>{appliedCoupon.code}</span>
+                              <span className={`text-[11px] ${isDark ? 'text-success/70' : 'text-success/80'}`}>— First month only</span>
+                            </div>
+                            <button onClick={handleRemoveCoupon} className="text-success hover:text-error transition-colors cursor-pointer">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         )}
-                        <a
-                          href="https://web.facebook.com/people/Batch-My-Photos/61588309656493/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`text-[11px] px-1 transition-colors ${isDark ? 'text-accent hover:text-accent/80' : 'text-primary hover:text-primary-hover'} hover:underline`}
-                        >
-                          Claim your coupon here →
-                        </a>
-                      </div>
-                    ) : (
-                      <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'border-success/30 bg-success/10' : 'border-success/20 bg-success/5'}`}>
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className={`text-xs font-semibold ${isDark ? 'text-success' : 'text-success'}`}>{appliedCoupon.code}</span>
-                          <span className={`text-[11px] ${isDark ? 'text-success/70' : 'text-success/80'}`}>— First month only</span>
-                        </div>
-                        <button onClick={handleRemoveCoupon} className="text-success hover:text-error transition-colors cursor-pointer">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      </>
                     )}
 
                     {checkoutError && (
@@ -216,23 +235,25 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, checkoutLoadi
 
                     <button
                       onClick={handleUpgradeClick}
-                      disabled={checkoutLoading}
-                      className={`w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary-hover hover:from-primary-hover hover:to-accent text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all cursor-pointer flex items-center justify-center gap-2 ${checkoutLoading ? 'opacity-75 cursor-wait' : ''}`}
+                      disabled={checkoutLoading || trialLoading}
+                      className={`w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary-hover hover:from-primary-hover hover:to-accent text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all cursor-pointer flex items-center justify-center gap-2 ${(checkoutLoading || trialLoading) ? 'opacity-75 cursor-wait' : ''}`}
                     >
-                      {checkoutLoading ? (
+                      {(checkoutLoading || trialLoading) ? (
                         <div className="flex items-center gap-2">
                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
-                          <span>Redirecting...</span>
+                          <span>{isTrialAvailable ? 'Activating…' : 'Redirecting...'}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span>Upgrade Now</span>
+                          <span>{isTrialAvailable ? 'Start Your Free Trial' : 'Upgrade Now'}</span>
                           <ArrowRight className="w-4 h-4" />
                         </div>
                       )}
                     </button>
                     <div className="flex items-center justify-center gap-2">
-                       <span className={`text-[10px] ${isDark ? 'text-accent/60' : 'text-primary/80'} text-center`}>Secured by PayMongo</span>
+                       <span className={`text-[10px] ${isDark ? 'text-accent/60' : 'text-primary/80'} text-center`}>
+                         {isTrialAvailable ? '30-day free trial · No payment required' : 'Secured by PayMongo'}
+                       </span>
                     </div>
                   </>
                 )}
