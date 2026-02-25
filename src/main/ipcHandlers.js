@@ -784,8 +784,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // trackBatchExecution automatically enqueues on any failure (offline/error),
       // and the queue is drained on the next successful run.  We don't block the
       // result return to keep the UI snappy.
-      if (!wasCancelled) {
-        subscriptionService.trackBatchExecution(sessionToken, totalBatchCount)
+      if (!wasCancelled && totalBatchCount > 0) {
+        subscriptionService.trackBatchExecution(sessionToken, 1)
           .then(trackResult => {
             if (!trackResult.success) {
               logger.warn(`⚠️ [IPC] Batch tracking ${trackResult.offline ? 'queued (offline)' : 'failed'}: ${trackResult.error || 'unknown'}`);

@@ -433,3 +433,24 @@ BATCH_VERBOSE_LOGGING=true npm run start
 4. **DevTools** open automatically in development mode
 5. **Logs** are printed to the terminal (main process) and DevTools console (renderer)
 6. Set `BATCH_VERBOSE_LOGGING=true` to see debug logs in packaged builds
+---
+
+## 11. Testing & App Download
+
+### Downloading BatchMyPhotos
+
+You can download the latest production version of BatchMyPhotos directly from the Microsoft Store:
+
+- [BatchMyPhotos on Microsoft Store](https://apps.microsoft.com/detail/9n1kkmv4nx4j?hl=en-US&gl=PH)
+
+### Testing Guidelines
+
+- Always test using the latest store version to ensure parity with production.
+- For manual and exploratory testing, see `docs/MANUAL_TEST_GUIDE.md` for step-by-step scenarios and expected results.
+- For automated/unit tests, refer to the `tests/` directory in the repository.
+- Report any issues or feedback via the project’s issue tracker or support channel.
+
+#### Test Account
+
+- **Email:** test123@cit.edu
+- **Password:** 123456

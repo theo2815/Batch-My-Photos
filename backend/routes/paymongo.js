@@ -14,6 +14,9 @@ const PLAN_CURRENCY = 'PHP'
 const PLAN_DESCRIPTION = 'BatchMyPhotos Pro — Monthly Subscription'
 const FREE_LIMIT = 2
 
+/** Free trial duration in days. */
+const FREE_TRIAL_DAYS = 30
+
 /** Maximum age (in seconds) for webhook timestamps before they are rejected as replayed. */
 const WEBHOOK_MAX_AGE_SECONDS = 300 // 5 minutes
 
@@ -125,6 +128,128 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
   if (computedBuf.length !== expectedBuf.length) return false
   return crypto.timingSafeEqual(computedBuf, expectedBuf)
 }
+
+// ── Free Trial Helper ─────────────────────────────────────────────────────────
+
+/**
+ * Check trial state from a subscription row.
+ * @param {Object|null} sub — subscription row (must include free_trial_used, free_trial_end_at)
+ * @returns {{ isTrialActive: boolean, isTrialExpired: boolean, freeTrialUsed: boolean }}
+ */
+function checkTrialExpiry(sub) {
+  if (!sub) return { isTrialActive: false, isTrialExpired: false, freeTrialUsed: false }
+  const freeTrialUsed = !!sub.free_trial_used
+  const trialEnd = sub.free_trial_end_at ? new Date(sub.free_trial_end_at) : null
+  const now = new Date()
+  const isTrialActive = freeTrialUsed && trialEnd && trialEnd >= now
+  const isTrialExpired = freeTrialUsed && trialEnd && trialEnd < now
+  return { isTrialActive, isTrialExpired, freeTrialUsed }
+}
+
+// ── POST /api/start-free-trial — Activate a one-time free trial ───────────────
+
+router.post('/start-free-trial', authenticateUser, async (req, res) => {
+  try {
+    const user = req.user
+    const hwid = req.body.hwid || null // Optional — sent by desktop app
+    const supabaseAdmin = req.app.locals.supabaseAdmin
+
+    // 1. Check if user already used their free trial
+    const { data: existingSub } = await supabaseAdmin
+      .from('subscriptions')
+      .select('free_trial_used, plan, status, expires_at')
+      .eq('user_id', user.id)
+      .single()
+
+    if (existingSub?.free_trial_used) {
+      return res.status(400).json({ error: 'You have already used your free trial.' })
+    }
+
+    // 2. Check if user already has active paid subscription
+    if (existingSub) {
+      const isExpired = existingSub.expires_at && new Date(existingSub.expires_at) < new Date()
+      const isActivePaid = existingSub.plan === 'pro' && existingSub.status === 'active' && !isExpired
+      if (isActivePaid) {
+        return res.status(400).json({ error: 'You already have an active Pro subscription.' })
+      }
+    }
+
+    // 3. HWID abuse prevention (desktop only — hwid is optional)
+    if (hwid && typeof hwid === 'string' && hwid.length >= 16) {
+      const { data: existingClaim } = await supabaseAdmin
+        .from('trial_device_claims')
+        .select('user_id')
+        .eq('hwid_hash', hwid)
+        .single()
+
+      if (existingClaim) {
+        return res.status(403).json({
+          error: 'A free trial has already been used on this device.',
+          code: 'DEVICE_TRIAL_CLAIMED',
+        })
+      }
+    }
+
+    // 4. Activate trial
+    const now = new Date()
+    const trialEnd = new Date(now)
+    trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS)
+
+    const { error: upsertError } = await supabaseAdmin
+      .from('subscriptions')
+      .upsert(
+        {
+          user_id: user.id,
+          plan: 'pro',
+          status: 'active',
+          free_trial_used: true,
+          free_trial_start_at: now.toISOString(),
+          free_trial_end_at: trialEnd.toISOString(),
+          expires_at: trialEnd.toISOString(),
+          amount: 0,
+          currency: PLAN_CURRENCY,
+          device_limit: 2,
+          device_removals_limit: 3,
+          device_removals_reset_at: trialEnd.toISOString(),
+          paid_at: now.toISOString(),
+          updated_at: now.toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
+
+    if (upsertError) {
+      console.error('Start free trial: upsert error:', upsertError)
+      return res.status(500).json({ error: 'Failed to activate free trial' })
+    }
+
+    // 5. Record HWID claim (desktop only)
+    if (hwid && typeof hwid === 'string' && hwid.length >= 16) {
+      const { error: claimError } = await supabaseAdmin
+        .from('trial_device_claims')
+        .insert({ hwid_hash: hwid, user_id: user.id })
+
+      if (claimError && claimError.code !== '23505') {
+        // Non-critical — log but don't fail the trial activation
+        console.error('Trial device claim error:', claimError)
+      }
+    }
+
+    console.log(`🎉 Free trial activated for user ${user.id} until ${trialEnd.toISOString()}`)
+
+    res.json({
+      success: true,
+      plan: 'pro',
+      status: 'active',
+      free_trial_used: true,
+      free_trial_start_at: now.toISOString(),
+      free_trial_end_at: trialEnd.toISOString(),
+      expires_at: trialEnd.toISOString(),
+    })
+  } catch (err) {
+    console.error('Start free trial error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 
 // ── POST /api/validate-coupon — Validate a coupon code ────────────────────────
 
@@ -367,22 +492,38 @@ router.get('/subscription', authenticateUser, async (req, res) => {
       return res.json({
         plan: 'free',
         status: 'active',
+        free_trial_used: false,
         usage: { used: usedThisMonth, limit: FREE_LIMIT },
       })
     }
 
-    // Check if subscription has expired
+    // Check trial and subscription expiry
+    const { isTrialActive, isTrialExpired, freeTrialUsed } = checkTrialExpiry(data)
     const isExpired = data.expires_at && new Date(data.expires_at) < new Date()
-    const effectivePlan = isExpired ? 'free' : data.plan
+
+    // Determine effective plan and status
+    let effectivePlan = data.plan
+    let effectiveStatus = data.status
+    if (isTrialExpired && data.amount === 0) {
+      // Trial-only user whose trial expired
+      effectivePlan = 'free'
+      effectiveStatus = 'trial_expired'
+    } else if (isExpired) {
+      effectivePlan = 'free'
+      effectiveStatus = 'expired'
+    }
 
     res.json({
       plan: effectivePlan,
-      status: isExpired ? 'expired' : data.status,
+      status: effectiveStatus,
       paid_at: data.paid_at,
       expires_at: data.expires_at,
       amount: data.amount,
       currency: data.currency,
       paymongo_checkout_id: data.paymongo_checkout_id,
+      free_trial_used: freeTrialUsed,
+      free_trial_start_at: data.free_trial_start_at || null,
+      free_trial_end_at: data.free_trial_end_at || null,
       usage: {
         used: usedThisMonth,
         limit: effectivePlan === 'pro' ? null : FREE_LIMIT, // null = unlimited
@@ -464,7 +605,7 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
     const canExecute = isPro || currentUsage < FREE_LIMIT
     const remaining = isPro ? null : Math.max(0, FREE_LIMIT - currentUsage)
 
-    console.log(`[CHECK-LIMIT] user=${user.id} plan=${sub?.plan} status=${sub?.status} expired=${isExpired} isPro=${isPro} usage=${currentUsage} canExecute=${canExecute}`)
+    console.log(`[CHECK-LIMIT] user=${user.id} plan=${sub?.plan} status=${sub?.status} expired=${isExpired} isPro=${isPro} usage=${currentUsage} canExecute=${canExecute} expires_at=${sub?.expires_at || 'none'}`)
 
     res.json({
       can_execute: canExecute,
@@ -489,7 +630,10 @@ router.post('/check-batch-limit', authenticateUser, async (req, res) => {
 router.post('/track-batch', authenticateUser, async (req, res) => {
   try {
     const user = req.user
-    const { batch_count = 1 } = req.body
+    // HOTFIX: Always count as 1 operation per request, regardless of client value.
+    // Old app versions send batch_count = number of folders (e.g., 17), which overcounts.
+    // New versions send 1. This normalizes behavior across all installed versions.
+    const batch_count = 1
 
     // Validate batch_count (must be a positive integer)
     if (typeof batch_count !== 'number' || !Number.isInteger(batch_count) || batch_count < 1 || batch_count > 1000) {
@@ -507,6 +651,7 @@ router.post('/track-batch', authenticateUser, async (req, res) => {
       .single()
 
     const isExpired = sub?.expires_at && new Date(sub.expires_at) < new Date()
+    // isPro uses expires_at (which covers both paid and trial expiry)
     const isPro = sub && sub.plan === 'pro' && !isExpired && sub.status === 'active'
 
     // Limit is FREE_LIMIT for free users, null (unlimited) for Pro

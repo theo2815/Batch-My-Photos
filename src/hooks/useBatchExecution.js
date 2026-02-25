@@ -104,6 +104,7 @@ export function useBatchExecution({ setAppState, setError }) {
           isOfflineFree: !!results.freeOffline,
           isPendingSync: results.code === 'PENDING_TRACKS_EXCEEDED',
         });
+        setAppState(STATES.READY);
         return;
       } else {
         throw new Error(results.error);

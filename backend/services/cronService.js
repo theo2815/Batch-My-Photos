@@ -13,6 +13,36 @@ const {
 } = require('./emailService')
 
 /**
+ * Helper to fetch emails for a batch of user IDs using the secure RPC.
+ * Chunks the requests into batches of 100 to prevent oversized queries.
+ */
+async function getEmailsForUsers(supabaseAdmin, userIds) {
+  const uniqueIds = [...new Set(userIds)].filter(Boolean)
+  if (uniqueIds.length === 0) return {}
+
+  const emailMap = {}
+  const chunkSize = 100
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize)
+    const { data, error } = await supabaseAdmin.rpc('get_user_emails', { user_ids: chunk })
+    
+    if (error) {
+      console.error('Cron: Failed to fetch user emails chunk:', error)
+      continue
+    }
+
+    if (data) {
+      for (const row of data) {
+        if (row.email) emailMap[row.id] = row.email
+      }
+    }
+  }
+
+  return emailMap
+}
+
+/**
  * Initialize all cron jobs. Call once after the server starts.
  * @param {object} supabaseAdmin — Service-role Supabase client
  */
@@ -44,30 +74,68 @@ function initCronJobs(supabaseAdmin) {
         return
       }
 
+      const userIdsToEmail = []
+
       if (!expiringSubs || expiringSubs.length === 0) {
-        console.log('Cron: No subscriptions expiring in the next 3 days.')
+        console.log('Cron: No paid subscriptions expiring in the next 3 days.')
+      } else {
+        console.log(`Cron: Found ${expiringSubs.length} expiring subscription(s)`)
+        userIdsToEmail.push(...expiringSubs.map(s => s.user_id))
+      }
+
+      // ── Free trial expiry reminders ────────────────────────────────
+      const { data: expiringTrials, error: trialError } = await supabaseAdmin
+        .from('subscriptions')
+        .select('user_id, free_trial_end_at')
+        .eq('free_trial_used', true)
+        .eq('status', 'active')
+        .gte('free_trial_end_at', now.toISOString())
+        .lte('free_trial_end_at', threeDaysLater.toISOString())
+
+      if (!trialError && expiringTrials && expiringTrials.length > 0) {
+        console.log(`Cron: Found ${expiringTrials.length} expiring free trial(s)`)
+        userIdsToEmail.push(...expiringTrials.map(t => t.user_id))
+      }
+
+      if (userIdsToEmail.length === 0) {
+        console.log('Cron: No emails to send today.')
         return
       }
 
-      console.log(`Cron: Found ${expiringSubs.length} expiring subscription(s)`)
+      // ── Bulk Fetch Emails and Send ──────────────────────────────────
+      const emailMap = await getEmailsForUsers(supabaseAdmin, userIdsToEmail)
+      let emailsSent = 0
 
-      for (const sub of expiringSubs) {
-        // Look up user email from Supabase Auth
-        const { data: userData, error: userErr } = await supabaseAdmin
-          .auth.admin.getUserById(sub.user_id)
-
-        if (userErr || !userData?.user?.email) {
-          console.warn(`Cron: Could not fetch email for user ${sub.user_id}`)
-          continue
+      // Process Paid Subs
+      if (expiringSubs && expiringSubs.length > 0) {
+        for (const sub of expiringSubs) {
+          const email = emailMap[sub.user_id]
+          if (!email) {
+            console.warn(`Cron: Could not fetch email for user ${sub.user_id}`)
+            continue
+          }
+          await sendSubscriptionExpiring({
+            to: email,
+            expiresAt: sub.expires_at,
+          }).catch(() => {})
+          emailsSent++
         }
-
-        await sendSubscriptionExpiring({
-          to: userData.user.email,
-          expiresAt: sub.expires_at,
-        })
       }
 
-      console.log('Cron: Expiry reminder job complete.')
+      // Process Free Trials
+      if (!trialError && expiringTrials && expiringTrials.length > 0) {
+        for (const trial of expiringTrials) {
+          const email = emailMap[trial.user_id]
+          if (!email) continue
+          await sendSubscriptionExpiring({
+            to: email,
+            expiresAt: trial.free_trial_end_at,
+          }).catch(() => {})
+          emailsSent++
+        }
+      }
+
+      console.log(`Cron: Expiry reminder job complete. Sent ${emailsSent} emails.`)
     } catch (err) {
       console.error('Cron: Expiry check error:', err)
     }
@@ -101,30 +169,47 @@ function initCronJobs(supabaseAdmin) {
         return
       }
 
-      console.log(`Cron: Sending summary to ${usageRows.length} user(s)`)
+      console.log(`Cron: Fetching emails and plans for ${usageRows.length} user(s)`)
 
-      for (const row of usageRows) {
-        // Look up user's email + plan
-        const { data: userData, error: userErr } = await supabaseAdmin
-          .auth.admin.getUserById(row.user_id)
+      const userIds = usageRows.map(r => r.user_id)
+      
+      // Fetch all emails in bulk
+      const emailMap = await getEmailsForUsers(supabaseAdmin, userIds)
 
-        if (userErr || !userData?.user?.email) continue
-
-        const { data: sub } = await supabaseAdmin
+      // Fetch all subscription plans in bulk using chunking for .in()
+      const planMap = {}
+      const chunkSize = 100
+      for (let i = 0; i < userIds.length; i += chunkSize) {
+        const chunk = userIds.slice(i, i + chunkSize)
+        const { data: subData } = await supabaseAdmin
           .from('subscriptions')
-          .select('plan')
-          .eq('user_id', row.user_id)
-          .single()
-
-        await sendMonthlyUsageSummary({
-          to: userData.user.email,
-          monthLabel,
-          batchesUsed: row.batch_count,
-          plan: sub?.plan || 'free',
-        })
+          .select('user_id, plan')
+          .in('user_id', chunk)
+        
+        if (subData) {
+          for (const sub of subData) {
+            planMap[sub.user_id] = sub.plan
+          }
+        }
       }
 
-      console.log('Cron: Monthly summary job complete.')
+      let emailsSent = 0
+      for (const row of usageRows) {
+        const email = emailMap[row.user_id]
+        if (!email) continue
+
+        const plan = planMap[row.user_id] || 'free'
+
+        await sendMonthlyUsageSummary({
+          to: email,
+          monthLabel,
+          batchesUsed: row.batch_count,
+          plan,
+        }).catch(() => {})
+        emailsSent++
+      }
+
+      console.log(`Cron: Monthly summary job complete. Sent ${emailsSent} emails.`)
     } catch (err) {
       console.error('Cron: Monthly summary error:', err)
     }
