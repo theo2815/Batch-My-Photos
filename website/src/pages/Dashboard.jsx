@@ -1,6 +1,6 @@
 
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom'
 import PricingModal from '../components/PricingModal'
 import InfoModal from '../components/modals/InfoModal'
 import { supabase } from '../lib/supabase'
@@ -24,7 +24,7 @@ const getDashModals = () => ({
   },
 })
 
-function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
+function DashModal({ modalKey, onClose}) {
   const { isDark } = useTheme()
   const content = getDashModals()[modalKey]
   useEffect(() => {
@@ -65,6 +65,7 @@ function DashModal({ modalKey, onClose, onUpgrade, checkoutLoading }) {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { isDark } = useTheme()
   const [user, setUser]             = useState(null)
@@ -75,7 +76,7 @@ export default function Dashboard() {
   const [confirmCancel, setConfirmCancel]   = useState(false)
   const [paymentMsg, setPaymentMsg] = useState(null)
   const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, startFreeTrial, cancelSubscription, validateCoupon } = useSubscription()
-  const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt, removalsResetAt } = useDevices()
+  const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt} = useDevices()
   const [removingDeviceId, setRemovingDeviceId] = useState(null)
   const [confirmRemoveDevice, setConfirmRemoveDevice] = useState(null) // { id, label }
   const [removeError, setRemoveError] = useState(null)
@@ -97,6 +98,16 @@ export default function Dashboard() {
     timersRef.current.push(id)
     return id
   }
+
+  // Handle trial activation redirect from Navbar
+  useEffect(() => {
+    if (location.state?.trialActivated) {
+      setPaymentMsg({ type: 'success', text: '🎉 Your 30-day free trial is now active! Enjoy Pro features.' })
+      safeTimeout(() => setPaymentMsg(null), 6000)
+      // Clear the state so refreshing doesn't re-trigger
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, location.pathname, navigate])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -875,8 +886,8 @@ export default function Dashboard() {
                     <ul className="space-y-2.5 text-sm">
                       {[
                         { text: 'Unlimited batches', included: sub?.plan === 'pro' },
-                        { text: 'Custom watermarks', included: sub?.plan === 'pro' },
-                        { text: 'Blur detection', included: sub?.plan === 'pro' },
+                        { text: 'Offline batching', included: sub?.plan === 'pro' },
+                        { text: 'Up to 2 devices', included: sub?.plan === 'pro' },
                       ].map((f) => (
                         <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-text-muted' : 'text-gray-400')}`}>
                           {f.included

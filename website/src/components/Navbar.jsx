@@ -1,12 +1,11 @@
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { Play, Menu, X } from 'lucide-react';
+import PricingModal from './PricingModal';
 
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
-import { Play, Menu, X } from 'lucide-react'
-import PricingModal from './PricingModal'
-
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/#features' },
@@ -14,133 +13,149 @@ const NAV_LINKS = [
   { label: 'Demo', href: '/demo', external: true },
   { label: 'FAQ', href: '/#faq' },
   { label: 'Contact', href: 'mailto:batchmyphotos@gmail.com', external: true },
-]
+];
 
 export default function Navbar() {
-  const [user, setUser] = useState(null)
-  const [scrolled, setScrolled] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [pricingOpen, setPricingOpen] = useState(false)
-  const [userPlan, setUserPlan] = useState(null) // 'free' | 'pro' | null
-  const [freeTrialUsed, setFreeTrialUsed] = useState(false)
-  const [freeTrialEndAt, setFreeTrialEndAt] = useState(null)
-  const [subLoading, setSubLoading] = useState(true)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const mobileMenuRef = useRef(null)
-  const hamburgerRef = useRef(null)
-  const location = useLocation()
-  const navigate = useNavigate()
-  const isLanding = location.pathname === '/'
+  const [user, setUser] = useState(null);
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [userPlan, setUserPlan] = useState(null); // 'free' | 'pro' | null
+  const [freeTrialUsed, setFreeTrialUsed] = useState(false);
+  const [freeTrialEndAt, setFreeTrialEndAt] = useState(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const mobileMenuRef = useRef(null);
+  const hamburgerRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLanding = location.pathname === '/';
 
   // Handle hash links (e.g. /#faq) — scroll if on landing, navigate if not
   const handleHashClick = (e, href) => {
-    e.preventDefault()
-    const hash = href.split('#')[1]
+    e.preventDefault();
+    const hash = href.split('#')[1];
     if (isLanding && hash) {
-      const el = document.getElementById(hash)
-      if (el) el.scrollIntoView({ behavior: 'smooth' })
+      const el = document.getElementById(hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     } else {
-      navigate(href)
+      navigate(href);
     }
-  }
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+      setUser(session?.user ?? null);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Track scroll for background transition
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Close mobile menu on route change
-  useEffect(() => { setMobileOpen(false) }, [location.pathname])
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   // Close mobile menu on click outside
   useEffect(() => {
-    if (!mobileOpen) return
+    if (!mobileOpen) return;
     const handler = (e) => {
       if (
-        mobileMenuRef.current && !mobileMenuRef.current.contains(e.target) &&
-        hamburgerRef.current && !hamburgerRef.current.contains(e.target)
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(e.target) &&
+        hamburgerRef.current &&
+        !hamburgerRef.current.contains(e.target)
       ) {
-        setMobileOpen(false)
+        setMobileOpen(false);
       }
-    }
-    document.addEventListener('mousedown', handler)
-    document.addEventListener('touchstart', handler)
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
     return () => {
-      document.removeEventListener('mousedown', handler)
-      document.removeEventListener('touchstart', handler)
-    }
-  }, [mobileOpen])
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [mobileOpen]);
 
-  const [loggingOut, setLoggingOut] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false);
   const handleLogout = async () => {
-    if (loggingOut) return
-    setLoggingOut(true)
+    if (loggingOut) return;
+    setLoggingOut(true);
     try {
-      await supabase.auth.signOut()
-      navigate('/')
+      await supabase.auth.signOut();
+      navigate('/');
     } finally {
-      setLoggingOut(false)
+      setLoggingOut(false);
     }
-  }
+  };
 
   // Theme-driven styling
-  const { isDark: dark } = useTheme()
+  const { isDark: dark } = useTheme();
 
   // Fetch user's plan as soon as they're logged in (so it's ready before modal opens)
   useEffect(() => {
-   if (!user) { setUserPlan(null); setSubLoading(false); return }
-    let cancelled = false
-    ;(async () => {
+    if (!user) {
+      setUserPlan(null);
+      setSubLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
       try {
-        setSubLoading(true)
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session || cancelled) return
+        setSubLoading(true);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session || cancelled) return;
         const res = await fetch(`${API_BASE}/api/subscription`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
-        })
-        if (!res.ok || cancelled) return
-        const data = await res.json()
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
         if (!cancelled) {
-          setUserPlan(data?.plan || 'free')
-          setFreeTrialUsed(!!data?.free_trial_used)
-          setFreeTrialEndAt(data?.free_trial_end_at || null)
+          setUserPlan(data?.plan || 'free');
+          setFreeTrialUsed(!!data?.free_trial_used);
+          setFreeTrialEndAt(data?.free_trial_end_at || null);
         }
       } catch {
-        if (!cancelled) setUserPlan('free')
+        if (!cancelled) setUserPlan('free');
       } finally {
-        if (!cancelled) setSubLoading(false)
+        if (!cancelled) setSubLoading(false);
       }
-    })()
-    return () => { cancelled = true }
-  }, [user])
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Pricing modal: if guest → login, if logged in → create checkout directly and redirect to PayMongo
   const handlePricingUpgrade = async (couponCode = null) => {
     if (!user) {
-      setPricingOpen(false)
-      navigate('/login')
-      return
+      setPricingOpen(false);
+      navigate('/login');
+      return;
     }
     try {
-      setCheckoutLoading(true)
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      setCheckoutLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      const body = { redirect_url: window.location.origin }
-      if (couponCode) body.coupon_code = couponCode
+      const body = { redirect_url: window.location.origin };
+      if (couponCode) body.coupon_code = couponCode;
 
       const res = await fetch(`${API_BASE}/api/checkout`, {
         method: 'POST',
@@ -149,36 +164,38 @@ export default function Navbar() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-      })
+      });
 
       if (!res.ok) {
-        if (res.status === 429) throw new Error('You\'re doing that too fast. Please wait a few minutes and try again.')
-        const errData = await res.json()
-        throw new Error(errData.error || 'Failed to create checkout session')
+        if (res.status === 429) throw new Error("You're doing that too fast. Please wait a few minutes and try again.");
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to create checkout session');
       }
 
-      const { checkout_url, checkout_id } = await res.json()
-      if (checkout_id) localStorage.setItem('pending_checkout_id', checkout_id)
+      const { checkout_url, checkout_id } = await res.json();
+      if (checkout_id) localStorage.setItem('pending_checkout_id', checkout_id);
       if (checkout_url) {
-        window.location.href = checkout_url
+        window.location.href = checkout_url;
       } else {
-        throw new Error('No checkout URL returned')
+        throw new Error('No checkout URL returned');
       }
     } catch (err) {
-      setCheckoutLoading(false)
-      throw err // PricingModal will catch this and display the error inline
+      setCheckoutLoading(false);
+      throw err; // PricingModal will catch this and display the error inline
     }
-  }
+  };
 
   // Free trial activation (no payment required)
   const handleStartTrial = async () => {
     if (!user) {
-      setPricingOpen(false)
-      navigate('/login')
-      return
+      setPricingOpen(false);
+      navigate('/login');
+      return;
     }
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Not authenticated')
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
 
     const res = await fetch(`${API_BASE}/api/start-free-trial`, {
       method: 'POST',
@@ -187,24 +204,27 @@ export default function Navbar() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({}),
-    })
+    });
 
     if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.error || 'Failed to start free trial')
+      const errData = await res.json();
+      throw new Error(errData.error || 'Failed to start free trial');
     }
 
-    // Trial activated — close modal and update state
-    setPricingOpen(false)
-    setUserPlan('pro')
-    setFreeTrialUsed(true)
-  }
+    // Trial activated — close modal, update state, and go to dashboard for success feedback
+    setPricingOpen(false);
+    setUserPlan('pro');
+    setFreeTrialUsed(true);
+    navigate('/dashboard', { state: { trialActivated: true } });
+  };
 
   // Coupon validation for logged-in users
   const handleValidateCoupon = async (code) => {
-    if (!user) return { valid: false, reason: 'Not authenticated' }
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return { valid: false, reason: 'Not authenticated' }
+    if (!user) return { valid: false, reason: 'Not authenticated' };
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return { valid: false, reason: 'Not authenticated' };
 
     const res = await fetch(`${API_BASE}/api/validate-coupon`, {
       method: 'POST',
@@ -213,14 +233,15 @@ export default function Navbar() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ code }),
-    })
+    });
 
     if (!res.ok) {
-      if (res.status === 429) return { valid: false, reason: 'You\'re doing that too fast. Please wait a few minutes and try again.' }
-      return { valid: false, reason: 'Server error' }
+      if (res.status === 429)
+        return { valid: false, reason: "You're doing that too fast. Please wait a few minutes and try again." };
+      return { valid: false, reason: 'Server error' };
     }
-    return res.json()
-  }
+    return res.json();
+  };
 
   return (
     <>
@@ -235,7 +256,6 @@ export default function Navbar() {
       >
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group shrink-0">
               <img
@@ -243,14 +263,16 @@ export default function Navbar() {
                 alt="BatchMyPhotos"
                 className="w-8 h-8 rounded-lg group-hover:scale-105 transition-transform"
               />
-              <span className={`text-base font-bold tracking-tight transition-colors ${dark ? 'text-text-primary' : 'text-text-primary-light'}`}>
+              <span
+                className={`text-base font-bold tracking-tight transition-colors ${dark ? 'text-text-primary' : 'text-text-primary-light'}`}
+              >
                 BatchMyPhotos
               </span>
             </Link>
 
             {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-1">
-              {NAV_LINKS.map(link => (
+              {NAV_LINKS.map((link) =>
                 link.action === 'pricing' ? (
                   <button
                     key={link.label}
@@ -291,7 +313,7 @@ export default function Navbar() {
                     {link.label}
                   </a>
                 )
-              ))}
+              )}
             </div>
 
             {/* Desktop right side */}
@@ -301,7 +323,9 @@ export default function Navbar() {
                   <Link
                     to="/dashboard"
                     className={`text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
-                      dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                      dark
+                        ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     Dashboard
@@ -310,10 +334,14 @@ export default function Navbar() {
                     onClick={handleLogout}
                     disabled={loggingOut}
                     className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                      dark ? 'text-text-secondary bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50' : 'text-text-secondary-light bg-bg-elevated-light hover:bg-gray-200 disabled:opacity-50'
+                      dark
+                        ? 'text-text-secondary bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50'
+                        : 'text-text-secondary-light bg-bg-elevated-light hover:bg-gray-200 disabled:opacity-50'
                     }`}
                   >
-                    {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                    {loggingOut && (
+                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    )}
                     {loggingOut ? 'Logging out…' : 'Logout'}
                   </button>
                 </>
@@ -322,7 +350,9 @@ export default function Navbar() {
                   <Link
                     to="/login"
                     className={`text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
-                      dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                      dark
+                        ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                        : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                     }`}
                   >
                     Login
@@ -343,7 +373,9 @@ export default function Navbar() {
             <button
               ref={hamburgerRef}
               className={`md:hidden p-2 rounded-lg transition-colors ${
-                dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                dark
+                  ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                  : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
               }`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
@@ -360,16 +392,25 @@ export default function Navbar() {
             mobileOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
-          <div className={`px-6 pb-6 pt-2 space-y-1 ${
-            dark ? 'bg-bg-main/95 backdrop-blur-xl border-t border-white/[0.04]' : 'bg-bg-surface-light/95 backdrop-blur-xl border-t border-gray-100'
-          }`}>
-            {NAV_LINKS.map(link => (
+          <div
+            className={`px-6 pb-6 pt-2 space-y-1 ${
+              dark
+                ? 'bg-bg-main/95 backdrop-blur-xl border-t border-white/[0.04]'
+                : 'bg-bg-surface-light/95 backdrop-blur-xl border-t border-gray-100'
+            }`}
+          >
+            {NAV_LINKS.map((link) =>
               link.action === 'pricing' ? (
                 <button
                   key={link.label}
-                  onClick={() => { setPricingOpen(true); setMobileOpen(false) }}
+                  onClick={() => {
+                    setPricingOpen(true);
+                    setMobileOpen(false);
+                  }}
                   className={`block w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                    dark
+                      ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                      : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
                 >
                   {link.label}
@@ -381,7 +422,9 @@ export default function Navbar() {
                   target={link.href.startsWith('mailto') ? undefined : '_blank'}
                   rel={link.href.startsWith('mailto') ? undefined : 'noopener noreferrer'}
                   className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                    dark
+                      ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                      : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
                   onClick={() => setMobileOpen(false)}
                 >
@@ -392,33 +435,52 @@ export default function Navbar() {
                   key={link.label}
                   href={link.href}
                   className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    dark ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]' : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
+                    dark
+                      ? 'text-text-secondary hover:text-white hover:bg-white/[0.06]'
+                      : 'text-text-secondary-light hover:text-text-primary-light hover:bg-bg-elevated-light'
                   }`}
-                  onClick={(e) => { handleHashClick(e, link.href); setMobileOpen(false) }}
+                  onClick={(e) => {
+                    handleHashClick(e, link.href);
+                    setMobileOpen(false);
+                  }}
                 >
                   {link.label}
                 </a>
               )
-            ))}
+            )}
 
             <div className={`pt-3 border-t ${dark ? 'border-white/[0.04]' : 'border-gray-200/80'} space-y-2`}>
               {user ? (
                 <>
-                  <Link to="/dashboard" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}>Dashboard</Link>
-                  <button 
-                    onClick={handleLogout} 
+                  <Link
+                    to="/dashboard"
+                    className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleLogout}
                     disabled={loggingOut}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                      dark ? 'text-text-secondary hover:text-white disabled:opacity-50' : 'text-text-secondary-light hover:text-text-primary-light disabled:opacity-50'
+                      dark
+                        ? 'text-text-secondary hover:text-white disabled:opacity-50'
+                        : 'text-text-secondary-light hover:text-text-primary-light disabled:opacity-50'
                     }`}
                   >
-                    {loggingOut && <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                    {loggingOut && (
+                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    )}
                     {loggingOut ? 'Logging out…' : 'Logout'}
                   </button>
                 </>
               ) : (
                 <>
-                  <Link to="/login" className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}>Login</Link>
+                  <Link
+                    to="/login"
+                    className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${dark ? 'text-text-secondary' : 'text-text-secondary-light'}`}
+                  >
+                    Login
+                  </Link>
                   <a
                     href="/demo"
                     target="_blank"
@@ -438,7 +500,10 @@ export default function Navbar() {
       {/* Pricing Modal — opened from navbar */}
       <PricingModal
         isOpen={pricingOpen}
-        onClose={() => { setPricingOpen(false); setCheckoutLoading(false) }}
+        onClose={() => {
+          setPricingOpen(false);
+          setCheckoutLoading(false);
+        }}
         onUpgrade={handlePricingUpgrade}
         onStartTrial={handleStartTrial}
         checkoutLoading={checkoutLoading}
@@ -449,5 +514,5 @@ export default function Navbar() {
         isTrialActive={freeTrialUsed && userPlan === 'pro' && freeTrialEndAt && new Date(freeTrialEndAt) >= new Date()}
       />
     </>
-  )
+  );
 }

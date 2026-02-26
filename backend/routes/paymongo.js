@@ -1,7 +1,7 @@
 const express = require('express')
 const crypto = require('crypto')
 const { authenticateUser } = require('../middleware/auth')
-const { sendPaymentConfirmation, sendSubscriptionCancelled } = require('../services/emailService')
+const { sendPaymentConfirmation, sendSubscriptionCancelled, sendFreeTrialConfirmation } = require('../services/emailService')
 const router = express.Router()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -235,6 +235,12 @@ router.post('/start-free-trial', authenticateUser, async (req, res) => {
     }
 
     console.log(`🎉 Free trial activated for user ${user.id} until ${trialEnd.toISOString()}`)
+
+    // Send confirmation email (non-blocking)
+    sendFreeTrialConfirmation({
+      to: user.email,
+      trialEndAt: trialEnd.toISOString(),
+    }).catch(err => console.error('Free trial email error:', err.message))
 
     res.json({
       success: true,

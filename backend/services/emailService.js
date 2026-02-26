@@ -354,6 +354,30 @@ async function sendSubscriptionCancelled({ to }) {
   return sendEmail({ to, subject: 'Subscription Cancelled \u2014 BatchMyPhotos', html })
 }
 
+/**
+ * Free trial activated — sent after user starts their 30-day free trial
+ */
+async function sendFreeTrialConfirmation({ to, trialEndAt }) {
+  const expiryDate = new Date(trialEndAt).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  })
+
+  const html = wrapTemplate(
+    'Free Trial Activated', 'Your 30-day Pro trial is now active',
+    `${p('Welcome to <strong style="color: #ffffff;">BatchMyPhotos Pro</strong>! Your free trial has been activated \u2014 no payment required.')}
+     ${highlightCard([
+       { label: 'Plan', value: 'Pro \u2014 Free Trial' },
+       { label: 'Price', value: '\u20B10.00' },
+       { label: 'Valid Until', value: expiryDate },
+     ])}
+     ${p('You now have access to <strong style="color: #ffffff;">unlimited batch operations</strong> and up to <strong style="color: #ffffff;">2 devices</strong> for the next 30 days. Enjoy!')}
+     ${p('Don\'t have the app yet? Download it now from the Microsoft Store:')}
+     ${ctaButton('Download BatchMyPhotos', 'https://apps.microsoft.com/detail/9N1KKMV4NX4J')}`
+  )
+
+  return sendEmail({ to, subject: 'Free Trial Activated \u2014 BatchMyPhotos Pro', html })
+}
+
 // \u2500\u2500 Exports \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 module.exports = {
@@ -364,4 +388,5 @@ module.exports = {
   sendNewDeviceAlert,
   sendDeviceRemovedAlert,
   sendMonthlyUsageSummary,
+  sendFreeTrialConfirmation,
 }
