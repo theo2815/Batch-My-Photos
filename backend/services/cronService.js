@@ -169,10 +169,20 @@ function initCronJobs(supabaseAdmin) {
         return
       }
 
-      console.log(`Cron: Fetching emails and plans for ${usageRows.length} user(s)`)
+      // Aggregate batch_count per user to avoid sending duplicate emails.
+      // The batch_usage table stores one row per batch operation, so a user
+      // with 7 operations would have 7 rows. We sum them into one entry.
+      const aggregated = {}
+      for (const row of usageRows) {
+        if (!aggregated[row.user_id]) {
+          aggregated[row.user_id] = 0
+        }
+        aggregated[row.user_id] += row.batch_count
+      }
 
-      const userIds = usageRows.map(r => r.user_id)
-      
+      const userIds = Object.keys(aggregated)
+      console.log(`Cron: Fetching emails and plans for ${userIds.length} unique user(s)`)
+
       // Fetch all emails in bulk
       const emailMap = await getEmailsForUsers(supabaseAdmin, userIds)
 
@@ -194,16 +204,16 @@ function initCronJobs(supabaseAdmin) {
       }
 
       let emailsSent = 0
-      for (const row of usageRows) {
-        const email = emailMap[row.user_id]
+      for (const [userId, totalBatchCount] of Object.entries(aggregated)) {
+        const email = emailMap[userId]
         if (!email) continue
 
-        const plan = planMap[row.user_id] || 'free'
+        const plan = planMap[userId] || 'free'
 
         await sendMonthlyUsageSummary({
           to: email,
           monthLabel,
-          batchesUsed: row.batch_count,
+          batchesUsed: totalBatchCount,
           plan,
         }).catch(() => {})
         emailsSent++
