@@ -21,6 +21,7 @@ function SettingsPanel({
   outputDir, 
   blurDetectionEnabled,
   blurSensitivity,
+  blurCategories,
   folderPath,
   // Props from parent
   validationError,
@@ -392,22 +393,10 @@ function SettingsPanel({
         />
       </div>
 
-      {/* Blur Detection - COMING SOON */}
-      <div className="setting-row blur-detection-row" style={{ opacity: 0.5, pointerEvents: 'none', position: 'relative' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Blur Detection */}
+      <div className="setting-row blur-detection-row">
+        <label>
           <ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:
-          <span style={{
-            fontSize: '10px',
-            padding: '2px 8px',
-            borderRadius: '4px',
-            backgroundColor: 'rgb(99 102 241 / 0.2)',
-            color: 'rgb(165 180 252)',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            Coming Soon
-          </span>
           {isAnalyzingBlur && <Loader2 size={14} className="settings-loading-spinner" />}
         </label>
         <label className="toggle-switch">
@@ -417,7 +406,6 @@ function SettingsPanel({
             onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
             role="switch"
             aria-checked={blurDetectionEnabled}
-            disabled
           />
           <span className="toggle-track">
             <span className="toggle-label on">On</span>
@@ -428,16 +416,16 @@ function SettingsPanel({
       </div>
 
       {blurDetectionEnabled && (
-        <div className="setting-row blur-sensitivity-row" style={{ opacity: 0.5, pointerEvents: 'none' }}>
-          <label>Sensitivity:</label>
+        <div className="setting-row blur-sensitivity-row">
+          <label>Categories:</label>
           <button
             className="change-sensitivity-btn"
             onClick={onOpenBlurModal}
-            disabled={true}
-            title="Feature coming soon"
+            disabled={isAnalyzingBlur}
+            title="Change which blur categories to flag"
           >
             <span className="change-sensitivity-label">
-              {blurSensitivity === 'strict' ? 'Strict' : blurSensitivity === 'lenient' ? 'Lenient' : 'Moderate'}
+              {Array.isArray(blurCategories) ? blurCategories.length : 3} of 3 types
             </span>
             <Pencil size={12} />
           </button>

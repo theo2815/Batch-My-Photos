@@ -218,16 +218,59 @@ const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 // ============================================================================
 
 /**
- * Number of images to send per batch to the AI blur detection service.
- * MobileNetV3-Small processes 20 images efficiently in a single forward pass.
- */
-const BLUR_AI_BATCH_SIZE = 20;
-
-/**
- * Timeout in milliseconds for each batch request to the AI service.
- * 30 seconds is generous for local inference; increase for cloud deployment.
+ * Timeout in milliseconds for each per-image request to the ai-api blur
+ * classifier. 30 seconds is generous for local inference; increase for a
+ * remote/cloud ai-api deployment.
  */
 const BLUR_AI_TIMEOUT_MS = 30000;
+
+/**
+ * Long edge (px) to resize each image to before uploading to the ai-api blur
+ * classifier. The CNN sees 224px internally, but the server's single /classify
+ * path downscales originals to 1280px first — so we match 1280 to preserve
+ * classification parity with that path. (512px was a Laplacian-era number; it
+ * discards the high-frequency detail motion/defocus blur is judged on and can
+ * flip a blurry frame to "sharp".) Resizing also dodges the server's 4096px /
+ * 10MB single-image rejection and cuts upload bytes ~90%.
+ */
+const BLUR_AI_MAX_DIMENSION = 1280;
+
+/**
+ * JPEG quality for the resized upload. The classifier was trained without any
+ * JPEG-compression augmentation, so heavy artifacts (q70 blocking/ringing) are
+ * out-of-distribution and can be misread as blur. q90 is visually lossless yet
+ * still small.
+ */
+const BLUR_AI_JPEG_QUALITY = 90;
+
+/**
+ * Sharp resize-pool size for the pre-upload resize phase. Sharp runs one libvips
+ * thread per call (sharp.concurrency(1) in the service), so we cap parallelism
+ * here. Leave one core free for the streaming/decode work.
+ */
+const BLUR_AI_RESIZE_CONCURRENCY = Math.max(2, os.cpus().length - 1);
+
+/**
+ * Images per /blur/classify/stream request. Must be ≤ the server's
+ * STREAM_CLASSIFY_MAX_SIZE (500). Kept at 200 to bound server memory (it buffers
+ * the whole request before streaming) and to limit rework if a stream drops.
+ */
+const BLUR_AI_STREAM_BATCH_SIZE = 200;
+
+/**
+ * Concurrent /blur/classify/stream requests in flight. Deliberately low: the
+ * server owns inference parallelism via its own semaphore, so firing many
+ * concurrent requests only oversubscribes its CPU. Decoupled from CPU core count
+ * on purpose (unlike BLUR_CONCURRENCY, which drives local Sharp work).
+ */
+const BLUR_AI_STREAM_CONCURRENCY = 2;
+
+/**
+ * Timeout (ms) for one /blur/classify/stream request (a chunk of up to
+ * BLUR_AI_STREAM_BATCH_SIZE images). Larger than the per-image BLUR_AI_TIMEOUT_MS
+ * because a chunk does proportionally more work.
+ */
+const BLUR_AI_STREAM_TIMEOUT_MS = 120000;
 
 module.exports = {
   UV_THREADPOOL_SIZE,
@@ -249,8 +292,13 @@ module.exports = {
   BLUR_THRESHOLDS,
   BLUR_EDGE_THRESHOLDS,
   BLUR_EDGE_PIXEL_THRESHOLD,
-  BLUR_AI_BATCH_SIZE,
   BLUR_AI_TIMEOUT_MS,
+  BLUR_AI_MAX_DIMENSION,
+  BLUR_AI_JPEG_QUALITY,
+  BLUR_AI_RESIZE_CONCURRENCY,
+  BLUR_AI_STREAM_BATCH_SIZE,
+  BLUR_AI_STREAM_CONCURRENCY,
+  BLUR_AI_STREAM_TIMEOUT_MS,
   DEVICE_LIMIT_PRO,
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,

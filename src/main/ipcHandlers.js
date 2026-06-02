@@ -884,7 +884,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * When AI mode is enabled, sends images to the Python FastAPI server.
    * If the AI service is unavailable, returns an error (no fallback).
    */
-  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate' }) => {
+  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null }) => {
     try {
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -896,6 +896,12 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       const validThresholds = ['strict', 'moderate', 'lenient'];
       const safeThreshold = validThresholds.includes(threshold) ? threshold : 'moderate';
 
+      // Validate categories: only the trained class names are allowed.
+      const VALID_CATEGORIES = ['motion_blurred', 'defocused_blurred', 'defocused_object_portrait'];
+      const safeCategories = Array.isArray(categories)
+        ? categories.filter(c => VALID_CATEGORIES.includes(c))
+        : null;
+
       // Read directory and group files
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
@@ -906,6 +912,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         fileGroups,
         folderPath,
         safeThreshold,
+        safeCategories,
         (progress) => {
           event.sender.send('blur-progress', progress);
         }

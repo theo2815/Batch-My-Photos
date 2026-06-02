@@ -1,3 +1,0 @@
-# This directory stores trained model weights.
-# Model files (.pt) are gitignored due to their large size.
-# Run training/train.py to generate best_model.pt

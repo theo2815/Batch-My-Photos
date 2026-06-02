@@ -124,10 +124,10 @@ const features = {
   BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', false),
 
   /**
-   * Enable the AI-powered blur detection service.
-   * When enabled, blur analysis is sent to the Python AI service (FastAPI)
+   * Enable the AI-powered blur detection backend.
+   * When enabled, blur analysis is sent to the ai-api blur classifier
    * instead of using the local Laplacian-based algorithm.
-   * Set to false to disable blur detection entirely when AI service is down.
+   * Set to false to use the local Laplacian backend (offline baseline).
    */
   BLUR_AI_ENABLED: envBool('BATCH_BLUR_AI_ENABLED', false),
 
@@ -141,11 +141,19 @@ const features = {
   HWID_BINDING_ENABLED: envBool('BATCH_HWID_BINDING_ENABLED', true),
 
   /**
-   * URL of the AI blur detection service.
-   * Defaults to local FastAPI server during development.
-   * Will be changed to production backend URL when deployed.
+   * Base URL of the QuickPitik ai-api (the desktop is the one client allowed to
+   * call ai-api directly). The blur path appends /api/v1/blur/classify.
+   * Defaults to a local ai-api in development; set BATCH_BLUR_AI_URL to a
+   * deployed ai-api host for production.
    */
   BLUR_AI_URL: process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
+
+  /**
+   * API key sent as X-API-Key to ai-api. Empty by default — a local ai-api in
+   * DEBUG mode accepts requests without a key. For a deployed ai-api, set
+   * BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
+   */
+  BLUR_AI_API_KEY: process.env.BATCH_BLUR_AI_API_KEY || '',
 };
 
 // ============================================================================

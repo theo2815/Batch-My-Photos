@@ -264,8 +264,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [threshold='moderate'] - Sensitivity: 'strict' | 'moderate' | 'lenient'
    * @returns {Promise<Object>} { success, blurResults, totalAnalyzed, blurryCount, totalGroups }
    */
-  analyzeBlur: (folderPath, threshold = 'moderate') =>
-    ipcRenderer.invoke('analyze-blur', { folderPath, threshold }),
+  analyzeBlur: (folderPath, threshold = 'moderate', categories = null) =>
+    ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories }),
 
   /**
    * Listen for blur analysis progress updates

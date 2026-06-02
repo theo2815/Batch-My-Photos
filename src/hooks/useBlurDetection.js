@@ -21,15 +21,20 @@ function formatEta(seconds) {
  * @param {boolean} params.blurDetectionEnabled - Whether blur detection is toggled on
  * @param {string} params.blurSensitivity - Sensitivity preset: 'strict' | 'moderate' | 'lenient'
  */
-export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity }) {
-  const [blurResults, setBlurResults] = useState(null);     // Full results map: { baseName: { score, isBlurry, analyzedFile } }
+export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity, blurCategories }) {
+  const [blurResults, setBlurResults] = useState(null);     // Full results map: { baseName: { score, isBlurry, analyzedFile, predictedClass } }
   const [blurProgress, setBlurProgress] = useState(null);   // { current, total }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [unflaggedGroups, setUnflaggedGroups] = useState(new Set()); // User-unflagged base names
   const [aiUnavailable, setAiUnavailable] = useState(false); // AI service down
 
-  // Track the last analyzed folder + sensitivity to avoid redundant analyses
-  const lastAnalysisRef = useRef({ folderPath: null, sensitivity: null });
+  // Cache discriminator: stable serialization of (sensitivity, categories)
+  // Re-analysis runs when this changes between calls.
+  const categoriesKey = Array.isArray(blurCategories) ? [...blurCategories].sort().join(',') : '';
+  const analysisKey = `${blurSensitivity}|${categoriesKey}`;
+
+  // Track the last analyzed folder + analysisKey to avoid redundant analyses
+  const lastAnalysisRef = useRef({ folderPath: null, key: null });
 
   // Track analysis start time for ETA computation
   const analysisStartTimeRef = useRef(null);
@@ -82,10 +87,10 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     // immune to React batching race conditions (unlike state).
     if (analysisInFlightRef.current) return;
 
-    // Skip if we already analyzed this folder with the same sensitivity
+    // Skip if we already analyzed this folder with the same sensitivity + categories
     if (
       lastAnalysisRef.current.folderPath === folderPath &&
-      lastAnalysisRef.current.sensitivity === blurSensitivity
+      lastAnalysisRef.current.key === analysisKey
     ) {
       return;
     }
@@ -97,11 +102,11 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     analysisStartTimeRef.current = Date.now();
 
     try {
-      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity);
+      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories);
 
       if (result.success) {
         setBlurResults(result.blurResults);
-        lastAnalysisRef.current = { folderPath, sensitivity: blurSensitivity };
+        lastAnalysisRef.current = { folderPath, key: analysisKey };
       } else if (result.aiUnavailable) {
         console.error('[BLUR] AI service unavailable:', result.error);
         setAiUnavailable(true);
@@ -119,7 +124,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
       setBlurProgress(null);
       analysisStartTimeRef.current = null;
     }
-  }, [folderPath, blurDetectionEnabled, blurSensitivity]);
+  }, [folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, analysisKey]);
 
   /**
    * Toggle a group's blur flag (un-flag or re-flag).
@@ -146,17 +151,17 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     setIsAnalyzing(false);
     setUnflaggedGroups(new Set());
     setAiUnavailable(false);
-    lastAnalysisRef.current = { folderPath: null, sensitivity: null };
+    lastAnalysisRef.current = { folderPath: null, key: null };
     analysisInFlightRef.current = false;
   }, []);
 
   /**
    * Clear only the analysis cache so the next runBlurAnalysis() call
-   * re-runs even if folder + sensitivity haven't changed.
+   * re-runs even if folder + sensitivity + categories haven't changed.
    * Used when the user explicitly clicks "Start Analysis" in the modal.
    */
   const clearAnalysisCache = useCallback(() => {
-    lastAnalysisRef.current = { folderPath: null, sensitivity: null };
+    lastAnalysisRef.current = { folderPath: null, key: null };
   }, []);
 
   return {

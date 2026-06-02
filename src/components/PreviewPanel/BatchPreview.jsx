@@ -8,9 +8,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle, ScanEye, Undo2, CheckCircle, Loader2 } from 'lucide-react';
-import { generateBatchFolderName } from '../../utils/batchNaming';
 import ImagePreviewModal from '../Modals/ImagePreviewModal';
 import './PreviewPanel.css';
+// Default import: the shared CJS module exposes its exports as the default
+// binding under both Vite dev (esbuild interop) and the Rollup build
+// (commonjsOptions). A named import works only in build, not dev — hence this.
+import batchNaming from '../../utils/batchNaming';
 
 const FILES_PER_LOAD = 10; // Number of files to show per "Load More" click
 const BATCHES_PER_LOAD = 10; // Number of batches to show per "Load More" click
@@ -125,7 +128,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
                 onClick={() => onToggleBatch(batch.batchNumber)}
               >
                 <span className="batch-name">
-                  {generateBatchFolderName(outputPrefix, batch.batchNumber - 1, batchDetails.length)}
+                  {batchNaming.generateBatchFolderName(outputPrefix, batch.batchNumber - 1, batchDetails.length)}
                 </span>
                 <span className="batch-count">{batch.fileCount} files</span>
                 <span className="expand-icon">
@@ -357,6 +360,35 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
                   </span>
                 )}
                 <span className="blurry-name">{baseName}</span>
+                {(() => {
+                  const badgeClass = result?.bestBlurClass || result?.predictedClass;
+                  if (!badgeClass || badgeClass === 'sharp') return null;
+                  const label =
+                    badgeClass === 'motion_blurred' ? 'Motion' :
+                    badgeClass === 'defocused_blurred' ? 'Defocused' :
+                    badgeClass === 'defocused_object_portrait' ? 'Subject blur' :
+                    null;
+                  if (!label) return null;
+                  return (
+                    <span
+                      className="blurry-category-badge"
+                      style={{
+                        fontSize: '10px',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgb(99 102 241 / 0.2)',
+                        color: 'rgb(165 180 252)',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={`${badgeClass} (${((result?.bestBlurProbability ?? 0) * 100).toFixed(0)}%)`}
+                    >
+                      {label}
+                    </span>
+                  );
+                })()}
                 <span className="blurry-score">Score: {result?.score >= 0 ? result.score.toFixed(1) : 'N/A'}</span>
                 <button
                   className="unflag-btn"

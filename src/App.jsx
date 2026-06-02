@@ -78,13 +78,14 @@ function App() {
     selectedPresetName, refreshingField, setRefreshingField,
     setSelectedPresetName, resetSettings, handleSettingsChange,
     handleSelectOutputFolder,
-    blurDetectionEnabled, blurSensitivity,
+    blurDetectionEnabled, blurSensitivity, blurCategories,
   } = settings;
 
   const blurDetection = useBlurDetection({
     folderPath,
     blurDetectionEnabled,
     blurSensitivity,
+    blurCategories,
   });
   const {
     blurryGroups, isAnalyzing: isAnalyzingBlur,
@@ -203,13 +204,21 @@ function App() {
   // Check authentication on mount
   useEffect(() => {
     async function checkAuth() {
-      const authStatus = await window.electronAPI.authCheckStatus();
-      setIsAuthenticated(authStatus.isAuthenticated);
-      setUser(authStatus.user);
-      setSubscription(authStatus.subscription);
-      setIsOffline(authStatus.offline || false);
-      setSessionExpired(authStatus.sessionExpired || false);
-      setAuthLoading(false);
+      try {
+        const authStatus = await window.electronAPI.authCheckStatus();
+        setIsAuthenticated(authStatus.isAuthenticated);
+        setUser(authStatus.user);
+        setSubscription(authStatus.subscription);
+        setIsOffline(authStatus.offline || false);
+        setSessionExpired(authStatus.sessionExpired || false);
+      } catch (err) {
+        // IPC rejected (rate-limit or bridge failure) — fall back to the login
+        // screen instead of hanging on the loading spinner forever.
+        console.error('[Auth] checkAuth failed:', err);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
+      }
     }
     checkAuth();
   }, []);
@@ -294,11 +303,12 @@ function App() {
 
     // Re-analyze on sensitivity change, folder change, or explicit request (analysisRequestId)
     runBlurAnalysis();
-  }, [blurDetectionEnabled, blurSensitivity, folderPath, analysisRequestId, runBlurAnalysis, resetBlurState]);
+  }, [blurDetectionEnabled, blurSensitivity, blurCategories, folderPath, analysisRequestId, runBlurAnalysis, resetBlurState]);
 
-  // Called when user clicks "Start Analysis" in the sensitivity modal
-  const handleConfirmBlurAnalysis = useCallback((selectedSensitivity) => {
-    handleSettingsChange('blurSensitivity', selectedSensitivity);
+  // Called when user clicks "Start Analysis" in the blur-detection modal
+  const handleConfirmBlurAnalysis = useCallback(({ categories, sensitivity }) => {
+    handleSettingsChange('blurCategories', categories);
+    handleSettingsChange('blurSensitivity', sensitivity);
     setShowBlurSensitivityModal(false);
     clearAnalysisCache();
     setAnalysisRequestId(id => id + 1);
@@ -563,7 +573,7 @@ function App() {
               previewResults={previewResults}
               isRefreshingPreview={isRefreshingPreview}
               refreshingField={refreshingField}
-              settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity }}
+              settings={{ maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity, blurCategories }}
               validationError={validationError}
               expandedBatch={expandedBatch}
               selectedPresetName={selectedPresetName}
@@ -729,6 +739,7 @@ function App() {
 
       <BlurSensitivityModal
         isOpen={showBlurSensitivityModal}
+        currentCategories={blurCategories}
         currentSensitivity={blurSensitivity}
         onStart={handleConfirmBlurAnalysis}
         onCancel={handleDismissBlurModal}

@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 
+const DEFAULT_BLUR_CATEGORIES = ['motion_blurred', 'defocused_blurred', 'defocused_object_portrait'];
+
 /**
  * Hook for managing batch settings (maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, presets, blur detection).
  */
@@ -13,6 +15,7 @@ export function useSettings() {
   const [refreshingField, setRefreshingField] = useState(null);
   const [blurDetectionEnabled, setBlurDetectionEnabled] = useState(false);
   const [blurSensitivity, setBlurSensitivity] = useState('moderate');
+  const [blurCategories, setBlurCategories] = useState(DEFAULT_BLUR_CATEGORIES);
 
   const resetSettings = useCallback(() => {
     setMaxFilesPerBatch('500');
@@ -24,6 +27,7 @@ export function useSettings() {
     setRefreshingField(null);
     setBlurDetectionEnabled(false);
     setBlurSensitivity('moderate');
+    setBlurCategories(DEFAULT_BLUR_CATEGORIES);
   }, []);
 
   const handleSettingsChange = useCallback((key, value) => {
@@ -74,6 +78,9 @@ export function useSettings() {
       case 'blurSensitivity':
         setBlurSensitivity(value);
         break;
+      case 'blurCategories':
+        setBlurCategories(Array.isArray(value) ? value : DEFAULT_BLUR_CATEGORIES);
+        break;
       default:
         break;
     }
@@ -98,6 +105,7 @@ export function useSettings() {
     refreshingField,
     blurDetectionEnabled,
     blurSensitivity,
+    blurCategories,
     setRefreshingField,
     setSelectedPresetName,
     resetSettings,

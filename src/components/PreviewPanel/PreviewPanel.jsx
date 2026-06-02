@@ -48,7 +48,7 @@ function PreviewPanel({
     onProceed,
     onReset
 }) {
-  const { maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity } = settings;
+  const { maxFilesPerBatch, outputPrefix, batchMode, sortBy, outputDir, blurDetectionEnabled, blurSensitivity, blurCategories } = settings;
   
   return (
     <div className="preview-container">
@@ -78,6 +78,7 @@ function PreviewPanel({
         outputDir={outputDir}
         blurDetectionEnabled={blurDetectionEnabled}
         blurSensitivity={blurSensitivity}
+        blurCategories={blurCategories}
         folderPath={folderPath}
         validationError={validationError}
         isRefreshingPreview={isRefreshingPreview}
