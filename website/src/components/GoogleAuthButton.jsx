@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Loader2 } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 
 export default function GoogleAuthButton({ text = "Sign in with Google", className = "", isDesktop = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const { isDark } = useTheme()
 
   const handleGoogleLogin = async () => {
     try {
@@ -36,11 +34,7 @@ export default function GoogleAuthButton({ text = "Sign in with Google", classNa
           type="button"
           onClick={handleGoogleLogin}
           disabled={loading}
-          className={`relative w-full flex items-center justify-center gap-3 rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200
-            ${isDark
-              ? 'border-white/[0.08] bg-white/[0.04] text-white hover:bg-white/[0.08] focus-visible:ring-primary/50'
-              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus-visible:ring-gray-200'
-            } focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+          className={`relative w-full flex items-center justify-center gap-3 rounded-xl border border-border-subtle bg-bg-elevated text-text-primary hover:bg-bg-surface focus-visible:ring-primary/50 px-4 py-3 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin text-primary" />

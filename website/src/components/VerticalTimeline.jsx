@@ -3,7 +3,6 @@ import { motion, useScroll } from 'framer-motion'
 import { useTheme } from '../context/ThemeContext'
 
 export default function VerticalTimeline({ content }) {
-  const { isDark } = useTheme()
   const containerRef = useRef(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -26,7 +25,7 @@ export default function VerticalTimeline({ content }) {
   return (
     <div ref={containerRef} className="relative mx-auto max-w-7xl px-6 lg:px-8">
       {/* ─── Timeline Track (background line) ─── */}
-      <div className={`absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 hidden lg:block ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+      <div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 hidden lg:block bg-border-subtle" />
 
       {/* ─── Timeline Track (progress fill) ─── */}
       <motion.div
@@ -34,8 +33,8 @@ export default function VerticalTimeline({ content }) {
         style={{
           height: '100%',
           scaleY: scrollYProgress,
-          background: 'linear-gradient(180deg, #2E5BFF 0%, #00D1FF 50%, #2E5BFF 100%)',
-          filter: 'drop-shadow(0 0 8px rgba(46,91,255,0.5))',
+          background: 'linear-gradient(180deg, var(--color-accent) 0%, var(--color-deep-ember) 50%, var(--color-accent) 100%)',
+          filter: 'drop-shadow(0 0 8px rgba(255,122,69,0.5))',
         }}
       />
 
@@ -71,10 +70,10 @@ export default function VerticalTimeline({ content }) {
                 <div
                   className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
                     isActive
-                      ? 'bg-primary border-primary shadow-[0_0_16px_rgba(46,91,255,0.7)]'
+                      ? 'bg-primary border-primary shadow-[0_0_16px_rgba(255,122,69,0.55)]'
                       : isPast
                         ? 'bg-primary/80 border-primary/60'
-                        : isDark ? 'bg-bg-surface border-text-muted' : 'bg-white border-gray-300'
+                        : 'bg-bg-surface border-text-muted'
                   }`}
                 />
               </motion.div>
@@ -84,7 +83,7 @@ export default function VerticalTimeline({ content }) {
             <div className="absolute left-2 top-1/2 -translate-y-1/2 lg:hidden">
               <div
                 className={`w-2.5 h-2.5 rounded-full transition-all duration-500 ${
-                  isPast || isActive ? 'bg-primary' : isDark ? 'bg-text-muted' : 'bg-gray-300'
+                  isPast || isActive ? 'bg-primary' : 'bg-text-muted'
                 }`}
               />
             </div>
@@ -115,7 +114,6 @@ export default function VerticalTimeline({ content }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function TimelineText({ item, index, align, slideFrom, className = '' }) {
-  const { isDark } = useTheme()
   const x = slideFrom === 'left' ? -40 : 40
   return (
     <motion.div
@@ -127,14 +125,14 @@ function TimelineText({ item, index, align, slideFrom, className = '' }) {
       transition={{ duration: 0.6, ease: 'easeOut' }}
       viewport={{ once: false, amount: 0.3 }}
     >
-      <span className="text-xs font-bold tracking-widest uppercase text-accent mb-3">
+      <span className="font-mono text-xs font-semibold tracking-widest uppercase text-accent mb-3">
         Step {index + 1}
       </span>
-      <h3 className={`text-2xl sm:text-3xl font-bold mb-4 leading-tight ${isDark ? 'text-text-primary' : 'text-text-primary-light'}`}>
+      <h3 className="font-display text-2xl sm:text-3xl font-bold mb-4 leading-tight text-text-primary">
         {item.title.replace(/^\d+\.\s*/, '')}
       </h3>
       <p
-        className={`text-base sm:text-lg leading-relaxed max-w-md ${isDark ? 'text-text-secondary' : 'text-text-secondary-light'} ${
+        className={`text-base sm:text-lg leading-relaxed max-w-md text-text-secondary ${
           align === 'right' ? 'lg:ml-auto' : ''
         }`}
       >
@@ -155,7 +153,7 @@ function TimelineCard({ item, slideFrom, className = '' }) {
       transition={{ duration: 0.7, ease: 'easeOut', delay: 0.1 }}
       viewport={{ once: false, amount: 0.3 }}
     >
-      <div className={`w-full h-80 sm:h-96 lg:h-[32rem] rounded-2xl overflow-hidden border ${isDark ? 'border-white/[0.06] shadow-[0_0_40px_rgba(0,0,0,0.3)]' : 'border-gray-200 shadow-lg shadow-gray-200/50'}`}>
+      <div className={`w-full h-80 sm:h-96 lg:h-[32rem] rounded-2xl overflow-hidden border border-border-subtle ${isDark ? 'shadow-[0_0_40px_rgba(0,0,0,0.3)]' : 'shadow-lg shadow-black/5'}`}>
         {item.content}
       </div>
     </motion.div>

@@ -108,7 +108,7 @@ export default function Settings() {
 
 
   /* ── Theme (from context) ── */
-  const { theme, setTheme, isDark } = useTheme()
+  const { theme, setTheme } = useTheme()
 
   /* ── Derived ── */
   const initials = user?.user_metadata?.full_name
@@ -118,19 +118,19 @@ export default function Settings() {
   /* ── Loading state ── */
   if (loading) {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
+      <div className="min-h-screen bg-bg-main flex items-center justify-center">
         <Loader2 className="w-6 h-6 text-accent animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className={`relative min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} overflow-hidden`}>
+    <div className="relative min-h-screen bg-bg-main overflow-hidden">
       {/* ── Ambient orbs ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className={`hero-orb-1 absolute top-20 -left-40 w-[500px] h-[500px] rounded-full blur-3xl ${isDark ? 'bg-primary/10' : 'bg-indigo-200/30'}`} />
-        <div className={`hero-orb-2 absolute bottom-20 -right-40 w-[500px] h-[500px] rounded-full blur-3xl ${isDark ? 'bg-purple-600/10' : 'bg-accent/10'}`} />
-        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(ellipse_at_top,rgba(46,91,255,0.04)_0%,transparent_50%)]' : 'bg-[radial-gradient(ellipse_at_top,rgba(46,91,255,0.03)_0%,transparent_50%)]'}`} />
+        <div className="hero-orb-1 absolute top-20 -left-40 w-[500px] h-[500px] rounded-full blur-3xl bg-primary/10" />
+        <div className="hero-orb-2 absolute bottom-20 -right-40 w-[500px] h-[500px] rounded-full blur-3xl bg-purple-600/10" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.04)_0%,transparent_50%)]" />
       </div>
 
       {/* ── Content ── */}
@@ -140,7 +140,7 @@ export default function Settings() {
         <div className="auth-card-in mb-10">
           <button
             onClick={() => navigate('/dashboard')}
-            className={`inline-flex items-center gap-1.5 text-sm ${isDark ? 'text-text-muted hover:text-accent' : 'text-gray-500 hover:text-primary'} transition-colors mb-5 cursor-pointer group`}
+            className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-accent transition-colors mb-5 cursor-pointer group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to Dashboard
@@ -150,8 +150,8 @@ export default function Settings() {
               {initials}
             </div>
             <div>
-              <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} tracking-tight`}>Settings</h1>
-              <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-500'} mt-0.5`}>{user?.email}</p>
+              <h1 className="text-2xl font-display font-bold text-text-primary tracking-tight">Settings</h1>
+              <p className="text-sm text-text-muted mt-0.5">{user?.email}</p>
             </div>
           </div>
         </div>
@@ -160,22 +160,18 @@ export default function Settings() {
             EDIT PROFILE
            ═══════════════════════════════════════════════════════════════════ */}
         <section id="profile" className="auth-card-in mb-6" style={{ animationDelay: '0.05s' }}>
-          <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
+          <div className="rounded-2xl border border-border-subtle bg-bg-elevated p-6 sm:p-7">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                  <User className={`w-4 h-4 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
+                <div className="w-8 h-8 rounded-lg bg-bg-surface flex items-center justify-center">
+                  <User className="w-4 h-4 text-text-secondary" />
                 </div>
-                <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Edit Profile</h2>
+                <h2 className="text-[15px] font-display font-bold text-text-primary">Edit Profile</h2>
               </div>
               {!isEditingProfile && (
                 <button
                   onClick={handleEditClick}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                    isDark 
-                      ? 'border-white/[0.1] text-accent hover:bg-white/[0.05]' 
-                      : 'border-gray-200 text-primary hover:bg-gray-50'
-                  }`}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-border-subtle text-accent hover:bg-bg-surface"
                 >
                   Edit
                 </button>
@@ -195,12 +191,12 @@ export default function Settings() {
 
             <form onSubmit={handleProfileSave} className="space-y-5">
               <div>
-                <label htmlFor="displayName" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label htmlFor="displayName" className="block text-sm font-medium text-text-secondary mb-2">
                   Display name
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <User className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <User className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     id="displayName"
@@ -209,31 +205,27 @@ export default function Settings() {
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Jane Doe"
                     disabled={!isEditingProfile}
-                    className={`auth-input block w-full rounded-xl border ${
-                      isDark 
-                        ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-text-muted disabled:opacity-50 disabled:cursor-default' 
-                        : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-default'
-                    } py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all`}
+                    className="auth-input block w-full rounded-xl border border-border-subtle bg-bg-elevated text-text-primary placeholder:text-text-muted disabled:opacity-50 disabled:cursor-default py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
                   Email address
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <Mail className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <Mail className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     type="email"
                     value={user?.email || ''}
                     disabled
-                    className={`block w-full rounded-xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02] text-text-muted' : 'border-gray-200 bg-gray-100 text-gray-400'} py-3 pl-10 pr-4 text-sm cursor-not-allowed`}
+                    className="block w-full rounded-xl border border-border-subtle bg-bg-elevated text-text-muted py-3 pl-10 pr-4 text-sm cursor-not-allowed"
                   />
                 </div>
-                <p className={`mt-1.5 text-xs ${isDark ? 'text-text-muted' : 'text-gray-400'}`}>To protect your account, email cannot be changed.</p>
+                <p className="mt-1.5 text-xs text-text-muted">To protect your account, email cannot be changed.</p>
               </div>
 
               {isEditingProfile && (
@@ -250,11 +242,7 @@ export default function Settings() {
                     type="button"
                     onClick={handleCancelClick}
                     disabled={profileSaving}
-                    className={`px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
-                      isDark 
-                        ? 'border-white/[0.1] text-text-secondary hover:bg-white/[0.05]' 
-                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className="px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer border-border-subtle text-text-secondary hover:bg-bg-surface"
                   >
                     Cancel
                   </button>
@@ -268,12 +256,12 @@ export default function Settings() {
             CHANGE PASSWORD
            ═══════════════════════════════════════════════════════════════════ */}
         <section id="password" className="auth-card-in mb-6" style={{ animationDelay: '0.1s' }}>
-          <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
+          <div className="rounded-2xl border border-border-subtle bg-bg-elevated p-6 sm:p-7">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                <Lock className={`w-4 h-4 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
+              <div className="w-8 h-8 rounded-lg bg-bg-surface flex items-center justify-center">
+                <Lock className="w-4 h-4 text-text-secondary" />
               </div>
-              <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Change Password</h2>
+              <h2 className="text-[15px] font-display font-bold text-text-primary">Change Password</h2>
             </div>
 
             {pwMsg && (
@@ -290,12 +278,12 @@ export default function Settings() {
             <form onSubmit={handlePasswordSave} className="space-y-5">
               {/* New password */}
               <div>
-                <label htmlFor="newPassword" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-text-secondary mb-2">
                   New password
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <Lock className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <Lock className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     id="newPassword"
@@ -304,12 +292,12 @@ export default function Settings() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-text-muted' : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-11 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all`}
+                    className="auth-input block w-full rounded-xl border border-border-subtle bg-bg-elevated text-text-primary placeholder:text-text-muted py-3 pl-10 pr-11 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNew(!showNew)}
-                    className={`absolute inset-y-0 right-0 flex items-center pr-3.5 ${isDark ? 'text-text-muted hover:text-text-secondary' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-text-muted hover:text-text-secondary transition-colors"
                   >
                     {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -319,7 +307,7 @@ export default function Settings() {
                   <div className="mt-2.5 space-y-1.5">
                     <div className="flex gap-1">
                       {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.color : isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.color : 'bg-bg-elevated'}`} />
                       ))}
                     </div>
                     <p className={`text-xs ${strength.level <= 1 ? 'text-red-400' : strength.level <= 2 ? 'text-amber-400' : strength.level <= 3 ? 'text-accent' : 'text-emerald-400'}`}>
@@ -331,12 +319,12 @@ export default function Settings() {
 
               {/* Confirm password */}
               <div>
-                <label htmlFor="confirmPw" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label htmlFor="confirmPw" className="block text-sm font-medium text-text-secondary mb-2">
                   Confirm new password
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <Lock className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <Lock className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     id="confirmPw"
@@ -345,18 +333,18 @@ export default function Settings() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'bg-white/[0.04] text-white placeholder:text-text-muted' : 'bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-11 text-sm focus:outline-none focus:ring-2 transition-all ${
+                    className={`auth-input block w-full rounded-xl border bg-bg-elevated text-text-primary placeholder:text-text-muted py-3 pl-10 pr-11 text-sm focus:outline-none focus:ring-2 transition-all ${
                       confirmPassword && confirmPassword !== newPassword
                         ? 'border-red-500/40 focus:border-red-500/50 focus:ring-red-500/20'
                         : confirmPassword && confirmPassword === newPassword
                           ? 'border-emerald-500/40 focus:border-emerald-500/50 focus:ring-emerald-500/20'
-                          : isDark ? 'border-white/[0.08] focus:border-primary/50 focus:ring-primary/20' : 'border-gray-300 focus:border-primary/50 focus:ring-primary/20'
+                          : 'border-border-subtle focus:border-primary/50 focus:ring-primary/20'
                     }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
-                    className={`absolute inset-y-0 right-0 flex items-center pr-3.5 ${isDark ? 'text-text-muted hover:text-text-secondary' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-text-muted hover:text-text-secondary transition-colors"
                   >
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -382,15 +370,15 @@ export default function Settings() {
             THEME
            ═══════════════════════════════════════════════════════════════════ */}
         <section id="preferences" className="auth-card-in mb-6" style={{ animationDelay: '0.2s' }}>
-          <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} p-6 sm:p-7`}>
+          <div className="rounded-2xl border border-border-subtle bg-bg-elevated p-6 sm:p-7">
             <div className="flex items-center gap-2.5 mb-5">
-              <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center`}>
-                <Palette className={`w-4 h-4 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
+              <div className="w-8 h-8 rounded-lg bg-bg-surface flex items-center justify-center">
+                <Palette className="w-4 h-4 text-text-secondary" />
               </div>
-              <h2 className={`text-[15px] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Appearance</h2>
+              <h2 className="text-[15px] font-display font-bold text-text-primary">Appearance</h2>
             </div>
 
-            <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-500'} mb-5`}>Choose how Batch My Photos looks. This applies across the entire site.</p>
+            <p className="text-sm text-text-muted mb-5">Choose how Batch My Photos looks. This applies across the entire site.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {THEMES.map(({ key, label, icon: I, desc }) => (
@@ -400,9 +388,7 @@ export default function Settings() {
                   className={`group relative rounded-xl border p-4 text-left transition-all cursor-pointer ${
                     theme === key
                       ? 'border-primary/40 bg-primary/[0.06] shadow-lg shadow-primary/5'
-                      : isDark
-                        ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.10]'
-                        : 'border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-300'
+                      : 'border-border-subtle bg-bg-elevated hover:bg-bg-surface hover:border-border-subtle'
                   }`}
                 >
                   {/* Selected indicator */}
@@ -414,14 +400,12 @@ export default function Settings() {
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 transition-colors ${
                     theme === key
                       ? 'bg-primary/15 border border-primary/20'
-                      : isDark
-                        ? 'bg-white/[0.03] border border-white/[0.06] group-hover:border-white/[0.10]'
-                        : 'bg-white border border-gray-200 group-hover:border-gray-300'
+                      : 'bg-bg-elevated border border-border-subtle group-hover:border-border-subtle'
                   }`}>
-                    <I className={`w-4.5 h-4.5 transition-colors ${theme === key ? 'text-accent' : isDark ? 'text-text-muted group-hover:text-text-secondary' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                    <I className={`w-4.5 h-4.5 transition-colors ${theme === key ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'}`} />
                   </div>
-                  <p className={`text-sm font-semibold transition-colors ${theme === key ? (isDark ? 'text-white' : 'text-gray-900') : isDark ? 'text-text-secondary' : 'text-gray-700'}`}>{label}</p>
-                  <p className={`text-[12px] ${isDark ? 'text-text-muted' : 'text-gray-400'} mt-0.5`}>{desc}</p>
+                  <p className={`text-sm font-semibold transition-colors ${theme === key ? 'text-text-primary' : 'text-text-secondary'}`}>{label}</p>
+                  <p className="text-[12px] text-text-muted mt-0.5">{desc}</p>
                 </button>
               ))}
             </div>
@@ -429,7 +413,7 @@ export default function Settings() {
         </section>
 
         {/* ── Privacy footer ── */}
-        <div className={`auth-card-in flex items-center justify-center gap-2 text-xs ${isDark ? 'text-text-muted' : 'text-gray-400'} mt-8`} style={{ animationDelay: '0.25s' }}>
+        <div className="auth-card-in flex items-center justify-center gap-2 text-xs text-text-muted mt-8" style={{ animationDelay: '0.25s' }}>
           <ShieldCheck className="w-3.5 h-3.5" />
           <span>Your photos never leave your device — we only store your email &amp; plan.</span>
         </div>

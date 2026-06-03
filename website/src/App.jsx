@@ -1,7 +1,7 @@
 
 import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
-import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { ThemeProvider } from './context/ThemeContext'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -27,7 +27,6 @@ import PageTransition from './components/PageTransition'
 const AppContent = () => {
   const location = useLocation();
   const isDemo = location.pathname === '/demo';
-  const { isDark } = useTheme();
 
   // Scroll to hash element after navigation (e.g. /#faq from /dashboard)
   useEffect(() => {
@@ -46,7 +45,7 @@ const AppContent = () => {
   }, [location.pathname, location.hash])
 
   return (
-    <div className={`min-h-screen font-sans ${isDark ? 'bg-bg-main text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className="min-h-screen font-sans bg-bg-main text-text-primary">
       {!isDemo && <Navbar />}
       <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
         <Routes location={location} key={location.pathname}>

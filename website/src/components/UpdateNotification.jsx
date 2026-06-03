@@ -21,7 +21,7 @@ const UpdateNotification = () => {
 
   return (
     <div className="fixed bottom-6 right-6 z-[100] animate-in slide-in-from-right-8 fade-in duration-500">
-      <div className="bg-bg-main/90 backdrop-blur-xl border border-white/10 text-white p-5 rounded-2xl shadow-2xl shadow-black/50 max-w-sm w-80 ring-1 ring-white/5">
+      <div className="bg-bg-main/90 backdrop-blur-xl border border-border-subtle text-text-primary p-5 rounded-2xl shadow-2xl shadow-black/50 max-w-sm w-80 ring-1 ring-border-subtle">
         
         {/* Header */}
         <div className="flex justify-between items-start mb-4">
@@ -30,13 +30,13 @@ const UpdateNotification = () => {
               <RefreshCw className={`w-5 h-5 ${updateStatus.status === 'downloading' ? 'animate-spin' : ''}`} />
             </div>
             <div>
-              <h3 className="font-semibold text-white leading-tight">Update Available</h3>
+              <h3 className="font-semibold text-text-primary leading-tight">Update Available</h3>
               <p className="text-xs text-text-secondary font-medium">Version {updateStatus.version}</p>
             </div>
           </div>
           <button 
             onClick={() => setMinimized(true)} 
-            className="text-text-secondary hover:text-white hover:bg-white/10 p-1 rounded-full transition-colors"
+            className="text-text-secondary hover:text-text-primary hover:bg-bg-surface p-1 rounded-full transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -53,9 +53,9 @@ const UpdateNotification = () => {
                 <span>Downloading...</span>
                 <span>{Math.round(updateStatus.progress || 0)}%</span>
               </div>
-              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-primary h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(46,91,255,0.5)]"
+              <div className="w-full bg-bg-elevated rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-primary h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(255,122,69,0.5)]"
                   style={{ width: `${updateStatus.progress || 0}%` }}
                 />
               </div>

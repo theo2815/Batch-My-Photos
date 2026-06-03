@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, CreditCard, Check, Clock, Sparkles } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 import { useSubscription } from '../hooks/useSubscription'
 import { supabase } from '../lib/supabase'
 
 
 export default function BillingHistory() {
   const navigate = useNavigate()
-  const { isDark } = useTheme()
   const { subscription: sub, loading } = useSubscription()
   const [transactions, setTransactions] = useState([])
   const [txLoading, setTxLoading] = useState(true)
@@ -39,7 +37,7 @@ export default function BillingHistory() {
   }, [])
 
   if (loading) return (
-    <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
+    <div className="min-h-screen bg-bg-main flex items-center justify-center">
       <div className="relative w-10 h-10">
         <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
         <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -48,24 +46,24 @@ export default function BillingHistory() {
   )
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} pt-24 pb-20`}>
-      
+    <div className="min-h-screen bg-bg-main pt-24 pb-20">
+
       <div className="max-w-4xl mx-auto px-5 sm:px-8 mb-8">
         <button
           onClick={() => navigate('/dashboard')}
-          className={`inline-flex items-center gap-1.5 text-sm ${isDark ? 'text-text-muted hover:text-accent' : 'text-gray-500 hover:text-primary'} transition-colors mb-5 cursor-pointer group`}
+          className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-accent transition-colors mb-5 cursor-pointer group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
           Back to Dashboard
         </button>
-        
+
         <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 rounded-2xl ${isDark ? 'bg-primary/10' : 'bg-primary/5'} flex items-center justify-center text-lg font-bold ${isDark ? 'text-accent' : 'text-primary'} border ${isDark ? 'border-primary/20' : 'border-primary/10'}`}>
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-lg font-bold text-accent border border-primary/20">
             <CreditCard className="w-7 h-7" />
           </div>
           <div>
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} tracking-tight`}>Billing & Invoices</h1>
-            <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-500'} mt-0.5`}>Manage your subscription and payment history</p>
+            <h1 className="text-2xl font-display font-bold text-text-primary tracking-tight">Billing & Invoices</h1>
+            <p className="text-sm text-text-muted mt-0.5">Manage your subscription and payment history</p>
           </div>
         </div>
       </div>
@@ -75,14 +73,14 @@ export default function BillingHistory() {
         {/* ── Subscription Summary ── */}
         <section className="auth-card-in" style={{ animationDelay: '0.05s' }}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-sm font-semibold ${isDark ? 'text-text-secondary' : 'text-gray-500'} uppercase tracking-wide`}>Current Subscription</h2>
+            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Current Subscription</h2>
           </div>
-          
-          <div className={`grid grid-cols-1 md:grid-cols-3 gap-4`}>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Plan Details */}
             <div className={`p-5 rounded-2xl border ${isFree
-              ? isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gray-50'
-              : isDark ? 'border-primary/20 bg-primary/[0.03]' : 'border-primary/10 bg-primary/5/50'
+              ? 'border-border-subtle bg-bg-elevated'
+              : 'border-primary/20 bg-primary/[0.03]'
             } relative overflow-hidden`}>
               <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
               <div className="relative z-10">
@@ -90,22 +88,22 @@ export default function BillingHistory() {
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
                     sub?.status === 'active'
                       ? 'bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20'
-                      : 'bg-bg-elevated text-text-muted ring-1 ring-slate-700'
+                      : 'bg-bg-elevated text-text-muted ring-1 ring-border-subtle'
                   }`}>{sub?.status === 'active' ? 'Active' : sub?.status || 'Inactive'}</span>
                 </div>
-                <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{isFree ? 'Free Plan' : 'Pro Plan'}</h3>
-                <p className={`text-sm ${isDark ? 'text-accent' : 'text-primary'}`}>{isFree ? '₱0/month' : '₱299/month'}</p>
+                <h3 className="text-xl font-display font-bold text-text-primary">{isFree ? 'Free Plan' : 'Pro Plan'}</h3>
+                <p className="text-sm font-mono text-accent">{isFree ? '₱0/month' : '₱299/month'}</p>
               </div>
             </div>
 
             {/* Next Billing / Expiry */}
-            <div className={`p-5 rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'}`}>
-              <p className={`text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-text-muted' : 'text-gray-400'} mb-1`}>
+            <div className="p-5 rounded-2xl border border-border-subtle bg-bg-elevated">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-1">
                 {isFree ? 'Plan Type' : 'Expires On'}
               </p>
               <div className="flex items-center gap-2">
-                <Clock className={`w-4 h-4 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`} />
-                <span className={`text-base font-medium ${isDark ? 'text-white' : 'text-gray-700'}`}>
+                <Clock className="w-4 h-4 text-text-secondary" />
+                <span className="text-base font-mono font-medium text-text-primary">
                   {isFree
                     ? 'Free — No expiry'
                     : sub?.expires_at
@@ -117,22 +115,22 @@ export default function BillingHistory() {
             </div>
 
             {/* Payment Info / Upgrade CTA */}
-            <div className={`p-5 rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} flex flex-col justify-center`}>
+            <div className="p-5 rounded-2xl border border-border-subtle bg-bg-elevated flex flex-col justify-center">
               {isFree ? (
                 <div className="flex flex-col gap-1.5">
                   <button
                     onClick={() => navigate('/dashboard?modal=pricing')}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer"
                   >
                     <Sparkles className="w-4 h-4 text-white" /> Upgrade to Pro
                   </button>
                 </div>
               ) : (
                 <>
-                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-text-muted' : 'text-gray-400'} mb-1`}>Last Payment</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-1">Last Payment</p>
                   <div className="flex items-center gap-2">
-                    <Check className={`w-4 h-4 text-emerald-500`} />
-                    <span className={`text-base font-medium ${isDark ? 'text-white' : 'text-gray-700'}`}>
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span className="text-base font-mono font-medium text-text-primary">
                       {sub?.paid_at
                         ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                         : '—'
@@ -147,9 +145,9 @@ export default function BillingHistory() {
 
         {/* ── Transaction History ── */}
         <section className="auth-card-in" style={{ animationDelay: '0.1s' }}>
-          <h2 className={`text-sm font-semibold ${isDark ? 'text-text-secondary' : 'text-gray-500'} uppercase tracking-wide mb-4`}>Transaction History</h2>
-          
-          <div className={`rounded-2xl border ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-white shadow-sm'} overflow-hidden`}>
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">Transaction History</h2>
+
+          <div className="rounded-2xl border border-border-subtle bg-bg-elevated overflow-hidden">
             {txLoading ? (
               <div className="p-8 flex justify-center">
                 <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -158,23 +156,23 @@ export default function BillingHistory() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className={`text-[11px] uppercase tracking-wider ${isDark ? 'text-text-muted border-b border-white/[0.06]' : 'text-gray-400 border-b border-gray-100'}`}>
+                    <tr className="text-[11px] uppercase tracking-wider text-text-muted border-b border-border-subtle">
                       <th className="px-6 py-4 font-semibold">Date</th>
                       <th className="px-6 py-4 font-semibold">Description</th>
                       <th className="px-6 py-4 font-semibold">Amount</th>
                       <th className="px-6 py-4 font-semibold">Status</th>
                     </tr>
                   </thead>
-                  <tbody className={`text-sm ${isDark ? 'divide-y divide-white/[0.04]' : 'divide-y divide-gray-50'}`}>
+                  <tbody className="text-sm divide-y divide-border-subtle">
                     {transactions.map((tx) => (
-                      <tr key={tx.id} className={`group ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'} transition-colors`}>
-                        <td className={`px-6 py-4 ${isDark ? 'text-text-secondary' : 'text-gray-700'}`}>
+                      <tr key={tx.id} className="group hover:bg-bg-surface transition-colors">
+                        <td className="px-6 py-4 font-mono text-text-secondary">
                           {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
-                        <td className={`px-6 py-4 ${isDark ? 'text-text-secondary' : 'text-gray-700'}`}>
+                        <td className="px-6 py-4 font-mono text-text-secondary">
                           {tx.description || 'BatchMyPhotos Subscription'}
                         </td>
-                        <td className={`px-6 py-4 font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <td className="px-6 py-4 font-mono font-medium text-text-primary">
                           {tx.currency} { (tx.amount / 100).toFixed(2) }
                         </td>
                         <td className="px-6 py-4">
@@ -196,11 +194,11 @@ export default function BillingHistory() {
               </div>
             ) : (
               <div className="p-12 text-center">
-                <div className={`w-12 h-12 mx-auto mb-4 rounded-full ${isDark ? 'bg-bg-elevated' : 'bg-gray-100'} flex items-center justify-center`}>
-                  <CreditCard className={`w-5 h-5 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-bg-elevated flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-text-muted" />
                 </div>
-                <h3 className={`text-base font-medium ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>No invoices yet</h3>
-                <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-500'}`}>Transactions will appear here once you make a payment.</p>
+                <h3 className="text-base font-medium text-text-primary mb-1">No invoices yet</h3>
+                <p className="text-sm text-text-muted">Transactions will appear here once you make a payment.</p>
               </div>
             )}
           </div>

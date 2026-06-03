@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 import { CheckCircle2, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
 
 /**
@@ -13,7 +12,6 @@ import { CheckCircle2, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
  * 3. Shows a "You can close this tab" message
  */
 export default function DesktopCallback() {
-  const { isDark } = useTheme()
   const [status, setStatus] = useState('loading') // 'loading' | 'redirecting' | 'success' | 'error'
   const [error, setError] = useState(null)
   const [deepLinkUrl, setDeepLinkUrl] = useState(null)
@@ -67,17 +65,17 @@ export default function DesktopCallback() {
   }
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-bg-main' : 'bg-gray-50'} px-4`}>
-      <div className={`w-full max-w-md rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/40' : 'border-gray-200 bg-white shadow-xl'} p-8 text-center`}>
+    <div className="min-h-screen flex items-center justify-center bg-bg-main px-4">
+      <div className="w-full max-w-md rounded-2xl border border-border-subtle bg-bg-elevated backdrop-blur-xl shadow-2xl shadow-black/40 p-8 text-center">
         {status === 'loading' && (
           <>
             <div className="flex justify-center mb-6">
-              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-accent' : 'text-primary'}`} />
+              <Loader2 className="w-12 h-12 animate-spin text-accent" />
             </div>
-            <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="text-xl font-bold mb-2 text-text-primary">
               Preparing redirect...
             </h1>
-            <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="text-sm text-text-secondary">
               Connecting to BatchMyPhotos desktop app
             </p>
           </>
@@ -86,12 +84,12 @@ export default function DesktopCallback() {
         {status === 'redirecting' && (
           <>
             <div className="flex justify-center mb-6">
-              <Loader2 className={`w-12 h-12 animate-spin ${isDark ? 'text-accent' : 'text-primary'}`} />
+              <Loader2 className="w-12 h-12 animate-spin text-accent" />
             </div>
-            <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="text-xl font-bold mb-2 text-text-primary">
               Redirecting to app...
             </h1>
-            <p className={`text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="text-sm text-text-secondary">
               Opening BatchMyPhotos desktop app
             </p>
           </>
@@ -100,19 +98,19 @@ export default function DesktopCallback() {
         {status === 'success' && (
           <>
             <div className="flex justify-center mb-6">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'}`}>
-                <CheckCircle2 className={`w-8 h-8 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-emerald-500/20">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
               </div>
             </div>
-            <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="text-xl font-bold mb-2 text-text-primary">
               Authentication complete!
             </h1>
-            <p className={`text-sm mb-6 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="text-sm mb-6 text-text-secondary">
               You can close this tab and return to the BatchMyPhotos app.
             </p>
             <button
               onClick={handleRetryDeepLink}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'text-accent hover:bg-white/[0.05]' : 'text-primary hover:bg-primary/5'}`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-accent hover:bg-bg-surface"
             >
               <ExternalLink className="w-4 h-4" />
               Click here if the app didn't open
@@ -123,19 +121,19 @@ export default function DesktopCallback() {
         {status === 'error' && (
           <>
             <div className="flex justify-center mb-6">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isDark ? 'bg-red-500/20' : 'bg-red-100'}`}>
-                <AlertCircle className={`w-8 h-8 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-red-500/20">
+                <AlertCircle className="w-8 h-8 text-red-400" />
               </div>
             </div>
-            <h1 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="text-xl font-bold mb-2 text-text-primary">
               Something went wrong
             </h1>
-            <p className={`text-sm mb-6 ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="text-sm mb-6 text-text-secondary">
               {error}
             </p>
             <a
               href="/login?desktop=true"
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-primary text-white hover:bg-primary-hover' : 'bg-primary text-white hover:bg-primary-hover'}`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-primary text-white hover:bg-primary-hover"
             >
               Try again
             </a>

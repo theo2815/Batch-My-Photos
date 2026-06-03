@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 import { Mail, ArrowRight, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 export default function ForgotPassword() {
@@ -11,7 +10,6 @@ export default function ForgotPassword() {
   const [otp, setOtp] = useState('')
   const [step, setStep] = useState('email') // 'email' | 'otp'
   const [error, setError] = useState(null)
-  const { isDark } = useTheme()
 
   const handleSendOtp = async (e) => {
     e.preventDefault()
@@ -58,30 +56,30 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className={`relative min-h-screen flex items-center justify-center ${isDark ? 'bg-bg-main' : 'bg-gray-50'} overflow-hidden px-4 py-20`}>
+    <div className="relative min-h-screen flex items-center justify-center bg-bg-main overflow-hidden px-4 py-20">
       {/* ── Background orbs ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className={`hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-primary/15' : 'bg-primary/10'}`} />
-        <div className={`hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-accent/15' : 'bg-accent/10'}`} />
-        <div className={`absolute top-0 left-0 w-full h-full ${isDark ? 'bg-[radial-gradient(ellipse_at_center,rgba(46,91,255,0.05)_0%,transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(46,91,255,0.03)_0%,transparent_70%)]'}`} />
+        <div className="hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl bg-primary/15" />
+        <div className="hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl bg-accent/15" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(255,122,69,0.05)_0%,transparent_70%)]" />
       </div>
 
       {/* ── Card ── */}
       <div className="auth-card-in relative z-10 w-full max-w-md">
-        <div className={`rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/40' : 'border-gray-200 bg-white shadow-xl shadow-gray-200/50'} p-8 sm:p-10`}>
+        <div className="rounded-2xl border border-border-subtle bg-bg-surface backdrop-blur-xl shadow-2xl shadow-black/30 p-8 sm:p-10">
 
           {/* Logo + heading */}
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2.5 group mb-6">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${isDark ? 'from-bg-surface to-bg-main border border-white/[0.08] shadow-xl shadow-black/30' : 'from-gray-100 to-gray-200 border border-gray-200 shadow-lg shadow-gray-200/50'} flex items-center justify-center`}>
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-bg-surface to-bg-main border border-border-subtle shadow-xl shadow-black/30 flex items-center justify-center">
                 <img src="/app_icon.png" alt="Logo" className="w-7 h-7 rounded-md" />
               </div>
-              <span className={`text-lg font-bold ${isDark ? 'text-white group-hover:text-accent' : 'text-gray-900 group-hover:text-primary'} transition-colors`}>Batch My Photos</span>
+              <span className="text-lg font-bold text-text-primary group-hover:text-accent transition-colors">Batch My Photos</span>
             </Link>
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="font-display text-2xl font-bold text-text-primary">
               {step === 'email' ? 'Reset password' : 'Enter code'}
             </h1>
-            <p className={`mt-2 text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="mt-2 text-sm text-text-secondary">
               {step === 'email' ? 'Enter your email to receive a code' : `We sent a code to ${email}`}
             </p>
           </div>
@@ -98,12 +96,12 @@ export default function ForgotPassword() {
             /* ── Step 1: Email ── */
             <form onSubmit={handleSendOtp} className="space-y-5">
               <div>
-                <label htmlFor="email" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-2">
                   Email address
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <Mail className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <Mail className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     id="email"
@@ -114,7 +112,7 @@ export default function ForgotPassword() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-text-muted' : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all`}
+                    className="auth-input block w-full rounded-xl border border-border-subtle bg-bg-elevated text-text-primary placeholder:text-text-muted py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -141,12 +139,12 @@ export default function ForgotPassword() {
             /* ── Step 2: OTP ── */
             <form onSubmit={handleVerifyOtp} className="space-y-5">
               <div>
-                <label htmlFor="otp" className={`block text-sm font-medium ${isDark ? 'text-text-secondary' : 'text-gray-700'} mb-2`}>
+                <label htmlFor="otp" className="block text-sm font-medium text-text-secondary mb-2">
                   Verification Code
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                    <KeyRound className={`w-4 h-4 ${isDark ? 'text-text-muted' : 'text-gray-400'}`} />
+                    <KeyRound className="w-4 h-4 text-text-muted" />
                   </div>
                   <input
                     id="otp"
@@ -156,7 +154,7 @@ export default function ForgotPassword() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     placeholder="123456"
-                    className={`auth-input block w-full rounded-xl border ${isDark ? 'border-white/[0.08] bg-white/[0.04] text-white placeholder:text-text-muted' : 'border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-400'} py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all`}
+                    className="auth-input block w-full rounded-xl border border-border-subtle bg-bg-elevated text-text-primary placeholder:text-text-muted py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -182,7 +180,7 @@ export default function ForgotPassword() {
               <button
                 type="button"
                 onClick={() => setStep('email')}
-                className={`w-full text-sm font-medium ${isDark ? 'text-text-secondary hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}
+                className="w-full text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
               >
                 Change email
               </button>
@@ -191,7 +189,7 @@ export default function ForgotPassword() {
 
           {/* Back to Login */}
           <div className="mt-6 text-center">
-            <Link to="/login" className={`text-sm font-medium ${isDark ? 'text-text-secondary hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors inline-flex items-center gap-2`}>
+            <Link to="/login" className="text-sm font-medium text-text-secondary hover:text-text-primary transition-colors inline-flex items-center gap-2">
               <ArrowLeft className="w-3 h-3" />
               Back to login
             </Link>

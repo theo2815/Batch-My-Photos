@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 
 /**
  * Route guard — redirects to /login if no active Supabase session.
@@ -9,7 +8,6 @@ import { useTheme } from '../context/ThemeContext'
  */
 export default function ProtectedRoute({ children }) {
   const [session, setSession] = useState(undefined) // undefined = loading
-  const { isDark } = useTheme()
 
   useEffect(() => {
     // Initial session check
@@ -28,13 +26,13 @@ export default function ProtectedRoute({ children }) {
   // Still loading
   if (session === undefined) {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
+      <div className="min-h-screen bg-bg-main flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-10 h-10">
             <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
             <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
-          <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'} tracking-wide`}>Loading…</p>
+          <p className="text-sm text-text-muted tracking-wide">Loading…</p>
         </div>
       </div>
     )

@@ -7,26 +7,32 @@
  */
 
 /* ============================================================================
-   DESIGN TOKENS (from desktop variables.css)
+   DESIGN TOKENS (originally ported from desktop variables.css)
+
+   NOTE: This palette has intentionally DIVERGED from the shipped Electron app.
+   The web demo was re-themed to the site's "Darkroom" identity (warm near-black
+   + safelight amber). Do NOT re-sync these values back from the desktop app's
+   variables.css — the divergence is deliberate. Variable NAMES are unchanged so
+   the 2000+ lines of component rules below keep working untouched.
    ============================================================================ */
 
 .sim-app {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #2d2d2d;
-  --bg-tertiary: #383838;
-  --bg-glass: rgba(45, 45, 45, 0.95);
+  --bg-primary: #17120f;
+  --bg-secondary: #211a15;
+  --bg-tertiary: #2a211b;
+  --bg-glass: rgba(33, 26, 21, 0.95);
 
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-primary: #f4ece2;
+  --text-secondary: #a89a8c;
+  --text-muted: #6f6257;
 
-  --accent-primary: #3b82f6;
-  --accent-secondary: #2563eb;
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --accent-primary: #ff7a45;
+  --accent-secondary: #c7472a;
+  --accent-gradient: linear-gradient(135deg, #ff7a45 0%, #c7472a 100%);
 
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
+  --success: #5fa86b;
+  --warning: #e0a340;
+  --error: #d6594a;
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -43,30 +49,33 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 10px rgba(59, 130, 246, 0.2);
+  --shadow-glow: 0 0 10px rgba(255, 122, 69, 0.25);
 
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 400ms ease;
 
   /* base */
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   line-height: 1.6;
   transition: background var(--transition-normal), color var(--transition-normal);
 }
 
-/* Light Theme — matches desktop [data-theme="light"] variables */
+/* Light "print-proof" theme — warm photo paper + deep-ember accent */
 .sim-app.light {
-  --bg-primary: #f5f7fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #e8ecf1;
-  --bg-glass: rgba(255, 255, 255, 0.9);
+  --bg-primary: #f4ece2;
+  --bg-secondary: #fbf6ee;
+  --bg-tertiary: #efe5d8;
+  --bg-glass: rgba(251, 246, 238, 0.92);
 
-  --text-primary: #1a1a2e;
-  --text-secondary: #4a4a6a;
-  --text-muted: #8888a8;
+  --text-primary: #2a211b;
+  --text-secondary: #6f6257;
+  --text-muted: #a89a8c;
+
+  --accent-primary: #c7472a;
+  --accent-secondary: #a83b22;
+  --accent-gradient: linear-gradient(135deg, #c7472a 0%, #a83b22 100%);
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -458,7 +467,7 @@
 
 .sim-app .folder-card.selected {
   border-color: var(--accent-primary);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(255, 122, 69, 0.08);
 }
 
 .sim-app .folder-card-title {
@@ -1025,7 +1034,7 @@
 
 .sim-app .change-sensitivity-btn:hover {
   border-color: var(--accent-primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(255, 122, 69, 0.05);
 }
 
 .sim-app .blur-sensitivity-row {
@@ -1447,7 +1456,7 @@
 
 .sim-app .sensitivity-card.selected {
   border-color: var(--accent-primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(255, 122, 69, 0.1);
 }
 
 .sim-app .sensitivity-radio {
@@ -1577,8 +1586,8 @@
   gap: var(--space-md);
   padding: var(--space-md) var(--space-lg);
   margin-top: var(--space-lg);
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 122, 69, 0.08);
+  border: 1px solid rgba(255, 122, 69, 0.2);
   border-radius: var(--radius-lg);
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -1767,7 +1776,7 @@
 
 .sim-app .file-item .thumbnail-placeholder:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 10px rgba(255, 122, 69, 0.5);
 }
 
 
@@ -1995,8 +2004,8 @@
 }
 
 .explorer-folder-card:active {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba(255, 122, 69, 0.08);
+  border-color: rgba(255, 122, 69, 0.25);
 }
 
 .explorer-folder-icon {
@@ -2049,8 +2058,8 @@
 }
 
 .explorer-file-card:active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(255, 122, 69, 0.1);
+  border-color: rgba(255, 122, 69, 0.3);
 }
 
 .explorer-file-thumb {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 import { Monitor, Loader2, LogOut, User } from 'lucide-react'
 
 /**
@@ -20,7 +19,6 @@ import { Monitor, Loader2, LogOut, User } from 'lucide-react'
  */
 export default function ConnectApp() {
   const navigate = useNavigate()
-  const { isDark } = useTheme()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
@@ -65,40 +63,40 @@ export default function ConnectApp() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-bg-main' : 'bg-gray-50'}`}>
-        <Loader2 className={`w-8 h-8 animate-spin ${isDark ? 'text-accent' : 'text-primary'}`} />
+      <div className="min-h-screen flex items-center justify-center bg-bg-main">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     )
   }
 
   return (
-    <div className={`relative min-h-screen flex items-center justify-center ${isDark ? 'bg-bg-main' : 'bg-gray-50'} overflow-hidden px-4 py-20`}>
+    <div className="relative min-h-screen flex items-center justify-center bg-bg-main overflow-hidden px-4 py-20">
       {/* ── Background orbs (matching login page) ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className={`hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-primary/15' : 'bg-primary/10'}`} />
-        <div className={`hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-accent/15' : 'bg-accent/10'}`} />
-        <div className={`absolute top-0 left-0 w-full h-full ${isDark ? 'bg-[radial-gradient(ellipse_at_center,rgba(46,91,255,0.05)_0%,transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(46,91,255,0.03)_0%,transparent_70%)]'}`} />
+        <div className="hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl bg-primary/15" />
+        <div className="hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl bg-accent/15" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(255,122,69,0.05)_0%,transparent_70%)]" />
       </div>
 
       {/* ── Card ── */}
       <div className="auth-card-in relative z-10 w-full max-w-md">
-        <div className={`rounded-2xl border ${isDark ? 'border-white/[0.08] bg-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/40' : 'border-gray-200 bg-white shadow-xl shadow-gray-200/50'} p-8 sm:p-10`}>
+        <div className="rounded-2xl border border-border-subtle bg-bg-elevated backdrop-blur-xl shadow-2xl shadow-black/40 p-8 sm:p-10">
 
           {/* ── Header ── */}
           <div className="text-center mb-8">
-            <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 ${isDark ? 'bg-primary/15 ring-1 ring-primary/20' : 'bg-primary/5 ring-1 ring-primary/10'}`}>
-              <Monitor className={`w-7 h-7 ${isDark ? 'text-accent' : 'text-primary'}`} />
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 bg-primary/15 ring-1 ring-primary/20">
+              <Monitor className="w-7 h-7 text-accent" />
             </div>
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="font-display text-2xl font-bold text-text-primary">
               Connect to Desktop App
             </h1>
-            <p className={`mt-2 text-sm ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+            <p className="mt-2 text-sm text-text-secondary">
               Link your account to the BatchMyPhotos desktop app
             </p>
           </div>
 
           {/* ── Account Card ── */}
-          <div className={`rounded-xl border p-4 mb-6 ${isDark ? 'border-white/[0.08] bg-white/[0.04]' : 'border-gray-200 bg-gray-50'}`}>
+          <div className="rounded-xl border p-4 mb-6 border-border-subtle bg-bg-elevated">
             <div className="flex items-center gap-4">
               {/* Avatar */}
               {avatarUrl ? (
@@ -109,23 +107,23 @@ export default function ConnectApp() {
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-primary/20 ring-1 ring-primary/30' : 'bg-primary/10 ring-1 ring-primary/20'}`}>
-                  <User className={`w-6 h-6 ${isDark ? 'text-accent' : 'text-primary'}`} />
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-primary/20 ring-1 ring-primary/30">
+                  <User className="w-6 h-6 text-accent" />
                 </div>
               )}
 
               {/* Name + Email */}
               <div className="min-w-0 flex-1">
-                <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                <p className="font-display text-sm font-semibold truncate text-text-primary">
                   {displayName}
                 </p>
-                <p className={`text-xs truncate ${isDark ? 'text-text-secondary' : 'text-gray-500'}`}>
+                <p className="font-mono text-xs truncate text-text-secondary">
                   {displayEmail}
                 </p>
               </div>
 
               {/* Verified badge */}
-              <div className={`shrink-0 px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+              <div className="shrink-0 px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-400">
                 Signed in
               </div>
             </div>
@@ -154,7 +152,7 @@ export default function ConnectApp() {
           <div className="mt-5 text-center">
             <button
               onClick={handleDifferentAccount}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-text-muted hover:text-text-secondary' : 'text-gray-400 hover:text-gray-600'} transition-colors cursor-pointer`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
             >
               <LogOut className="w-3 h-3" />
               Sign in with a different account

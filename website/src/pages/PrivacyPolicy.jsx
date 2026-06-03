@@ -1,10 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Shield, ArrowLeft } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 
 const PrivacyPolicy = () => {
-  const { isDark } = useTheme()
-
   return (
     <div className="min-h-screen py-20 px-4">
       <div className="max-w-2xl mx-auto">
@@ -21,22 +18,22 @@ const PrivacyPolicy = () => {
             <div className="p-2 rounded-lg bg-emerald-500/10">
               <Shield className="w-6 h-6 text-emerald-400" />
             </div>
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className="text-2xl font-display font-bold text-text-primary">
               Privacy Policy
             </h1>
           </div>
         </div>
 
         {/* Content */}
-        <div className={`rounded-xl border p-6 sm:p-8 ${isDark ? 'bg-bg-surface/50 border-white/6' : 'bg-white border-gray-200'}`}>
+        <div className="rounded-xl border p-6 sm:p-8 bg-bg-surface/50 border-border-subtle">
           <div className="space-y-5">
             <p className="text-text-secondary leading-relaxed">Your privacy matters to us. Here's exactly how Batch My Photos handles your data.</p>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Your photos stay on your device</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Your photos stay on your device</h4>
               <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party. Period.</p>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>What we collect</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">What we collect</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
                 <li>• <strong className="text-text-secondary">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
                 <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce per-plan device limits. We do not collect your device name, model, or operating system.</li>
@@ -46,7 +43,7 @@ const PrivacyPolicy = () => {
               </ul>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>What we don't collect</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">What we don't collect</h4>
               <ul className="space-y-1 text-sm text-text-secondary">
                 <li>• ❌ Photo content, metadata, or file names</li>
                 <li>• ❌ File system paths or folder structures</li>
@@ -54,7 +51,7 @@ const PrivacyPolicy = () => {
               </ul>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data handling & retention</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Data handling & retention</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
                 <li>• <strong className="text-text-secondary">Photos</strong> — All photo processing happens entirely on your local device. No images are ever uploaded to our servers.</li>
                 <li>• <strong className="text-text-secondary">Account data</strong> — Your email, subscription status, and device bindings are stored securely in our database (hosted by Supabase) for as long as your account is active.</li>
@@ -63,15 +60,15 @@ const PrivacyPolicy = () => {
               </ul>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Cookies & local storage</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Cookies & local storage</h4>
               <p className="text-sm text-text-secondary leading-relaxed">We only use <strong className="text-text-secondary">essential cookies and local storage</strong> required for authentication (keeping you logged in). We do not use any third-party tracking cookies, advertising cookies, or analytics cookies. Because we only use essential cookies, no consent banner is required.</p>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Third-party services</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Third-party services</h4>
               <p className="text-sm text-text-secondary leading-relaxed">We use Supabase for authentication and Paymongo for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
             </div>
             <div>
-              <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Your rights</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Your rights</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
                 <li>• <strong className="text-text-secondary">Access</strong> — You can request a copy of all personal data we hold about you.</li>
                 <li>• <strong className="text-text-secondary">Correction</strong> — You can ask us to correct any inaccurate data.</li>
@@ -80,8 +77,8 @@ const PrivacyPolicy = () => {
               </ul>
               <p className="text-sm text-text-secondary leading-relaxed mt-2">To exercise any of these rights, email <a href="mailto:batchmyphotos@gmail.com" className="text-accent hover:text-accent transition-colors">batchmyphotos@gmail.com</a>. We will respond within 30 days.</p>
             </div>
-            <div className="pt-3 border-t border-white/6">
-              <p className="text-xs text-text-muted">Last updated: February 2026</p>
+            <div className="pt-3 border-t border-border-subtle">
+              <p className="text-xs font-mono text-text-muted">Last updated: February 2026</p>
             </div>
           </div>
         </div>
