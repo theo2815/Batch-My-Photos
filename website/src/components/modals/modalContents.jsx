@@ -17,7 +17,7 @@ const MODAL_CONTENT = {
     color: 'text-accent',
     body: (
       <div className="space-y-5">
-        <p className="text-text-secondary leading-relaxed">Welcome to Batch My Photos! Here's how to get organized in just a few minutes.</p>
+        <p className="text-text-secondary leading-relaxed">How to sort your first folder, start to finish.</p>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">1. Import your photos</h4>
           <p className="text-sm text-text-secondary leading-relaxed">Drag and drop a folder containing your photos directly into the app. We'll scan everything instantly, no uploading, no cloud, just your local files.</p>
@@ -35,7 +35,7 @@ const MODAL_CONTENT = {
           <p className="text-sm text-text-secondary leading-relaxed">Hit Start and watch your photos get sorted into clean, labeled folders. If you change your mind, hit undo and everything goes right back where it was.</p>
         </div>
         <div className="pt-3 border-t border-border-subtle">
-          <p className="text-xs text-text-muted">💡 Tip: Try the Live Demo first to see the full workflow without installing anything.</p>
+          <p className="text-xs text-text-muted">Tip: try the live demo first — it runs the whole workflow without installing anything.</p>
         </div>
       </div>
     ),
@@ -44,10 +44,10 @@ const MODAL_CONTENT = {
   documentation: {
     title: 'Documentation',
     icon: FileText,
-    color: 'text-cyan-400',
+    color: 'text-accent',
     body: (
       <div className="space-y-5">
-        <p className="text-text-secondary leading-relaxed">Everything you need to know about using Batch My Photos effectively.</p>
+        <p className="text-text-secondary leading-relaxed">How each setting and feature works.</p>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Batch Settings</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
@@ -76,7 +76,7 @@ const MODAL_CONTENT = {
   changelog: {
     title: 'Changelog',
     icon: Clock,
-    color: 'text-amber-400',
+    color: 'text-accent',
     body: (
       <div className="space-y-6">
         <p className="text-text-secondary leading-relaxed">What's new, what's fixed, and what's coming next.</p>
@@ -85,7 +85,7 @@ const MODAL_CONTENT = {
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/20 text-accent">v1.0.0</span>
             <span className="text-xs text-text-muted">February 2026</span>
           </div>
-          <h4 className="text-sm font-display font-semibold text-text-primary mb-1.5">🎉 Initial Release</h4>
+          <h4 className="text-sm font-display font-semibold text-text-primary mb-1.5">Initial release</h4>
           <ul className="space-y-1 text-sm text-text-secondary">
             <li>• Drag-and-drop folder import with instant scanning</li>
             <li>• Configurable batch sizes, naming, and sort order</li>
@@ -97,12 +97,11 @@ const MODAL_CONTENT = {
           </ul>
         </div>
         <div className="pt-3 border-t border-border-subtle">
-          <h4 className="text-sm font-display font-semibold text-text-primary mb-1.5">🔮 Coming Soon</h4>
+          <h4 className="text-sm font-display font-semibold text-text-primary mb-1.5">Planned</h4>
           <ul className="space-y-1 text-sm text-text-secondary">
             <li>• Blur detection</li>
             <li>• Watermarking support</li>
             <li>• Multi-folder processing</li>
-            <li>• And more coming soon!</li>
           </ul>
         </div>
       </div>
@@ -113,13 +112,13 @@ const MODAL_CONTENT = {
   privacyPolicy: {
     title: 'Privacy Policy',
     icon: Shield,
-    color: 'text-emerald-400',
+    color: 'text-accent',
     body: (
       <div className="space-y-5">
-        <p className="text-text-secondary leading-relaxed">Your privacy matters to us. Here's exactly how Batch My Photos handles your data.</p>
+        <p className="text-text-secondary leading-relaxed">Exactly how Batch My Photos handles your data.</p>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your photos stay on your device</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party. Period.</p>
+          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party.</p>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we collect</h4>
@@ -134,9 +133,9 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we don't collect</h4>
           <ul className="space-y-1 text-sm text-text-secondary">
-            <li>• ❌ Photo content, metadata, or file names</li>
-            <li>• ❌ File system paths or folder structures</li>
-            <li>• ❌ Any data from your local machine</li>
+            <li>• Photo content, metadata, or file names</li>
+            <li>• File system paths or folder structures</li>
+            <li>• Any data from your local machine</li>
           </ul>
         </div>
         <div>
@@ -176,10 +175,10 @@ const MODAL_CONTENT = {
   termsOfService: {
     title: 'Terms of Service',
     icon: ScrollText,
-    color: 'text-purple-400',
+    color: 'text-accent',
     body: (
       <div className="space-y-5">
-        <p className="text-text-secondary leading-relaxed">By using Batch My Photos, you agree to the following terms. We've kept them short, clear, and fair.</p>
+        <p className="text-text-secondary leading-relaxed">By using Batch My Photos, you agree to the terms below.</p>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Usage</h4>
           <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process we don't monitor, review, or access your files.</p>

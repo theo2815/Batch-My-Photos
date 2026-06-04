@@ -15,8 +15,8 @@ const PrivacyPolicy = () => {
             Back to home
           </Link>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10">
-              <Shield className="w-6 h-6 text-emerald-400" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Shield className="w-6 h-6 text-accent" />
             </div>
             <h1 className="text-2xl font-display font-bold text-text-primary">
               Privacy Policy
@@ -27,10 +27,10 @@ const PrivacyPolicy = () => {
         {/* Content */}
         <div className="rounded-xl border p-6 sm:p-8 bg-bg-surface/50 border-border-subtle">
           <div className="space-y-5">
-            <p className="text-text-secondary leading-relaxed">Your privacy matters to us. Here's exactly how Batch My Photos handles your data.</p>
+            <p className="text-text-secondary leading-relaxed">Exactly how Batch My Photos handles your data.</p>
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Your photos stay on your device</h4>
-              <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party. Period.</p>
+              <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party.</p>
             </div>
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">What we collect</h4>
@@ -45,9 +45,9 @@ const PrivacyPolicy = () => {
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">What we don't collect</h4>
               <ul className="space-y-1 text-sm text-text-secondary">
-                <li>• ❌ Photo content, metadata, or file names</li>
-                <li>• ❌ File system paths or folder structures</li>
-                <li>• ❌ Any data from your local machine</li>
+                <li>• Photo content, metadata, or file names</li>
+                <li>• File system paths or folder structures</li>
+                <li>• Any data from your local machine</li>
               </ul>
             </div>
             <div>

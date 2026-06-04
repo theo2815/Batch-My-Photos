@@ -15,8 +15,8 @@ const TermsOfService = () => {
             Back to home
           </Link>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-500/10">
-              <ScrollText className="w-6 h-6 text-purple-400" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <ScrollText className="w-6 h-6 text-accent" />
             </div>
             <h1 className="text-2xl font-display font-bold text-text-primary">
               Terms of Service
@@ -27,7 +27,7 @@ const TermsOfService = () => {
         {/* Content */}
         <div className="rounded-xl border p-6 sm:p-8 bg-bg-surface/50 border-border-subtle">
           <div className="space-y-5">
-            <p className="text-text-secondary leading-relaxed">By using Batch My Photos, you agree to the following terms. We've kept them short, clear, and fair.</p>
+            <p className="text-text-secondary leading-relaxed">By using Batch My Photos, you agree to the terms below.</p>
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Usage</h4>
               <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process — we don't monitor, review, or access your files.</p>

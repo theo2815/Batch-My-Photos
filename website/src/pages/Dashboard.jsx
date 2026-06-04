@@ -73,7 +73,7 @@ export default function Dashboard() {
   // Handle trial activation redirect from Navbar
   useEffect(() => {
     if (location.state?.trialActivated) {
-      setPaymentMsg({ type: 'success', text: '🎉 Your 30-day free trial is now active! Enjoy Pro features.' })
+      setPaymentMsg({ type: 'success', text: 'Your 30-day Pro trial is active.' })
       safeTimeout(() => setPaymentMsg(null), 6000)
       // Clear the state so refreshing doesn't re-trigger
       navigate(location.pathname, { replace: true, state: {} })
@@ -157,7 +157,7 @@ export default function Dashboard() {
 
     // #region agent log
     if (paymentStatus === 'success') {
-      setPaymentMsg({ type: 'success', text: '🎉 Verifying your payment…' })
+      setPaymentMsg({ type: 'success', text: 'Verifying your payment…' })
       
       // Clean URL immediately to prevent re-triggering this effect
       const nextParams = new URLSearchParams(searchParams)
@@ -168,11 +168,11 @@ export default function Dashboard() {
       verifyPayment().then((result) => {
         console.log('Payment verification result:', result)
         if (result?.verified) {
-          setPaymentMsg({ type: 'success', text: '🎉 Payment confirmed! Your Pro plan is now active.' })
+          setPaymentMsg({ type: 'success', text: 'Payment confirmed. Your Pro plan is active.' })
         } else {
           // Webhook may have handled it — just refetch
           refetchSub()
-          setPaymentMsg({ type: 'success', text: '🎉 Payment successful! Refreshing your plan…' })
+          setPaymentMsg({ type: 'success', text: 'Payment received. Refreshing your plan…' })
         }
         safeTimeout(() => setPaymentMsg(null), 6000)
       })
@@ -230,7 +230,7 @@ export default function Dashboard() {
   const handleStartTrial = async () => {
     await startFreeTrial()
     setActiveModal(null)
-    setPaymentMsg({ type: 'success', text: '🎉 Your 30-day free trial is now active! Enjoy Pro features.' })
+    setPaymentMsg({ type: 'success', text: 'Your 30-day Pro trial is active.' })
     safeTimeout(() => setPaymentMsg(null), 6000)
   }
 
@@ -825,10 +825,10 @@ export default function Dashboard() {
                   {/* Plan Details */}
                   <div className="space-y-3">
                     {[
-                      { label: 'Status', value: sub?.status === 'active' ? '✅ Active' : '⚠️ ' + (sub?.status || 'Unknown') },
+                      { label: 'Status', value: sub?.status === 'active' ? 'Active' : (sub?.status || 'Unknown') },
                       { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
                       { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 5 used` },
+                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 2 used` },
                     ].map((item) => (
                       <div key={item.label} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-bg-elevated">
                         <span className="text-sm text-text-secondary">{item.label}</span>
