@@ -39,3 +39,6 @@ backend/test-email.js
 
 # Backend migrations (contain DB schema details)
 backend/migrations/
+
+# Claude Code local settings
+.claude/
