@@ -1,11 +1,12 @@
 /**
  * Subscription Service for Desktop App
  *
- * Handles batch limit checking and usage tracking by communicating
- * with the backend API. Free users have a 2 batches/month limit,
+ * Handles batch limit checking and usage tracking via Supabase RPCs
+ * (check_batch_limit / track_batch / get_my_subscription — SECURITY DEFINER,
+ * user derived from the JWT). Free users have a 2 batches/month limit,
  * Pro users have unlimited batches.
  *
- * Offline mode: When the backend is unreachable, enforces limits
+ * Offline mode: When Supabase is unreachable, enforces limits
  * against a locally cached subscription state instead of allowing
  * unlimited access. Cache is updated on every successful API call.
  *
@@ -15,10 +16,7 @@
 const { net } = require('electron')
 const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
-const config = require('./config')
-const deviceService = require('./deviceService')
-
-const API_BASE = config.urls.BACKEND_URL
+const { rpc } = require('./supabaseApi')
 
 const FREE_LIMIT = 2
 const CACHE_STALE_DAYS = 3          // Reduced from 7 → 3 — smaller offline grace window
@@ -259,31 +257,19 @@ async function flushPendingTracks(sessionToken) {
 
   logger.log(`🔄 [SUBSCRIPTION] Flushing ${queue.length} pending batch track(s) in parallel...`)
 
-  const headers = {
-    'Authorization': `Bearer ${sessionToken}`,
-    'Content-Type': 'application/json',
-  }
-  if (config.features.HWID_BINDING_ENABLED) {
-    headers['X-Device-ID'] = deviceService.getHwid()
-  }
-
-  // Flush all entries in parallel with per-request timeouts (not sequentially)
+  // Flush all entries in parallel with per-request timeouts (not sequentially).
+  // track_batch counts 1 per call server-side; limit-exceeded comes back as
+  // 200 + success:false — treat it as 'fail' so the entry stays queued
+  // (same behavior as the old 403).
   const results = await Promise.allSettled(
-    queue.map(async (entry) => {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), FLUSH_TIMEOUT_MS)
+    queue.map(async () => {
       try {
-        const response = await net.fetch(`${API_BASE}/api/track-batch`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ batch_count: entry.batchCount }),
-          signal: controller.signal,
-        })
-        return response.ok ? 'ok' : 'fail'
+        const response = await rpc('track_batch', {}, sessionToken, { timeoutMs: FLUSH_TIMEOUT_MS })
+        if (!response.ok) return 'fail'
+        const data = await response.json().catch(() => ({}))
+        return data.success === true ? 'ok' : 'fail'
       } catch (_err) {
         return 'fail'
-      } finally {
-        clearTimeout(timeout)
       }
     })
   )
@@ -378,35 +364,17 @@ async function checkBatchLimit(sessionToken) {
  * @returns {Promise<Object>}
  */
 async function _checkBatchLimitFromAPI(sessionToken) {
-  const headers = {
-    'Authorization': `Bearer ${sessionToken}`,
-    'Content-Type': 'application/json',
-  }
-
-  // Include device ID for HWID enforcement
-  if (config.features.HWID_BINDING_ENABLED) {
-    headers['X-Device-ID'] = deviceService.getHwid()
-  }
-
-  // Retry once on 401 — Supabase getUser() can fail transiently on cold starts
+  // Retry once on 401 — token validation can fail transiently on cold starts
   const MAX_ATTEMPTS = 2
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
     try {
       logger.log(`🔍 [SUBSCRIPTION] Checking batch limit... (attempt ${attempt})`)
 
-      const response = await net.fetch(`${API_BASE}/api/check-batch-limit`, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeout)
+      const response = await rpc('check_batch_limit', {}, sessionToken, { timeoutMs: API_TIMEOUT_MS })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        logger.warn(`⚠️ [SUBSCRIPTION] Batch limit check failed: ${errorData.error}`)
+        const errorData = await response.json().catch(() => ({}))
+        logger.warn(`⚠️ [SUBSCRIPTION] Batch limit check failed: ${errorData.message || errorData.error || 'Unknown error'}`)
 
         // On 401, retry once after a brief delay (token validation can be transient)
         if (response.status === 401 && attempt < MAX_ATTEMPTS) {
@@ -437,7 +405,6 @@ async function _checkBatchLimitFromAPI(sessionToken) {
 
       return result
     } catch (err) {
-      clearTimeout(timeout)
       logger.error('❌ [SUBSCRIPTION] Check batch limit failed:', err.message)
 
       // On network error, retry once before falling back to cache
@@ -484,41 +451,24 @@ async function trackBatchExecution(sessionToken, batchCount = 1) {
     return { success: false, offline: true }
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
   try {
     logger.log(`📊 [SUBSCRIPTION] Tracking ${batchCount} batch(es)...`)
 
-    const headers = {
-      'Authorization': `Bearer ${sessionToken}`,
-      'Content-Type': 'application/json',
-    }
+    // track_batch counts 1 per call server-side (the old backend hotfix,
+    // now baked into the RPC). Limit-exceeded is 200 + success:false —
+    // treat it exactly like the old 403: enqueue + increment local cache.
+    const response = await rpc('track_batch', {}, sessionToken, { timeoutMs: API_TIMEOUT_MS })
+    const data = await response.json().catch(() => ({}))
 
-    // Include device ID for HWID enforcement
-    if (config.features.HWID_BINDING_ENABLED) {
-      headers['X-Device-ID'] = deviceService.getHwid()
-    }
-
-    const response = await net.fetch(`${API_BASE}/api/track-batch`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ batch_count: batchCount }),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeout)
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown' }))
-      logger.error(`❌ [SUBSCRIPTION] Track batch failed: ${errorData.error}`)
+    if (!response.ok || data.success !== true) {
+      logger.error(`❌ [SUBSCRIPTION] Track batch failed: ${data.error || data.message || 'Unknown'}`)
 
       // Enqueue for retry so usage is never silently lost
       _enqueuePendingTrack(batchCount)
       _incrementCachedUsage(batchCount)
-      return { success: false, error: errorData.error }
+      return { success: false, error: data.error || data.message }
     }
 
-    const data = await response.json()
     logger.log(`✅ [SUBSCRIPTION] Tracked ${batchCount} batch(es) successfully`)
     logger.log(`   Usage: ${data.usage.used}/${data.usage.limit == null ? '∞' : data.usage.limit}`)
 
@@ -538,7 +488,6 @@ async function trackBatchExecution(sessionToken, batchCount = 1) {
 
     return { success: true, usage: data.usage }
   } catch (err) {
-    clearTimeout(timeout)
     logger.error('❌ [SUBSCRIPTION] Track batch error:', err.message)
 
     // Offline: enqueue for retry AND increment local cache
@@ -565,19 +514,7 @@ async function refreshSubscription(sessionToken) {
   try {
     logger.log('🔄 [SUBSCRIPTION] Refreshing subscription status...')
 
-    const headers = {
-      'Authorization': `Bearer ${sessionToken}`,
-    }
-
-    // Include device ID for HWID enforcement
-    if (config.features.HWID_BINDING_ENABLED) {
-      headers['X-Device-ID'] = deviceService.getHwid()
-    }
-
-    const response = await net.fetch(`${API_BASE}/api/subscription`, {
-      method: 'GET',
-      headers,
-    })
+    const response = await rpc('get_my_subscription', {}, sessionToken)
 
     if (!response.ok) {
       logger.warn(`⚠️ [SUBSCRIPTION] Refresh failed: ${response.status}`)

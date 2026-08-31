@@ -1768,16 +1768,16 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 
   /**
    * Handler: Check if a newer app version is available.
-   * Pings the backend /api/version endpoint, compares with app.getVersion(),
-   * and returns the result. Fails silently (returns updateAvailable: false)
-   * so the app works fine offline.
+   * Pings the website's /api/version endpoint (Next.js route on Vercel),
+   * compares with app.getVersion(), and returns the result. Fails silently
+   * (returns updateAvailable: false) so the app works fine offline.
    */
   handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
 
     try {
-      const url = `${config.urls.BACKEND_URL}/api/version`;
+      const url = `${config.urls.FRONTEND_URL}/api/version`;
       const response = await net.fetch(url, { method: 'GET' });
 
       if (!response.ok) {

@@ -9,27 +9,26 @@
  * Responsibilities:
  * 1. Generate & cache a consistent HWID across app restarts and updates.
  * 2. Provide a human-readable device label (hostname).
- * 3. Bind the device to the user's subscription on the backend.
+ * 3. Bind the device via Supabase RPCs (bind_device / device_heartbeat /
+ *    list_my_devices / remove_device — SECURITY DEFINER, user from JWT).
+ *    Blocking states come back as jsonb `code` fields, not HTTP statuses.
  * 4. Run a 5-minute heartbeat loop while the app is active.
  *
  * Integration points:
- * - authService.js  → verifySession sends X-Device-ID header
- * - subscriptionService.js → checkBatchLimit / trackBatch send X-Device-ID header
+ * - authService.js  → checkAuthStatus calls bindDevice
  * - ipcHandlers.js → exposes device-* IPC channels to the renderer
  * - main.js → starts/stops the heartbeat lifecycle
  */
 
 const os = require('os')
 const { machineIdSync } = require('node-machine-id')
-const { net } = require('electron')
 const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
 const config = require('./config')
+const { rpc } = require('./supabaseApi')
 
 // Persistent cache so we never need to re-query the OS after first run
 const deviceStore = new SecureStore({ name: 'device-info' })
-
-const API_BASE = config.urls.BACKEND_URL
 
 /** Heartbeat interval: 5 minutes (in ms) */
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
@@ -98,35 +97,28 @@ async function bindDevice(sessionToken) {
   if (!config.features.HWID_BINDING_ENABLED) return { bound: true, skipped: true }
 
   try {
-    const response = await net.fetch(`${API_BASE}/api/devices/bind`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-        'X-Device-ID': getHwid(),
-      },
-      body: JSON.stringify({
-        hwid: getHwid(),
-        device_label: getDeviceLabel(),
-      }),
-    })
+    const response = await rpc('bind_device', {
+      p_hwid: getHwid(),
+      p_label: getDeviceLabel(),
+    }, sessionToken)
 
     const data = await response.json()
 
-    if (response.status === 403 && data.code === 'DEVICE_LIMIT_REACHED') {
+    // Blocking states are body fields now (RPC returns 200 + code), not 403s
+    if (data.code === 'DEVICE_LIMIT_REACHED') {
       logger.warn(`⚠️ [DEVICE] Device limit reached: ${data.count}/${data.limit}`)
       deviceStore.set('isDeviceBlocked', true)
       return { bound: false, error: data.error, code: data.code, limit: data.limit, count: data.count }
     }
 
-    if (response.status === 403 && data.code === 'COOLDOWN_ACTIVE') {
+    if (data.code === 'COOLDOWN_ACTIVE') {
       logger.warn(`⚠️ [DEVICE] Cooldown active until ${data.cooldown_ends}`)
       deviceStore.set('isDeviceBlocked', true)
       return { bound: false, error: data.error, code: data.code, cooldownEnds: data.cooldown_ends }
     }
 
-    if (!response.ok) {
-      logger.warn(`⚠️ [DEVICE] Bind failed: ${response.status} — ${data.error || 'Unknown'}`)
+    if (!response.ok || data.bound !== true) {
+      logger.warn(`⚠️ [DEVICE] Bind failed: ${response.status} — ${data.error || data.message || 'Unknown'}`)
       return { bound: false, error: data.error || 'Bind failed' }
     }
 
@@ -177,37 +169,31 @@ async function verifyDeviceLive(sessionToken) {
   }
 
   try {
-    const response = await net.fetch(`${API_BASE}/api/devices/heartbeat`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-        'X-Device-ID': getHwid(),
-      },
-      body: JSON.stringify({ hwid: getHwid() }),
-    })
+    const response = await rpc('device_heartbeat', { p_hwid: getHwid() }, sessionToken)
 
-    if (response.status === 404) {
-      logger.warn('⚠️ [DEVICE] Live check: device not found — marking blocked')
-      deviceStore.set('isDeviceBlocked', true)
-      return { authorized: false, reason: 'This device has been removed from your account. Please log in again or re-authorize this device.' }
-    }
-
-    if (response.status === 409) {
+    if (response.ok) {
       const data = await response.json()
+
+      // Removal/eviction come back as body fields (was: HTTP 404 / 409)
+      if (data.code === 'DEVICE_NOT_FOUND') {
+        logger.warn('⚠️ [DEVICE] Live check: device not found — marking blocked')
+        deviceStore.set('isDeviceBlocked', true)
+        return { authorized: false, reason: 'This device has been removed from your account. Please log in again or re-authorize this device.' }
+      }
+
       if (data.invalidated) {
         logger.warn('⚠️ [DEVICE] Live check: session invalidated (concurrent limit)')
         deviceStore.set('isDeviceBlocked', true)
         return { authorized: false, reason: 'Too many active devices. Remove a device from your account to continue.' }
       }
+
+      if (data.ok) {
+        deviceStore.set('isDeviceBlocked', false)
+        return { authorized: true }
+      }
     }
 
-    if (response.ok) {
-      deviceStore.set('isDeviceBlocked', false)
-      return { authorized: true }
-    }
-
-    // Unexpected status — allow (fail-open for unknown server errors)
+    // Unexpected status/body — allow (fail-open for unknown server errors)
     logger.warn(`⚠️ [DEVICE] Live check unexpected status ${response.status} — allowing`)
     return { authorized: true }
   } catch (err) {
@@ -230,17 +216,11 @@ async function listDevices(sessionToken) {
   if (!sessionToken) return { error: 'Not authenticated' }
 
   try {
-    const response = await net.fetch(`${API_BASE}/api/devices`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'X-Device-ID': getHwid(),
-      },
-    })
+    const response = await rpc('list_my_devices', {}, sessionToken)
 
     if (!response.ok) {
       const data = await response.json()
-      return { error: data.error || `Failed (${response.status})` }
+      return { error: data.error || data.message || `Failed (${response.status})` }
     }
 
     const data = await response.json()
@@ -269,17 +249,12 @@ async function deauthorizeDevice(sessionToken, deviceId) {
   if (!sessionToken) return { success: false, error: 'Not authenticated' }
 
   try {
-    const response = await net.fetch(`${API_BASE}/api/devices/${deviceId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'X-Device-ID': getHwid(),
-      },
-    })
+    const response = await rpc('remove_device', { p_device_id: deviceId }, sessionToken)
 
     const data = await response.json()
 
-    if (response.status === 403 && data.code === 'REMOVAL_LIMIT_REACHED') {
+    // Limit-reached is a body field now (RPC returns 200 + code), not a 403
+    if (data.code === 'REMOVAL_LIMIT_REACHED') {
       logger.warn(`⚠️ [DEVICE] Removal limit reached: ${data.removals_used}/${data.removals_limit}`)
       return {
         success: false,
@@ -291,8 +266,8 @@ async function deauthorizeDevice(sessionToken, deviceId) {
       }
     }
 
-    if (!response.ok) {
-      return { success: false, error: data.error || `Failed (${response.status})` }
+    if (!response.ok || data.success !== true) {
+      return { success: false, error: data.error || data.message || `Failed (${response.status})` }
     }
 
     logger.log(`✅ [DEVICE] Device ${deviceId} de-authorized`)
@@ -324,29 +299,21 @@ async function _sendHeartbeat(sessionToken) {
   if (!sessionToken || !config.features.HWID_BINDING_ENABLED) return
 
   try {
-    const response = await net.fetch(`${API_BASE}/api/devices/heartbeat`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-        'X-Device-ID': getHwid(),
-      },
-      body: JSON.stringify({ hwid: getHwid() }),
-    })
+    const response = await rpc('device_heartbeat', { p_hwid: getHwid() }, sessionToken)
 
-    if (response.status === 404) {
-      // Device was de-authorized remotely — mark as blocked
-      logger.warn('⚠️ [DEVICE] Heartbeat: device not found — may have been de-authorized')
-      deviceStore.set('isDeviceBlocked', true)
-    } else if (response.status === 409) {
-      // Concurrent session limit exceeded — oldest session invalidated
+    if (response.ok) {
       const data = await response.json()
-      if (data.invalidated) {
+      if (data.code === 'DEVICE_NOT_FOUND') {
+        // Device was de-authorized remotely — mark as blocked
+        logger.warn('⚠️ [DEVICE] Heartbeat: device not found — may have been de-authorized')
+        deviceStore.set('isDeviceBlocked', true)
+      } else if (data.invalidated) {
+        // Concurrent session limit exceeded — oldest session invalidated
         logger.warn('⚠️ [DEVICE] Heartbeat: session invalidated due to concurrent device limit')
         deviceStore.set('isDeviceBlocked', true)
+      } else if (data.ok) {
+        deviceStore.set('isDeviceBlocked', false)
       }
-    } else if (response.ok) {
-      deviceStore.set('isDeviceBlocked', false)
     }
   } catch (err) {
     // Network error — non-fatal, will retry next interval

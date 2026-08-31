@@ -186,21 +186,25 @@ const limits = {
 };
 
 // ============================================================================
-// URLS — Backend & frontend URLs for API calls and deep link auth
+// URLS — Supabase & frontend URLs for API calls and deep link auth
 // ============================================================================
-// In production (packaged app), defaults point to your deployed server.
-// Single deploy: backend and website run on the same server/URL.
-// In development (running from source), defaults point to localhost.
-// Always overridable via environment variables.
+// Auth/subscription/device calls go DIRECTLY to Supabase (GoTrue + PostgREST
+// RPCs) — the Express backend is retired. The anon (publishable) key is
+// public by design: RLS + SECURITY DEFINER RPCs are the security boundary.
+// For local testing against `supabase start`, override both via env.
 
 const PROD_URL = 'https://www.batchmyphotos.com'
 
 const urls = {
-  /** Backend API base URL (no trailing slash) */
-  BACKEND_URL: process.env.BATCH_BACKEND_API_URL
-    || (isProduction ? PROD_URL : 'http://localhost:3000'),
+  /** Supabase project base URL (no trailing slash) */
+  SUPABASE_URL: process.env.BATCH_SUPABASE_URL
+    || 'https://hhkwmryvvenkmlsuinld.supabase.co',
 
-  /** Website frontend URL (no trailing slash) — same server in production */
+  /** Supabase anon/publishable API key (public; sent as `apikey` header) */
+  SUPABASE_ANON_KEY: process.env.BATCH_SUPABASE_ANON_KEY
+    || 'sb_publishable_NjMEpJILZHOwg1Ea0z8GRA_7Ljgf0Cg',
+
+  /** Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version */
   FRONTEND_URL: process.env.BATCH_FRONTEND_URL
     || (isProduction ? PROD_URL : 'http://localhost:3000'),
 };
