@@ -1,16 +1,19 @@
 # Manual Test Guide — Persistent Authentication & Session Migration
 
-**Date:** February 21, 2026  
-**Covers:** Refresh tokens, silent session migration, graceful fallback, offline resilience
+**Date:** February 21, 2026 (updated 2026-08-31 — Express backend retired; auth now goes directly to Supabase)
+**Covers:** Refresh tokens, graceful fallback, offline resilience
+
+> **2026-08-31:** token refresh is now `POST {SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`
+> (GoTrue direct) and session verification is the `get_my_subscription` RPC. The legacy
+> `exchange-session` migration was removed — pre-refresh-token sessions get a one-time re-login
+> (Scenarios 4-5 below describe the OLD behavior and are retired).
 
 ---
 
 ## Prerequisites
 
-1. **Backend deployed** — Push the latest `backend/` to Railway so the two new endpoints are live:
-   - `POST /api/auth/refresh`
-   - `POST /api/auth/exchange-session`
-2. **App rebuilt** — Run `npm run build` in the root directory so the Electron app includes the latest `authService.js`, `App.jsx`, and `LoginScreen.jsx` changes.
+1. **Supabase reachable** — the migrations in `supabase/migrations/` are applied (locally: `npx supabase start`; point the app at it with `BATCH_SUPABASE_URL` / `BATCH_SUPABASE_ANON_KEY`).
+2. **App rebuilt** — Run `npm run build` in `desktop/` so the Electron app includes the latest `authService.js` changes.
 3. **DevTools open** — In the running Electron app, press `Ctrl+Shift+I` to open DevTools → Console tab. All `[AUTH]` logs appear here.
 
 ---
@@ -274,8 +277,7 @@ Waiting 1 hour for JWT expiry is tedious. Here are ways to speed it up:
 | Fresh login | Deep link → save both tokens | Dashboard |
 | Restart < 1hr | `verifySession` → 200 OK | Dashboard |
 | Restart > 1hr, has refresh token | `verifySession` → 401 → `refreshAccessToken` → new tokens | Dashboard (no interruption) |
-| Restart > 1hr, NO refresh token, JWT still valid | `_migrateSession` → exchange-session → new tokens | Dashboard (no interruption) |
-| Restart > 1hr, NO refresh token, JWT expired | Migration fails → verify fails → `clearSession` → `openLoginPage` | Login screen with "Session refreshed" message + auto-opened browser |
+| Restart > 1hr, NO refresh token (legacy pre-refresh session) | verify fails → refresh fails (no token) → `clearSession` → `openLoginPage` | One-time re-login via auto-opened browser |
 | No internet | `verifySession` → network error → trust local cache | Dashboard (offline mode) |
 | Explicit logout | `clearSession` → clear both tokens | Login screen |
 
@@ -300,9 +302,7 @@ Use this checklist to track your testing progress:
 
 | Problem | Likely Cause | Fix |
 |---------|-------------|-----|
-| "No refresh token stored" on every startup | Logged in before the update; migration endpoint not deployed | Deploy backend to Railway, then restart app |
-| Migration returns 401 | JWT already expired before migration could run | Log out → log back in (one-time) |
-| Migration returns 500 | Backend missing `supabaseAdmin` or `SUPABASE_SERVICE_ROLE_KEY` | Check Railway env vars |
-| Refresh returns 401 | Refresh token revoked (user revoked sessions in Supabase) | Log out → log back in |
-| "exchange-session" 404 | Backend not deployed with the new endpoint | `git push` to Railway |
+| "No refresh token stored" on every startup | Legacy pre-refresh session | Log out → log back in (one-time; the deep link now always carries a refresh token) |
+| Refresh returns 400/401 | Refresh token revoked or rotated away (GoTrue returns 400 `invalid_grant` for dead tokens) | Log out → log back in |
+| Every RPC returns 401 | Wrong `BATCH_SUPABASE_ANON_KEY`, or the JWT expired and refresh also failed | Check config/env; re-login |
 | App shows login screen unexpectedly | Check console for which `[AUTH]` log preceded it — tells you exactly what failed | Follow the log trail |

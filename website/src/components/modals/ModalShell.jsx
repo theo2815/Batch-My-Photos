@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * ModalShell — the single overlay primitive for the site.
  *

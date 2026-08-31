@@ -1,5 +1,7 @@
+'use client'
+
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 /**
@@ -7,6 +9,7 @@ import { supabase } from '../lib/supabase'
  * Wrap any <Route> element that requires authentication.
  */
 export default function ProtectedRoute({ children }) {
+  const router = useRouter()
   const [session, setSession] = useState(undefined) // undefined = loading
 
   useEffect(() => {
@@ -23,6 +26,12 @@ export default function ProtectedRoute({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // No session → redirect to login (effect, since render-time navigation
+  // isn't allowed in Next)
+  useEffect(() => {
+    if (session === null) router.replace('/login')
+  }, [session, router])
+
   // Still loading
   if (session === undefined) {
     return (
@@ -38,9 +47,9 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  // No session → redirect to login
+  // No session → the effect above is redirecting; render nothing meanwhile
   if (!session) {
-    return <Navigate to="/login" replace />
+    return null
   }
 
   return children

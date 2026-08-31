@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Shared modal content definitions.
  *

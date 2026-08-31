@@ -1,15 +1,16 @@
+'use client'
+
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
-
 /**
- * Route guard — requires active Supabase session + admin role verified by backend.
+ * Route guard — requires active Supabase session + admin role via is_admin().
  * Non-admins see a 404-style page (don't reveal admin routes exist).
- * No admin emails are hardcoded in the frontend — the backend owns the allowlist.
+ * No admin emails are hardcoded in the frontend — the admin_users table owns it.
  */
 export default function AdminRoute({ children }) {
+  const router = useRouter()
   const [state, setState] = useState('loading') // 'loading' | 'admin' | 'denied' | 'unauthenticated'
 
   useEffect(() => {
@@ -19,23 +20,19 @@ export default function AdminRoute({ children }) {
         return
       }
 
-      // Ask the backend if this user is an admin (no hardcoded emails in frontend)
       try {
-        const res = await fetch(`${API_BASE}/api/admin/check`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setState(data.isAdmin ? 'admin' : 'denied')
-        } else {
-          setState('denied')
-        }
+        const { data, error } = await supabase.rpc('is_admin')
+        setState(!error && data === true ? 'admin' : 'denied')
       } catch {
         // Network error — deny access (admin dashboard requires connectivity)
         setState('denied')
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (state === 'unauthenticated') router.replace('/login')
+  }, [state, router])
 
   if (state === 'loading') {
     return (
@@ -52,7 +49,7 @@ export default function AdminRoute({ children }) {
   }
 
   if (state === 'unauthenticated') {
-    return <Navigate to="/login" replace />
+    return null // redirecting to /login via the effect above
   }
 
   // Non-admin users see a 404 page (don't reveal admin routes)

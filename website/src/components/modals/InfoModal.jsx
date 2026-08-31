@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Reusable info modal — thin wrapper over ModalShell (portal + escape +
  * scroll-lock live there).

@@ -1,10 +1,12 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+'use client'
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useSubscription } from '../hooks/useSubscription';
 import { Play, Menu, X } from 'lucide-react';
 import PricingModal from './PricingModal';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/#features' },
@@ -19,16 +21,14 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
-  const [userPlan, setUserPlan] = useState(null); // 'free' | 'pro' | null
-  const [freeTrialUsed, setFreeTrialUsed] = useState(false);
-  const [freeTrialEndAt, setFreeTrialEndAt] = useState(null);
-  const [subLoading, setSubLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const mobileMenuRef = useRef(null);
   const hamburgerRef = useRef(null);
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isLanding = location.pathname === '/';
+  const pathname = usePathname();
+  const router = useRouter();
+  const isLanding = pathname === '/';
+  // Billing data + actions come from the shared hook (no duplicated fetches)
+  const { subscription, loading: subLoading, createCheckout, startFreeTrial, validateCoupon } = useSubscription();
 
   // Handle hash links (e.g. /#faq) — scroll if on landing, navigate if not
   const handleHashClick = (e, href) => {
@@ -38,7 +38,7 @@ export default function Navbar() {
       const el = document.getElementById(hash);
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     } else {
-      navigate(href);
+      router.push(href);
     }
   };
 
@@ -65,7 +65,7 @@ export default function Navbar() {
   // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
-  }, [location.pathname]);
+  }, [pathname]);
 
   // Close mobile menu on click outside
   useEffect(() => {
@@ -94,84 +94,24 @@ export default function Navbar() {
     setLoggingOut(true);
     try {
       await supabase.auth.signOut();
-      navigate('/');
+      router.push('/');
     } finally {
       setLoggingOut(false);
     }
   };
 
-  // Fetch user's plan as soon as they're logged in (so it's ready before modal opens)
-  useEffect(() => {
-    if (!user) {
-      setUserPlan(null);
-      setSubLoading(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        setSubLoading(true);
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session || cancelled) return;
-        const res = await fetch(`${API_BASE}/api/subscription`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled) {
-          setUserPlan(data?.plan || 'free');
-          setFreeTrialUsed(!!data?.free_trial_used);
-          setFreeTrialEndAt(data?.free_trial_end_at || null);
-        }
-      } catch {
-        if (!cancelled) setUserPlan('free');
-      } finally {
-        if (!cancelled) setSubLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
   // Pricing modal: if guest → login, if logged in → create checkout directly and redirect to PayMongo
   const handlePricingUpgrade = async (couponCode = null) => {
     if (!user) {
       setPricingOpen(false);
-      navigate('/login');
+      router.push('/login');
       return;
     }
     try {
       setCheckoutLoading(true);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const body = { redirect_url: window.location.origin };
-      if (couponCode) body.coupon_code = couponCode;
-
-      const res = await fetch(`${API_BASE}/api/checkout`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        if (res.status === 429) throw new Error("You're doing that too fast. Please wait a few minutes and try again.");
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to create checkout session');
-      }
-
-      const { checkout_url, checkout_id } = await res.json();
-      if (checkout_id) localStorage.setItem('pending_checkout_id', checkout_id);
-      if (checkout_url) {
-        window.location.href = checkout_url;
+      const checkoutUrl = await createCheckout(couponCode);
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
       } else {
         throw new Error('No checkout URL returned');
       }
@@ -185,58 +125,22 @@ export default function Navbar() {
   const handleStartTrial = async () => {
     if (!user) {
       setPricingOpen(false);
-      navigate('/login');
+      router.push('/login');
       return;
     }
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) throw new Error('Not authenticated');
+    await startFreeTrial();
 
-    const res = await fetch(`${API_BASE}/api/start-free-trial`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(errData.error || 'Failed to start free trial');
-    }
-
-    // Trial activated — close modal, update state, and go to dashboard for success feedback
+    // Trial activated — close modal and go to dashboard for success feedback
+    // (the hook refetches the subscription; the toast flag travels via sessionStorage)
     setPricingOpen(false);
-    setUserPlan('pro');
-    setFreeTrialUsed(true);
-    navigate('/dashboard', { state: { trialActivated: true } });
+    sessionStorage.setItem('bmp_nav_state', JSON.stringify({ trialActivated: true }));
+    router.push('/dashboard');
   };
 
   // Coupon validation for logged-in users
   const handleValidateCoupon = async (code) => {
     if (!user) return { valid: false, reason: 'Not authenticated' };
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return { valid: false, reason: 'Not authenticated' };
-
-    const res = await fetch(`${API_BASE}/api/validate-coupon`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 429)
-        return { valid: false, reason: "You're doing that too fast. Please wait a few minutes and try again." };
-      return { valid: false, reason: 'Server error' };
-    }
-    return res.json();
+    return validateCoupon(code);
   };
 
   return (
@@ -251,7 +155,7 @@ export default function Navbar() {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5 group shrink-0">
+            <Link href="/" className="flex items-center gap-2.5 group shrink-0">
               <img
                 src="/app_icon.png"
                 alt="BatchMyPhotos"
@@ -303,7 +207,7 @@ export default function Navbar() {
               {user ? (
                 <>
                   <Link
-                    to="/dashboard"
+                    href="/dashboard"
                     className="text-sm font-medium px-3.5 py-2 rounded-lg transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
                   >
                     Dashboard
@@ -322,7 +226,7 @@ export default function Navbar() {
               ) : (
                 <>
                   <Link
-                    to="/login"
+                    href="/login"
                     className="text-sm font-medium px-3.5 py-2 rounded-lg transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
                   >
                     Login
@@ -403,7 +307,7 @@ export default function Navbar() {
               {user ? (
                 <>
                   <Link
-                    to="/dashboard"
+                    href="/dashboard"
                     className="block px-3 py-2.5 rounded-lg text-sm font-medium text-text-secondary"
                   >
                     Dashboard
@@ -422,7 +326,7 @@ export default function Navbar() {
               ) : (
                 <>
                   <Link
-                    to="/login"
+                    href="/login"
                     className="block px-3 py-2.5 rounded-lg text-sm font-medium text-text-secondary"
                   >
                     Login
@@ -454,10 +358,10 @@ export default function Navbar() {
         onStartTrial={handleStartTrial}
         checkoutLoading={checkoutLoading}
         onValidateCoupon={user ? handleValidateCoupon : null}
-        isPro={userPlan === 'pro'}
-        freeTrialUsed={freeTrialUsed}
+        isPro={subscription?.plan === 'pro'}
+        freeTrialUsed={!!subscription?.free_trial_used}
         subscriptionLoading={subLoading}
-        isTrialActive={freeTrialUsed && userPlan === 'pro' && freeTrialEndAt && new Date(freeTrialEndAt) >= new Date()}
+        isTrialActive={!!subscription?.free_trial_used && subscription?.plan === 'pro' && subscription?.free_trial_end_at && new Date(subscription.free_trial_end_at) >= new Date()}
       />
     </>
   );

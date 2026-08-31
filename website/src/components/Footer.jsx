@@ -1,5 +1,6 @@
+'use client'
 
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { useState } from 'react'
 import { Camera, Heart, ShieldCheck, Mail, Facebook } from 'lucide-react'
 import InfoModal from './modals/InfoModal'
@@ -20,7 +21,7 @@ export default function Footer() {
 
             {/* Brand column */}
             <div className="md:col-span-1">
-              <Link to="/" className="flex items-center gap-2 group">
+              <Link href="/" className="flex items-center gap-2 group">
                 <img src="/app_icon.png" alt="BatchMyPhotos" className="w-6 h-6 rounded-md shadow-sm" />
                 <span className="font-display text-base font-bold text-text-primary">Batch My Photos</span>
               </Link>
@@ -46,7 +47,7 @@ export default function Footer() {
               <ul className="space-y-2.5">
                 <li><a href="/#features" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Features</a></li>
                 <li><a href="/demo" target="_blank" rel="noopener noreferrer" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Live Demo</a></li>
-                <li><Link to="/register" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Download</Link></li>
+                <li><Link href="/register" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Download</Link></li>
                 <li><a href="/#faq" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>FAQ</a></li>
               </ul>
             </div>

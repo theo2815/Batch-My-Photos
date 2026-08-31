@@ -1,6 +1,8 @@
+'use client'
+
 import React from 'react';
 import { Camera, X, Minus, Square, Command, History, Sun, Moon, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import '../styles/desktop.css';
 
 /**
@@ -25,7 +27,7 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
           <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#6f6257' : '#94a3b8' }}>
             <div className="flex space-x-2 mr-4">
               <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors cursor-pointer group flex items-center justify-center">
-                <Link to="/" className="opacity-0 group-hover:opacity-100 text-black">
+                <Link href="/" className="opacity-0 group-hover:opacity-100 text-black">
                   <X size={8} strokeWidth={3} />
                 </Link>
               </div>
@@ -95,7 +97,7 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
             Please open it on a larger screen for the full experience.
           </p>
           <Link
-            to="/"
+            href="/"
             className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-accent transition-colors group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />

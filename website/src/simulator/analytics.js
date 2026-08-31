@@ -7,7 +7,7 @@
  */
 
 const STORAGE_KEY = 'bmp_demo_analytics';
-const isDev = import.meta.env.DEV;
+const isDev = process.env.NODE_ENV === 'development';
 
 let sessionEvents = [];
 let sessionStart = Date.now();
