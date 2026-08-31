@@ -1,7 +1,9 @@
+'use client'
+
 /**
  * useDevices Hook
  *
- * Manages device bindings via the backend REST API.
+ * Manages device bindings via Supabase RPCs (list_my_devices / remove_device).
  * Used on the website Dashboard to list and de-authorize devices.
  *
  * Exposes removal-limit metadata:
@@ -10,8 +12,6 @@
 
 import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-
-const API_BASE = import.meta.env.VITE_API_URL || ''
 
 export function useDevices() {
   const [devices, setDevices] = useState([])
@@ -40,20 +40,15 @@ export function useDevices() {
         return
       }
 
-      const res = await fetch(`${API_BASE}/api/devices`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `Failed to load devices (${res.status})`)
+      const { data, error: rpcError } = await supabase.rpc('list_my_devices')
+      if (rpcError) {
+        throw new Error(rpcError.message || 'Failed to load devices')
       }
 
-      const data = await res.json()
       setDevices(data.devices || [])
       setDeviceLimit(data.device_limit || 1)
 
-      // Removal-limit metadata from enriched GET /api/devices
+      // Removal-limit metadata
       setRemovalsUsed(data.removals_used ?? 0)
       setRemovalsLimit(data.removals_limit ?? 3)
       setCooldownEndsAt(data.cooldown_ends_at ?? null)
@@ -67,7 +62,7 @@ export function useDevices() {
 
   /**
    * Remove a device binding.
-   * Handles 403 REMOVAL_LIMIT_REACHED from the backend.
+   * REMOVAL_LIMIT_REACHED comes back as a body `code` field (200), not a 403.
    * On success returns { success, removalsUsed, removalsLimit, cooldownEndsAt }.
    * @param {string} deviceId - UUID of the device_bindings row
    */
@@ -76,20 +71,19 @@ export function useDevices() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Not authenticated')
 
-      const res = await fetch(`${API_BASE}/api/devices/${deviceId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      const { data: body, error: rpcError } = await supabase.rpc('remove_device', { p_device_id: deviceId })
+      if (rpcError) {
+        throw new Error(rpcError.message || 'Failed to remove device')
+      }
 
-      const body = await res.json().catch(() => ({}))
+      if (body.code === 'REMOVAL_LIMIT_REACHED') {
+        setRemovalsUsed(body.removals_used ?? removalsUsed)
+        setRemovalsLimit(body.removals_limit ?? removalsLimit)
+        return { success: false, code: 'REMOVAL_LIMIT_REACHED', error: body.error }
+      }
 
-      if (!res.ok) {
-        if (res.status === 403 && body.code === 'REMOVAL_LIMIT_REACHED') {
-          setRemovalsUsed(body.removals_used ?? removalsUsed)
-          setRemovalsLimit(body.removals_limit ?? removalsLimit)
-          return { success: false, code: 'REMOVAL_LIMIT_REACHED', error: body.error }
-        }
-        throw new Error(body.error || `Failed to remove device (${res.status})`)
+      if (!body.success) {
+        throw new Error(body.error || 'Failed to remove device')
       }
 
       // Update metrics from response

@@ -1,15 +1,16 @@
+'use client'
+
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 
 /**
  * Route guard — redirects to /login if no active Supabase session.
  * Wrap any <Route> element that requires authentication.
  */
 export default function ProtectedRoute({ children }) {
+  const router = useRouter()
   const [session, setSession] = useState(undefined) // undefined = loading
-  const { isDark } = useTheme()
 
   useEffect(() => {
     // Initial session check
@@ -25,24 +26,30 @@ export default function ProtectedRoute({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // No session → redirect to login (effect, since render-time navigation
+  // isn't allowed in Next)
+  useEffect(() => {
+    if (session === null) router.replace('/login')
+  }, [session, router])
+
   // Still loading
   if (session === undefined) {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-bg-main' : 'bg-gray-50'} flex items-center justify-center`}>
+      <div className="min-h-screen bg-bg-main flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-10 h-10">
             <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
             <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
-          <p className={`text-sm ${isDark ? 'text-text-muted' : 'text-gray-400'} tracking-wide`}>Loading…</p>
+          <p className="text-sm text-text-muted tracking-wide">Loading…</p>
         </div>
       </div>
     )
   }
 
-  // No session → redirect to login
+  // No session → the effect above is redirecting; render nothing meanwhile
   if (!session) {
-    return <Navigate to="/login" replace />
+    return null
   }
 
   return children

@@ -44,9 +44,9 @@ It is a sibling product of **QuickPitik** — the marathon photography ecosystem
 | Renderer (UI)    | React 18 · Vite · Lucide icons · custom hooks (no Redux) |
 | Image handling   | Sharp · Exifr (EXIF parsing)                            |
 | Storage          | electron-store + OS encryption (Windows DPAPI)          |
-| Backend API      | Express on Railway · Supabase (Postgres + Auth) · Resend|
-| Payments         | PayMongo                                                |
-| Marketing site   | React 19 · Tailwind · Framer Motion · React Router v7   |
+| Backend          | Supabase — Postgres (RLS + RPCs) · Auth · Edge Functions · pg_cron · Resend |
+| Payments         | PayMongo (via Supabase Edge Functions)                  |
+| Marketing site   | Next.js 15 (App Router) · React 19 · Tailwind v4 · Framer Motion — on Vercel |
 | Packaging        | electron-builder (NSIS + AppX)                          |
 
 **Platform support:** Windows-only (NSIS installer + Microsoft Store AppX).
@@ -55,16 +55,17 @@ It is a sibling product of **QuickPitik** — the marathon photography ecosystem
 
 ## Architecture
 
-BatchMyPhotos is a three-tier application: a desktop client, a shared backend API, and a marketing/dashboard website served by the same backend.
+BatchMyPhotos is a desktop client + a Next.js marketing/dashboard website, with **Supabase as the entire backend** — no app server. Business logic lives in Postgres (RLS + SECURITY DEFINER RPCs); payments and email run in Edge Functions.
 
 ```
-/                   Electron desktop app (root)
-├── main.js         Electron main process entry
-├── preload.js      Context bridge — IPC API exposed to the renderer
-├── src/main/       Main-process services (Node.js, CommonJS)
-├── src/            React renderer (ESM, JSX)
-├── backend/        Express API server — Supabase, PayMongo, Resend
-└── website/        Marketing site + dashboard — Vite + React 19 + Tailwind
+├── desktop/        Electron desktop app
+│   ├── main.js     Electron main process entry
+│   ├── preload.js  Context bridge — IPC API exposed to the renderer
+│   ├── src/main/   Main-process services (Node.js, CommonJS)
+│   └── src/        React renderer (ESM, JSX)
+├── supabase/       The backend — migrations (full schema + RPCs) + Edge Functions
+├── website/        Marketing site + dashboard — Next.js 15 + React 19 + Tailwind v4
+└── backend/        RETIRED Express server — kept only until Railway is decommissioned
 ```
 
 ### Main-process services
@@ -91,46 +92,45 @@ React 18 with hooks-based state management — no Redux. Each feature has a dedi
 
 - **Windows 10 or 11** (the app ships Windows-only)
 - **Node.js 20+** and npm
-- For backend/website development: a Supabase project, PayMongo test keys, and a Resend API key (all gitignored — contact the team for development credentials)
+- For backend/website development: a Supabase project (or `npx supabase start` with Docker), PayMongo test keys, and a Resend API key — see `website/.env.example` for the full environment reference
 
 ### Install
 
 ```powershell
 git clone https://github.com/theo2815/Batch-My-Photos.git
 cd Batch-My-Photos
-npm install
-npm install --prefix backend
+npm install --prefix desktop
 npm install --prefix website
 ```
 
 ### Run (development)
 
 ```powershell
+# Local Supabase stack (Postgres + Auth + PostgREST; applies supabase/migrations)
+npx supabase start
+
 # Desktop app (Vite dev server + Electron)
-npm start
+npm start --prefix desktop
 
-# Backend API (Express on port 3100)
-node backend/server.js
-
-# Website (Vite dev server)
+# Website (Next.js dev server, port 3000)
 npm run dev --prefix website
 ```
 
 ### Build installers
 
 ```powershell
-# NSIS installer + AppX (Microsoft Store) → /release
-npm run dist
+# NSIS installer + AppX (Microsoft Store) → desktop/release
+npm run dist --prefix desktop
 
 # AppX only
-npm run dist:appx
+npm run dist:appx --prefix desktop
 ```
 
 ### Tests
 
 ```powershell
-npm test            # vitest single-run
-npm run test:watch  # watch mode
+npm test --prefix desktop            # vitest single-run
+npm run test:watch --prefix desktop  # watch mode
 ```
 
 ---

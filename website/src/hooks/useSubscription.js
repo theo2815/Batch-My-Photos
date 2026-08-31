@@ -1,11 +1,28 @@
+'use client'
+
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const FREE_DEFAULTS = { plan: 'free', status: 'active', usage: { used: 0, limit: 2 } }
+
+/**
+ * Read the error payload out of a supabase.functions.invoke error.
+ * FunctionsHttpError carries the Response in error.context.
+ */
+async function functionErrorMessage(error, fallback) {
+  try {
+    const body = await error.context.json()
+    return body.error || fallback
+  } catch {
+    return fallback
+  }
+}
 
 /**
  * Custom hook to fetch and manage the current user's subscription status.
- * Returns { subscription, loading, error, refetch, createCheckout, verifyPayment }
+ * Data layer: Supabase RPCs + Edge Functions (the Express backend is gone).
+ * Returns { subscription, loading, error, refetch, createCheckout, verifyPayment,
+ *           startFreeTrial, cancelSubscription, validateCoupon }
  */
 export function useSubscription() {
   const [subscription, setSubscription] = useState(null)
@@ -19,27 +36,25 @@ export function useSubscription() {
 
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
+        setSubscription(FREE_DEFAULTS)
         return
       }
 
-      const res = await fetch(`${API_BASE}/api/subscription`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        signal,
-      })
+      let query = supabase.rpc('get_my_subscription')
+      if (signal) query = query.abortSignal(signal)
+      const { data, error: rpcError } = await query
 
-      if (!res.ok) {
-        throw new Error('Failed to fetch subscription')
+      if (rpcError) {
+        throw new Error(rpcError.message || 'Failed to fetch subscription')
       }
 
-      const data = await res.json()
-      setSubscription(data || { plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
+      setSubscription(data || FREE_DEFAULTS)
     } catch (err) {
       if (err.name === 'AbortError') return
       console.error('useSubscription error:', err)
       setError(err.message)
       // Fallback to free plan on error
-      setSubscription({ plan: 'free', status: 'active', usage: { used: 0, limit: 2 } })
+      setSubscription(FREE_DEFAULTS)
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
@@ -92,7 +107,7 @@ export function useSubscription() {
   }, [fetchSubscription])
 
   /**
-   * Creates a PayMongo checkout session and returns the checkout URL.
+   * Creates a PayMongo checkout session (Edge Function) and returns the URL.
    * Also saves checkout_id to localStorage for verification on return.
    */
   const createCheckout = useCallback(async (couponCode) => {
@@ -102,44 +117,32 @@ export function useSubscription() {
     const body = { redirect_url: window.location.origin }
     if (couponCode) body.coupon_code = couponCode
 
-    const res = await fetch(`${API_BASE}/api/checkout`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body)
-    })
-
-    if (!res.ok) {
-      if (res.status === 429) {
-        throw new Error('You\'re doing that too fast. Please wait a few minutes and try again.')
-      }
-      const errData = await res.json()
-      throw new Error(errData.error || 'Failed to create checkout session')
+    const { data, error: fnError } = await supabase.functions.invoke('checkout', { body })
+    if (fnError) {
+      throw new Error(await functionErrorMessage(fnError, 'Failed to create checkout session'))
     }
 
-    const { checkout_url, checkout_id } = await res.json()
+    const { checkout_url, checkout_id } = data
 
     // Save checkout_id for verification when user returns
     if (checkout_id) {
       localStorage.setItem('pending_checkout_id', checkout_id)
     }
-    
+
     console.log('Checkout session created:', { checkout_id, checkout_url })
     return checkout_url
   }, [])
 
   /**
-   * Verifies a pending payment directly with PayMongo API (webhook fallback).
-   * Checks localStorage for pending checkout_id.
+   * Verifies a pending payment directly with PayMongo (webhook fallback,
+   * Edge Function). Checks localStorage for pending checkout_id.
    * Returns { verified, plan, status } or null if no pending checkout.
    */
   const verifyPayment = useCallback(async () => {
     const checkoutId = localStorage.getItem('pending_checkout_id')
     if (!checkoutId) {
-        console.log('No pending checkout ID found in localStorage')
-        return null
+      console.log('No pending checkout ID found in localStorage')
+      return null
     }
 
     try {
@@ -147,22 +150,15 @@ export function useSubscription() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return null
 
-      const res = await fetch(`${API_BASE}/api/verify-payment`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ checkout_id: checkoutId }),
+      const { data: result, error: fnError } = await supabase.functions.invoke('verify-payment', {
+        body: { checkout_id: checkoutId },
       })
 
-      if (!res.ok) {
-        const errData = await res.json()
-        console.error('Verify payment error response:', errData)
+      if (fnError) {
+        console.error('Verify payment error:', await functionErrorMessage(fnError, fnError.message))
         return null
       }
 
-      const result = await res.json()
       console.log('Verify payment response:', result)
 
       if (result.verified) {
@@ -186,21 +182,10 @@ export function useSubscription() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const res = await fetch(`${API_BASE}/api/start-free-trial`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    })
+    const { data: result, error: rpcError } = await supabase.rpc('start_free_trial')
+    if (rpcError) throw new Error(rpcError.message || 'Failed to start free trial')
+    if (!result?.success) throw new Error(result?.error || 'Failed to start free trial')
 
-    if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.error || 'Failed to start free trial')
-    }
-
-    const result = await res.json()
     await fetchSubscription()
     return result
   }, [fetchSubscription])
@@ -212,45 +197,26 @@ export function useSubscription() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Not authenticated')
 
-    const res = await fetch(`${API_BASE}/api/cancel-subscription`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-    })
-
-    if (!res.ok) {
-      const errData = await res.json()
-      throw new Error(errData.error || 'Failed to cancel subscription')
-    }
+    const { data: result, error: rpcError } = await supabase.rpc('cancel_my_subscription')
+    if (rpcError) throw new Error(rpcError.message || 'Failed to cancel subscription')
+    if (!result?.success) throw new Error(result?.error || 'Failed to cancel subscription')
 
     await fetchSubscription()
     return true
   }, [fetchSubscription])
 
   /**
-   * Validates a coupon code server-side.
+   * Validates a coupon code server-side (SECURITY DEFINER RPC — users have no
+   * read access to the coupons table).
    * Returns { valid, code, originalPrice, discountedPrice, description } or { valid: false, reason }
    */
   const validateCoupon = useCallback(async (code) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return { valid: false, reason: 'Not authenticated' }
 
-    const res = await fetch(`${API_BASE}/api/validate-coupon`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    })
-
-    if (!res.ok) {
-      if (res.status === 429) return { valid: false, reason: 'You\'re doing that too fast. Please wait a few minutes and try again.' }
-      return { valid: false, reason: 'Server error' }
-    }
-    return res.json()
+    const { data, error: rpcError } = await supabase.rpc('validate_coupon', { p_code: code })
+    if (rpcError) return { valid: false, reason: 'Server error' }
+    return data
   }, [])
 
   return { subscription, loading, error, refetch: fetchSubscription, createCheckout, verifyPayment, startFreeTrial, cancelSubscription, validateCoupon }

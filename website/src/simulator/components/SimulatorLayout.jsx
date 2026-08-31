@@ -1,6 +1,8 @@
+'use client'
+
 import React from 'react';
 import { Camera, X, Minus, Square, Command, History, Sun, Moon, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import '../styles/desktop.css';
 
 /**
@@ -15,17 +17,17 @@ import '../styles/desktop.css';
  */
 const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHistory = false, modals, simTheme = 'dark', onToggleTheme }) => {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-bg-main flex items-center justify-center p-4 font-sans selection:bg-primary/30">
       <div className={`sim-app ${simTheme === 'light' ? 'light' : ''} w-full max-w-[900px] h-[700px] rounded-xl border shadow-2xl flex flex-col overflow-hidden relative`}
-           style={{ background: simTheme === 'light' ? '#f5f7fa' : '#1e1e1e', borderColor: simTheme === 'light' ? '#d1d5db' : '#27272a' }}>
+           style={{ background: simTheme === 'light' ? '#f4ece2' : '#17120f', borderColor: simTheme === 'light' ? '#d8cab8' : '#2a211b' }}>
         
         {/* ─── macOS Title Bar ────────────────────────────────────────── */}
         <div className="h-10 flex items-center justify-between px-4 border-b shrink-0 select-none"
-             style={{ background: simTheme === 'light' ? '#e8ecf1' : '#27272a', borderColor: simTheme === 'light' ? '#d1d5db' : '#3f3f46' }}>
-          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#4a4a6a' : '#94a3b8' }}>
+             style={{ background: simTheme === 'light' ? '#efe5d8' : '#2a211b', borderColor: simTheme === 'light' ? '#d8cab8' : '#3f3f46' }}>
+          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#6f6257' : '#94a3b8' }}>
             <div className="flex space-x-2 mr-4">
               <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors cursor-pointer group flex items-center justify-center">
-                <Link to="/" className="opacity-0 group-hover:opacity-100 text-black">
+                <Link href="/" className="opacity-0 group-hover:opacity-100 text-black">
                   <X size={8} strokeWidth={3} />
                 </Link>
               </div>
@@ -36,10 +38,10 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
                 <Square size={6} fill="black" className="opacity-0 hover:opacity-100 text-black" />
               </div>
             </div>
-            <Command size={14} className="text-indigo-400" />
+            <Command size={14} className="text-accent" />
             <span>BatchMyPhotos - Demo Mode</span>
           </div>
-          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: simTheme === 'light' ? '#8888a8' : '#64748b' }}>
+          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: simTheme === 'light' ? '#a89a8c' : '#64748b' }}>
             Interactive Web Demo
           </div>
         </div>
@@ -87,16 +89,16 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
       </div>
 
       {/* ─── Mobile Warning ─────────────────────────────────────────── */}
-      <div className="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center lg:hidden p-8 text-center">
+      <div className="fixed inset-0 bg-bg-main z-50 flex items-center justify-center lg:hidden p-8 text-center">
         <div>
           <h2 className="text-2xl font-bold text-white mb-4">Desktop Experience Required</h2>
-          <p className="text-slate-400 mb-6">
+          <p className="text-text-secondary mb-6">
             This interactive demo simulates a complex desktop workflow.
             Please open it on a larger screen for the full experience.
           </p>
           <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-indigo-400 transition-colors group"
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-accent transition-colors group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to Home

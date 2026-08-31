@@ -1,13 +1,19 @@
+'use client'
+
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
 
+// SSR guards: on the server, render with the dark defaults — the inline
+// <head> script (app/layout.jsx) sets the real .dark class before paint.
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(() => localStorage.getItem('bmp-theme') || 'dark')
+  const [theme, setThemeState] = useState(() =>
+    typeof window === 'undefined' ? 'dark' : localStorage.getItem('bmp-theme') || 'dark'
+  )
 
   // Track system preference for 'system' mode
   const [systemDark, setSystemDark] = useState(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches
+    typeof window === 'undefined' ? true : window.matchMedia('(prefers-color-scheme: dark)').matches
   )
 
   useEffect(() => {
