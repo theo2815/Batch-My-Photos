@@ -1,0 +1,15 @@
+project_id = "batchmyphotos"
+
+# Edge Function auth: the webhook verifies PayMongo's HMAC itself, and
+# send-email is called by pg_net with a shared secret — neither carries a user JWT.
+[functions.paymongo-webhook]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.checkout]
+verify_jwt = true
+
+[functions.verify-payment]
+verify_jwt = true
