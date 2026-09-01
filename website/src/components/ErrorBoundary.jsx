@@ -38,7 +38,7 @@ export default class ErrorBoundary extends Component {
                 this.setState({ hasError: false })
                 window.location.reload()
               }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-primary/35 hover:brightness-110 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-sm font-semibold text-white hover:brightness-110 transition-all cursor-pointer"
             >
               Refresh page
             </button>

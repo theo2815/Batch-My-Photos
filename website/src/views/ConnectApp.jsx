@@ -75,9 +75,6 @@ export default function ConnectApp() {
     <div className="relative min-h-screen flex items-center justify-center bg-bg-main overflow-hidden px-4 py-20">
       {/* ── Background orbs (matching login page) ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl bg-primary/15" />
-        <div className="hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl bg-accent/15" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(255,122,69,0.05)_0%,transparent_70%)]" />
       </div>
 
       {/* ── Card ── */}
@@ -125,7 +122,7 @@ export default function ConnectApp() {
               </div>
 
               {/* Verified badge */}
-              <div className="shrink-0 px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-400">
+              <div className="shrink-0 px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-700">
                 Signed in
               </div>
             </div>
@@ -135,7 +132,7 @@ export default function ConnectApp() {
           <button
             onClick={handleConnect}
             disabled={connecting}
-            className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary-hover hover:shadow-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
+            className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
           >
             {connecting ? (
               <>

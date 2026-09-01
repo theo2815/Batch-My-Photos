@@ -123,7 +123,7 @@ export default function BillingHistory() {
                 <div className="flex flex-col gap-1.5">
                   <button
                     onClick={() => router.push('/dashboard?modal=pricing')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover px-4 py-2.5 text-sm font-semibold text-white transition-all cursor-pointer"
                   >
                     <Sparkles className="w-4 h-4 text-white" /> Upgrade to Pro
                   </button>

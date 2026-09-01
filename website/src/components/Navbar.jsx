@@ -18,7 +18,6 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -52,14 +51,6 @@ export default function Navbar() {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
-  }, []);
-
-  // Track scroll for background transition
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // Close mobile menu on route change
@@ -145,13 +136,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-bg-surface/80 backdrop-blur-xl border-b border-border-subtle'
-            : 'bg-transparent'
-        }`}
-      >
+      <nav className="fixed top-0 inset-x-0 z-50 bg-bg-main/85 backdrop-blur-md border-b border-border-subtle">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
@@ -169,13 +154,13 @@ export default function Navbar() {
             </Link>
 
             {/* Desktop nav links */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-6">
               {NAV_LINKS.map((link) =>
                 link.action === 'pricing' ? (
                   <button
                     key={link.label}
                     onClick={() => setPricingOpen(true)}
-                    className="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                    className="nav-link py-2 font-mono uppercase tracking-[0.14em] text-[13px] transition-colors cursor-pointer text-text-secondary hover:text-text-primary"
                   >
                     {link.label}
                   </button>
@@ -185,7 +170,7 @@ export default function Navbar() {
                     href={link.href}
                     target={link.href.startsWith('mailto') ? undefined : '_blank'}
                     rel={link.href.startsWith('mailto') ? undefined : 'noopener noreferrer'}
-                    className="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                    className="nav-link py-2 font-mono uppercase tracking-[0.14em] text-[13px] transition-colors text-text-secondary hover:text-text-primary"
                   >
                     {link.label}
                   </a>
@@ -194,7 +179,7 @@ export default function Navbar() {
                     key={link.label}
                     href={link.href}
                     onClick={(e) => handleHashClick(e, link.href)}
-                    className="px-3.5 py-2 rounded-lg text-sm font-medium transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                    className="nav-link py-2 font-mono uppercase tracking-[0.14em] text-[13px] transition-colors text-text-secondary hover:text-text-primary"
                   >
                     {link.label}
                   </a>
@@ -208,14 +193,14 @@ export default function Navbar() {
                 <>
                   <Link
                     href="/dashboard"
-                    className="text-sm font-medium px-3.5 py-2 rounded-lg transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                    className="nav-link py-2 font-mono uppercase tracking-[0.14em] text-[13px] transition-colors text-text-secondary hover:text-text-primary"
                   >
                     Dashboard
                   </Link>
                   <button
                     onClick={handleLogout}
                     disabled={loggingOut}
-                    className="text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-text-secondary bg-bg-elevated hover:bg-bg-surface disabled:opacity-50"
+                    className="text-sm font-semibold px-4 py-2 rounded-full border border-border-subtle transition-colors flex items-center gap-2 text-text-secondary hover:bg-bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loggingOut && (
                       <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -227,7 +212,7 @@ export default function Navbar() {
                 <>
                   <Link
                     href="/login"
-                    className="text-sm font-medium px-3.5 py-2 rounded-lg transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-surface"
+                    className="nav-link py-2 font-mono uppercase tracking-[0.14em] text-[13px] transition-colors text-text-secondary hover:text-text-primary"
                   >
                     Login
                   </Link>
@@ -235,7 +220,7 @@ export default function Navbar() {
                     href="/demo"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-semibold shadow-md shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-px transition-all"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white text-sm font-bold transition-colors"
                   >
                     <Play className="w-3.5 h-3.5" /> Try Demo
                   </a>
@@ -263,7 +248,7 @@ export default function Navbar() {
           }`}
         >
           <div
-            className="px-6 pb-6 pt-2 space-y-1 bg-bg-surface/95 backdrop-blur-xl border-t border-border-subtle"
+            className="px-6 pb-6 pt-2 space-y-1 bg-bg-main/95 backdrop-blur-xl border-t border-border-subtle"
           >
             {NAV_LINKS.map((link) =>
               link.action === 'pricing' ? (
@@ -335,7 +320,7 @@ export default function Navbar() {
                     href="/demo"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-semibold transition-colors"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white text-sm font-bold transition-colors"
                     onClick={() => setMobileOpen(false)}
                   >
                     <Play className="w-3.5 h-3.5" /> Try Demo
@@ -344,6 +329,13 @@ export default function Navbar() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Finish-line stripe */}
+        <div className="flex h-1" aria-hidden="true">
+          <span className="flex-1 bg-primary" />
+          <span className="flex-1 bg-accent-strong" />
+          <span className="flex-1 bg-deep-ember" />
         </div>
       </nav>
 

@@ -2,71 +2,155 @@
 
 /* ═══════════════════════════════════════════════════════════════════
    Global Color Theme – Tailwind v4 @theme
+   "Finish Line" (adopted from the QuickPitik website, 2026-09-01):
+   warm bone paper, near-black ink, one deep forest-green accent.
+   Light-only — the darkroom light/dark runtime blocks are gone.
+
+   Token-name note: BMP call sites use `bg-elevated` as the CARD/input
+   background and `bg-surface` as the hover-wash/chip layer, so the
+   QuickPitik roles map INVERTED here: elevated = white card surface,
+   surface = paper-deep. Values changed, ~600 call sites untouched.
    ═══════════════════════════════════════════════════════════════════ */
 @theme {
-  /* ── Fonts (Darkroom redesign) ── */
-  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
-  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* ── Fonts (Finish Line) ── */
+  --font-display: "Archivo", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-hero: "Anton", "Archivo", sans-serif; /* landing hero H1 only */
 
-  /* ── Darkroom palette (defaults; runtime values flip in :root / .dark below) ── */
-  --color-primary: #FF7A45;        /* safelight amber — doubles as primary */
-  --color-primary-hover: #FF935F;
-  --color-accent: #FF7A45;
-  --color-accent-strong: #C7472A;  /* deep ember — amber-on-paper text in light mode */
-  --color-deep-ember: #C7472A;     /* gradient ends / pressed states */
-  --color-bg-main: #0E0C0B;
-  --color-bg-surface: #17120F;
-  --color-bg-elevated: #211A15;
-  --color-text-primary: #F4ECE2;   /* photo-paper warm white */
-  --color-text-secondary: #A89A8C;
-  --color-text-muted: #6F6257;
-  --color-border-subtle: rgba(244, 236, 226, 0.08);
-  --color-success: #5FA86B;
-  --color-warning: #E0A340;
-  --color-error: #D6594A;
+  /* ── Finish Line palette ── */
+  --color-primary: #1B7A46;        /* fresh — CTAs, active states */
+  --color-primary-hover: #14562F;  /* fresh-deep */
+  --color-accent: #1B7A46;         /* fresh */
+  --color-accent-strong: #14562F;  /* fresh-deep — stripe segment 2 */
+  --color-deep-ember: #0C3321;     /* pine — stripe segment 3 / deepest accent */
+  --color-bg-main: #F8F5EE;        /* paper — warm bone canvas */
+  --color-bg-surface: #EFEAE0;     /* paper-deep — hover wash, chips, alt sections */
+  --color-bg-elevated: #FFFFFF;    /* surface — cards, inputs */
+  --color-text-primary: #111111;   /* ink */
+  --color-text-secondary: #475569; /* slate */
+  --color-text-muted: #64748B;     /* slate-soft */
+  --color-border-subtle: #E5E2D9;  /* line */
+  --color-success: #1B7A46;
+  --color-warning: #D97706;
+  --color-error: #DC2626;
+
+  /* ── Elevation ── */
+  --shadow-card: 0 1px 2px rgba(17,17,20,0.04), 0 8px 24px -12px rgba(17,17,20,0.12);
+  --shadow-lift: 0 2px 4px rgba(17,17,20,0.05), 0 20px 40px -16px rgba(17,17,20,0.22);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Theme runtime values — the SAME token names flip via .dark on <html>.
-   These plain (unlayered) rules override the @theme defaults (in @layer
-   theme), so every bg-bg-main / text-text-* / text-accent utility
-   auto-switches between print-proof (light) and darkroom (dark).
-   .dark is declared after :root so it wins when both match.
-   ═══════════════════════════════════════════════════════════════════ */
-:root {
-  /* Light = print-proof: warm photo paper, ink text, deep-ember accent */
-  --color-bg-main: #F4ECE2;
-  --color-bg-surface: #FBF6EE;
-  --color-bg-elevated: #EFE5D8;
-  --color-text-primary: #2A211B;
-  --color-text-secondary: #6F6257;
-  --color-text-muted: #A89A8C;
-  --color-border-subtle: rgba(42, 33, 27, 0.10);
-  --color-accent: #C7472A;
-  --color-primary: #C7472A;
-  --color-primary-hover: #A83B22;
-}
-.dark {
-  /* Dark = darkroom: warm near-black, safelight amber */
-  --color-bg-main: #0E0C0B;
-  --color-bg-surface: #17120F;
-  --color-bg-elevated: #211A15;
-  --color-text-primary: #F4ECE2;
-  --color-text-secondary: #A89A8C;
-  --color-text-muted: #6F6257;
-  --color-border-subtle: rgba(244, 236, 226, 0.08);
-  --color-accent: #FF7A45;
-  --color-primary: #FF7A45;
-  --color-primary-hover: #FF935F;
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Theme-aware base so the body matches the active theme (kills pre-React flash) */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-main);
   color: var(--color-text-primary);
+  font-size: 17px;
+  line-height: 1.55;
+  letter-spacing: -0.006em;
 }
+
+/* ── Global keyboard focus (utilities with their own focus ring still win) ── */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Finish Line motifs
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Hero display: Anton, condensed uppercase race-banner impact */
+.font-hero {
+  font-family: var(--font-hero);
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+  line-height: 0.92;
+  font-weight: 400;
+}
+
+/* Race-stripe motif: three green bars (finish-line energy) */
+.race-stripe {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.race-stripe > span {
+  display: block;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* Kicker (mono uppercase eyebrow) */
+.kicker {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  color: var(--color-text-secondary);
+}
+@media (min-width: 400px) {
+  .kicker { font-size: 15px; }
+}
+@media (min-width: 768px) {
+  .kicker { font-size: 13px; }
+}
+
+/* Nav link hover underline */
+.nav-link {
+  position: relative;
+}
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1.5px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+.nav-link:hover::after {
+  width: 100%;
+}
+
+/* Tabular numerals */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Fade-up reveal + staggered children */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.7s ease-out both; }
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-up 0.7s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.35s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.45s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.55s; }
 
 /* ═══════════════════════════════════════════════════════════════════
    Landing Page – Desktop App Animations
@@ -137,19 +221,16 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Darkroom atmosphere — replaces the old mesh / particle / shimmer
-   "AI-landing" background. Texture comes from material (grain, a
-   contact-sheet grid, a film rebate frame), not from blurred blobs.
+   Atmosphere — texture from material (grain, ruled grid), no blobs
    ═══════════════════════════════════════════════════════════════════ */
 
-/* Film-grain overlay — drop on a full-viewport fixed layer (pointer-events:none) */
+/* Grain overlay — drop on a full-viewport fixed layer (pointer-events:none) */
 .film-grain {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  opacity: 0.04; mix-blend-mode: overlay;
+  opacity: 0.05; mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 160px 160px;
 }
-.dark .film-grain { opacity: 0.07; }
 
 /* Contact-sheet grid — faint ruled lines; drop on a section wrapper */
 .contact-sheet-grid {
@@ -158,39 +239,17 @@ body {
     repeating-linear-gradient(90deg, var(--color-border-subtle) 0 1px, transparent 1px 88px);
 }
 
-/* Film-rebate frame — bordered frame with a mono frame number via data-frame */
-.rebate-frame { position: relative; border: 1px solid var(--color-border-subtle); }
-.rebate-frame::before {
-  content: attr(data-frame);
-  position: absolute; top: 0.5rem; left: 0.625rem;
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
-  color: var(--color-text-muted); pointer-events: none;
-}
-
-/* Ambient safelight glow (formerly the floating orbs — now static). The size,
-   color (bg-primary/* → amber) and blur come from inline utilities in the JSX. */
-
-/* ── Section Reveal ── */
-@keyframes sectionReveal {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 /* Footer modal entrance */
 @keyframes footerModalIn {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Custom scrollbar for modal body – dark mode (default) */
+/* Custom scrollbar for modal body */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
-
-/* Custom scrollbar – light mode */
-:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
-:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
 /* Auth card entrance */
 @keyframes authCardIn {
@@ -200,4 +259,4 @@ body {
 .auth-card-in { animation: authCardIn 0.5s ease-out; }
 
 /* Auth input subtle glow on focus */
-.auth-input:focus { box-shadow: 0 0 0 3px rgba(255,122,69,0.22), 0 1px 2px rgba(0,0,0,0.25); }
+.auth-input:focus { box-shadow: 0 0 0 3px rgba(27,122,70,0.22), 0 1px 2px rgba(17,17,20,0.08); }

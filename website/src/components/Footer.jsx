@@ -14,7 +14,13 @@ export default function Footer() {
 
   return (
     <>
-      <footer className="bg-bg-main border-t border-border-subtle">
+      <footer className="bg-bg-surface">
+        {/* Finish-line stripe */}
+        <div className="flex h-1" aria-hidden="true">
+          <span className="flex-1 bg-primary" />
+          <span className="flex-1 bg-accent-strong" />
+          <span className="flex-1 bg-deep-ember" />
+        </div>
         <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16">
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
@@ -43,7 +49,7 @@ export default function Footer() {
 
             {/* Product column */}
             <div>
-              <h4 className={`text-xs font-bold tracking-widest uppercase text-text-secondary mb-4`}>Product</h4>
+              <h4 className={`kicker mb-4`}>Product</h4>
               <ul className="space-y-2.5">
                 <li><a href="/#features" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Features</a></li>
                 <li><a href="/demo" target="_blank" rel="noopener noreferrer" className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Live Demo</a></li>
@@ -54,7 +60,7 @@ export default function Footer() {
 
             {/* Resources column */}
             <div>
-              <h4 className={`text-xs font-bold tracking-widest uppercase text-text-secondary mb-4`}>Resources</h4>
+              <h4 className={`kicker mb-4`}>Resources</h4>
               <ul className="space-y-2.5">
                 <li><a href="#" onClick={open('gettingStarted')} className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Getting Started</a></li>
                 <li><a href="#" onClick={open('documentation')} className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Documentation</a></li>
@@ -64,7 +70,7 @@ export default function Footer() {
 
             {/* Legal column */}
             <div>
-              <h4 className={`text-xs font-bold tracking-widest uppercase text-text-secondary mb-4`}>Legal</h4>
+              <h4 className={`kicker mb-4`}>Legal</h4>
               <ul className="space-y-2.5">
                 <li><a href="#" onClick={open('privacyPolicy')} className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Privacy Policy</a></li>
                 <li><a href="#" onClick={open('termsOfService')} className={`text-sm text-text-muted hover:text-text-primary transition-colors`}>Terms of Service</a></li>
@@ -75,7 +81,7 @@ export default function Footer() {
 
           {/* Divider */}
           <div className="mt-14 pt-8 border-t border-border-subtle flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className={`text-xs text-text-muted`}>&copy; {year} BatchMyPhotos. All rights reserved.</p>
+            <p className={`font-mono uppercase tracking-[0.08em] text-xs text-text-muted`}>&copy; {year} BatchMyPhotos. All rights reserved.</p>
             <div className={`flex flex-col sm:flex-row items-center gap-1.5 text-xs text-text-muted`}>
               <span>Developed by <strong className="text-text-secondary">Theo Cedric Chan</strong></span>
               <span className="hidden sm:inline">·</span>
