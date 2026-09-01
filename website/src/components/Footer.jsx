@@ -82,10 +82,8 @@ export default function Footer() {
           {/* Divider */}
           <div className="mt-14 pt-8 border-t border-border-subtle flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className={`font-mono uppercase tracking-[0.08em] text-xs text-text-muted`}>&copy; {year} BatchMyPhotos. All rights reserved.</p>
-            <div className={`flex flex-col sm:flex-row items-center gap-1.5 text-xs text-text-muted`}>
-              <span>Developed by <strong className="text-text-secondary">Theo Cedric Chan</strong></span>
-              <span className="hidden sm:inline">·</span>
-              <a href="mailto:theocedricchan28@gmail.com" className="hover:text-accent transition-colors">theocedricchan28@gmail.com</a>
+            <div className={`flex items-center gap-1.5 text-xs text-text-muted`}>
+              <span>Developed by <strong className="text-text-secondary">QuickPitik team</strong></span>
             </div>
             <div className={`flex items-center gap-1.5 text-xs text-text-muted`}>
               <ShieldCheck className="w-3.5 h-3.5" />

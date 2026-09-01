@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { motion, useReducedMotion, useScroll, useMotionValueEvent } from 'framer-motion'
 import {
   Folder, FolderOpen, ArrowLeft, Grid3x3, List, XCircle, ChevronRight, ChevronDown,
   Package, CheckCircle, Undo2, History, RotateCcw, Play, Camera, Upload, Heart, Monitor, ArrowUp,
@@ -258,35 +258,43 @@ const CompletePanel = () => (
   </div>
 )
 
-// ─── Alternating demonstration scene ────────────────────────────────────────
-const Scene = ({ eyebrow, title, body, visual, reverse }) => (
-  <div className="border-t border-border-subtle">
-    <div className="mx-auto max-w-7xl px-6 lg:px-8 py-20 sm:py-28">
-      <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className={reverse ? 'lg:order-2' : ''}
-        >
-          <span className="inline-flex items-center gap-3">
-            <span className="race-stripe" aria-hidden="true"><span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" /></span>
-            <span className="kicker">{eyebrow}</span>
-          </span>
-          <h2 className="font-display mt-3 text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">{title}</h2>
-          <p className="mt-4 text-lg text-text-secondary leading-relaxed">{body}</p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.05 }}
-          className={reverse ? 'lg:order-1' : ''}
-        >
-          <div className="h-[380px] sm:h-[440px]">{visual}</div>
-        </motion.div>
-      </div>
+// Aliased so core ESLint's no-unused-vars sees the JSX usage (no
+// eslint-plugin-react in this repo to teach it about <MotionDiv>).
+const MotionDiv = motion.div
+
+// ─── Scroll-reveal wrapper (respects reduced motion) ────────────────────────
+const Reveal = ({ children, className = '', y = 24, delay = 0 }) => {
+  const reduce = useReducedMotion()
+  return (
+    <MotionDiv
+      className={className}
+      initial={reduce ? false : { opacity: 0, y }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </MotionDiv>
+  )
+}
+
+// ─── Step headline + body (used by the split and centered layouts) ──────────
+const StepText = ({ title, body, center = false }) => (
+  <div className={center ? 'text-center' : ''}>
+    <h3 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-text-primary text-balance">{title}</h3>
+    <p className={`mt-4 text-lg text-text-secondary leading-relaxed max-w-xl text-pretty ${center ? 'mx-auto' : ''}`}>{body}</p>
+  </div>
+)
+
+const StepSplit = ({ title, body, visual, reverse }) => (
+  <div className="mx-auto max-w-7xl px-6 lg:px-8 py-14 sm:py-20">
+    <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+      <Reveal className={reverse ? 'lg:order-2' : ''}>
+        <StepText title={title} body={body} />
+      </Reveal>
+      <Reveal delay={0.05} className={reverse ? 'lg:order-1' : ''}>
+        <div className="h-[380px] sm:h-[440px]">{visual}</div>
+      </Reveal>
     </div>
   </div>
 )
@@ -302,12 +310,12 @@ const PERSONAS = [
 const FAQ_ITEMS = [
   { q: 'Are my photos uploaded anywhere?', a: "No. Photos are processed on your computer and are never uploaded. There's no cloud step and no third-party access." },
   { q: 'How accurate is the live demo compared to the real app?', a: 'The demo runs the same workflow as the desktop app, on sample photos instead of your own. Download the app to use it on your real files.' },
-  { q: 'Can it handle very large folders (10,000+ photos)?', a: "Yes. It's built for 5,000–20,000+ photos and processes files directly on your drive, so speed depends on your hardware, not a server." },
-  { q: "What if I don't like the result? Can I undo?", a: 'Yes. Every batch is reversible — Undo puts files back where they were. You can re-batch with different settings as often as you want.' },
-  { q: 'Where can I upload my batches after processing?', a: 'Anywhere. Sorted folders work with Google Photos, Drive, Dropbox, WeTransfer, or a client gallery — any service that takes standard folders.' },
+  { q: 'Can it handle very large folders (10,000+ photos)?', a: "Yes. It's built for 5,000 to 20,000+ photos and processes files directly on your drive, so speed depends on your hardware, not a server." },
+  { q: "What if I don't like the result? Can I undo?", a: 'Yes. Every batch is reversible. Undo puts files back where they were, and you can re-batch with different settings as often as you want.' },
+  { q: 'Where can I upload my batches after processing?', a: 'Anywhere. Sorted folders work with Google Photos, Drive, Dropbox, WeTransfer, or a client gallery, any service that takes standard folders.' },
   { q: 'Is it safe? Will it corrupt or delete my photos?', a: 'Your photos are never edited. The app only moves or copies files into new folders. Use Copy mode to keep originals, and Undo is always one click away.' },
-  { q: 'What if the app crashes or I accidentally close it?', a: 'Your progress is saved automatically. Reopen the app and pick up where you left off — processed files stay put, and Undo still works after a restart.' },
-  { q: 'Is it really free?', a: 'Yes. The free plan covers 2 batches a month and needs an internet connection. Pro removes the batch limit, adds offline batching and a second device — ₱299/month, cancel anytime.' },
+  { q: 'What if the app crashes or I accidentally close it?', a: 'Your progress is saved automatically. Reopen the app and pick up where you left off. Processed files stay put, and Undo still works after a restart.' },
+  { q: 'Is it really free?', a: 'Yes. The free plan covers 2 batches a month and needs an internet connection. Pro removes the batch limit and adds offline batching and a second device for ₱299 a month, cancel anytime.' },
 ]
 
 const FaqItem = ({ item, isOpen, onToggle }) => (
@@ -351,15 +359,11 @@ const StoreBadge = () => (
   </a>
 )
 
-// ─── Scroll-to-top button ───────────────────────────────────────────────────
+// ─── Scroll-to-top button (Motion scroll value, not a window listener) ───────
 const ScrollToTop = () => {
   const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > 600)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  const { scrollY } = useScroll()
+  useMotionValueEvent(scrollY, 'change', (y) => setVisible(y > 600))
   return (
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
@@ -374,55 +378,76 @@ const ScrollToTop = () => {
 export default function LandingPage() {
   return (
     <div className="relative bg-bg-main">
-      <div className="contact-sheet-grid absolute inset-0 pointer-events-none" style={{ zIndex: 0 }} aria-hidden="true" />
-
       {/* Hero */}
       <HeroBeforeAfter />
 
       {/* Honest one-liner */}
       <div className="relative z-10 border-t border-border-subtle">
-        <p className="mx-auto max-w-3xl px-6 py-10 text-center text-lg text-text-secondary">
-          <span className="font-mono text-text-muted tnum">1–2 hours</span> of sorting by hand becomes <span className="font-mono text-accent">a few seconds</span>.
+        <p className="mx-auto max-w-3xl px-6 py-12 text-center text-lg sm:text-xl text-text-secondary text-balance">
+          <span className="font-mono text-text-muted tnum">1-2 hours</span> of sorting by hand becomes <span className="font-mono text-accent">a few seconds</span>.
         </p>
       </div>
 
-      {/* Demonstration scenes */}
-      <div className="relative z-10">
-        <Scene
-          eyebrow="01 · Import"
+      {/* How it works — four steps, four different layouts */}
+      <section id="features" className="relative z-10 border-t border-border-subtle">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 pt-20 sm:pt-28 pb-2 text-center">
+          <span className="inline-flex items-center gap-3">
+            <span className="race-stripe" aria-hidden="true"><span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" /></span>
+            <span className="kicker">How it works</span>
+          </span>
+          <h2 className="font-display mt-4 text-3xl sm:text-4xl font-bold tracking-tight text-text-primary text-balance">Four steps, start to finish.</h2>
+        </div>
+
+        {/* 1 · Import — split */}
+        <StepSplit
           title="Drag a folder in. It scans on your drive."
-          body="Drop a folder of thousands of photos onto the app. It reads them straight from your file system — nothing is uploaded."
+          body="Drop a folder of thousands of photos onto the app. It reads them straight from your file system. Nothing is uploaded."
           visual={<DropZonePanel />}
         />
-        <Scene
+
+        {/* 2 · Preview — split reversed */}
+        <StepSplit
           reverse
-          eyebrow="02 · Preview"
           title="Set how it splits, then preview every folder."
           body="Choose the photos-per-folder limit and sort order, and see the exact batches and file counts before a single file moves."
           visual={<MockBatchPreview />}
         />
-        <Scene
-          eyebrow="03 · Run"
-          title="It runs in seconds. Reversible in one click."
-          body="Move files for speed or copy to keep originals. Changed your mind? Undo puts every file back where it was."
-          visual={<CompletePanel />}
-        />
-        <Scene
-          reverse
-          eyebrow="04 · Done"
-          title="Open the folders and upload anywhere."
-          body="Your photos sit in numbered folders, ready for Google Photos, Drive, or a client gallery — any service that takes standard folders."
-          visual={<MockFileExplorer />}
-        />
-      </div>
+
+        {/* 3 · Run — centered moment */}
+        <div className="mx-auto max-w-3xl px-6 lg:px-8 py-14 sm:py-20">
+          <Reveal>
+            <StepText
+              center
+              title="It runs in seconds. Reversible in one click."
+              body="Move files for speed or copy to keep originals. Changed your mind? Undo puts every file back where it was."
+            />
+          </Reveal>
+          <Reveal delay={0.05} className="mt-10 max-w-md mx-auto">
+            <CompletePanel />
+          </Reveal>
+        </div>
+
+        {/* 4 · Done — stacked full-width showcase */}
+        <div className="mx-auto max-w-6xl px-6 lg:px-8 py-14 sm:py-20">
+          <Reveal className="max-w-2xl">
+            <StepText
+              title="Open the folders and upload anywhere."
+              body="Your photos sit in numbered folders, ready for Google Photos, Drive, or a client gallery, any service that takes standard folders."
+            />
+          </Reveal>
+          <Reveal delay={0.05} className="mt-10">
+            <div className="h-[440px] sm:h-[520px]"><MockFileExplorer /></div>
+          </Reveal>
+        </div>
+      </section>
 
       {/* Who it's for — quiet strip */}
       <div className="relative z-10 border-t border-border-subtle">
         <div className="mx-auto max-w-5xl px-6 py-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
-          <span className="kicker">Made for</span>
-          {PERSONAS.map(({ icon: Icon, label }) => (
-            <span key={label} className="flex items-center gap-2 text-sm text-text-secondary">
-              <Icon className="w-4 h-4 text-accent" /> {label}
+          <span className="text-sm font-semibold text-text-muted">Made for</span>
+          {PERSONAS.map((p) => (
+            <span key={p.label} className="flex items-center gap-2 text-sm text-text-secondary">
+              <p.icon className="w-4 h-4 text-accent" /> {p.label}
             </span>
           ))}
         </div>
@@ -430,34 +455,26 @@ export default function LandingPage() {
 
       {/* FAQ */}
       <div id="faq" className="relative z-10 border-t border-border-subtle">
-        <div className="mx-auto max-w-3xl px-6 lg:px-8 py-24">
-          <div className="text-center mb-12">
-            <span className="inline-flex items-center gap-3">
-              <span className="race-stripe" aria-hidden="true"><span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" /></span>
-              <span className="kicker">FAQ</span>
-            </span>
-            <h2 className="font-display mt-4 text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">Questions before you start</h2>
-          </div>
+        <div className="mx-auto max-w-3xl px-6 lg:px-8 py-20 sm:py-24">
+          <Reveal className="mb-10">
+            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-text-primary text-balance">Questions before you start</h2>
+          </Reveal>
           <FaqAccordion />
         </div>
       </div>
 
       {/* Final CTA */}
-      <div className="relative z-10 border-t border-border-subtle">
-        <div className="mx-auto max-w-3xl px-6 py-28 text-center">
-          <span className="inline-flex items-center gap-3 mb-4">
-            <span className="race-stripe" aria-hidden="true"><span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" /></span>
-            <span className="kicker">Get started</span>
-          </span>
-          <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">Stop sorting photos by hand.</h2>
-          <p className="mt-4 text-lg text-text-secondary max-w-xl mx-auto leading-relaxed">Try it in the browser, then install from the Microsoft Store. Free to start.</p>
+      <div className="relative z-10 border-t border-border-subtle bg-bg-surface">
+        <div className="mx-auto max-w-3xl px-6 py-24 sm:py-28 text-center">
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-text-primary text-balance">Stop sorting photos by hand.</h2>
+          <p className="mt-4 text-lg text-text-secondary max-w-xl mx-auto leading-relaxed text-pretty">Try it in the browser, then install from the Microsoft Store. Free to start.</p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a href="/demo" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-primary hover:bg-primary-hover text-white text-base font-bold transition-colors">
+            <a href="/demo" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-primary hover:bg-primary-hover text-white text-base font-bold transition-[background-color,transform] duration-200 hover:-translate-y-0.5 active:scale-[0.98]">
               <Play className="w-5 h-5" /> Try the demo
             </a>
             <StoreBadge />
           </div>
-          <p className="mt-8 text-sm text-text-muted">Free to start · Cancel anytime</p>
+          <p className="mt-8 text-sm text-text-muted">Free to start. Cancel anytime.</p>
         </div>
       </div>
 
