@@ -41,19 +41,13 @@ async function generatePosterArt() {
   const width = 720;
   const height = 1280;
   const logoSize = 400;
-  const text = "Batch My Photos";
+  const text = 'BatchMyPhotos';
   
   // Create an SVG for the background and text
   const svgImage = `
     <svg width="${width}" height="${height}" version="1.1" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grad1)" />
-      <text x="50%" y="80%" font-size="60" font-family="Arial, sans-serif" fill="white" text-anchor="middle" font-weight="bold">${text}</text>
+      <rect width="100%" height="100%" fill="#111111" />
+      <text x="50%" y="80%" font-size="60" font-family="Archivo, Arial, sans-serif" fill="#F8F5EE" text-anchor="middle" font-weight="bold">${text}</text>
     </svg>
   `;
 
