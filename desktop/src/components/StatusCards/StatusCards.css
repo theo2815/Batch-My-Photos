@@ -44,7 +44,7 @@
 .toolbar-btn:hover {
   color: var(--text-primary);
   background: var(--bg-primary);
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--border);
 }
 
 .toolbar-btn:active {
@@ -131,7 +131,7 @@
   display: flex;
   justify-content: space-between;
   padding: var(--space-sm) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
 }
 
 .result-row:last-child {
@@ -154,7 +154,7 @@
 
 /* Error Message */
 .error-message {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(220, 38, 38, 0.1);
   border: 1px solid var(--error);
   border-radius: var(--radius-md);
   padding: var(--space-md);

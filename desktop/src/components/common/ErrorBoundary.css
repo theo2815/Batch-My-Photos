@@ -37,12 +37,12 @@
 }
 
 .error-boundary .error-message {
-  color: var(--error, #ff6b6b);
-  font-family: monospace;
+  color: var(--error);
+  font-family: var(--font-mono);
   font-size: 0.9rem;
-  background: rgba(255, 107, 107, 0.1);
+  background: rgba(220, 38, 38, 0.08);
   padding: 0.75rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 1rem;
   word-break: break-word;
 }
@@ -65,40 +65,40 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   transition: all 0.2s ease;
 }
 
 .error-boundary .error-actions .btn.primary {
-  background: var(--accent, #7c3aed);
+  background: var(--accent-primary);
   color: white;
 }
 
 .error-boundary .error-actions .btn.primary:hover {
-  background: var(--accent-hover, #6d28d9);
+  background: var(--accent-hover);
   transform: translateY(-2px);
 }
 
 .error-boundary .error-actions .btn.secondary {
-  background: transparent;
-  color: var(--text-secondary, #a0a0a0);
-  border: 1px solid var(--border, #333);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 .error-boundary .error-actions .btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .error-boundary .error-details {
   margin-top: 2rem;
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
   padding: 1rem;
 }
 
@@ -117,6 +117,6 @@
   word-break: break-word;
   margin: 0.5rem 0;
   padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
 }

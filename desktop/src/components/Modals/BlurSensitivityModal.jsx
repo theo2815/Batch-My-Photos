@@ -145,7 +145,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
           style={{
             margin: '18px 0 10px',
             paddingTop: '14px',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
+            borderTop: '1px solid var(--border)',
           }}
         >
           <div
@@ -154,7 +154,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
               fontWeight: 600,
               letterSpacing: '0.4px',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.55)',
+              color: 'var(--text-secondary)',
               marginBottom: '8px',
             }}
           >
@@ -183,12 +183,12 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
                     padding: '8px 10px',
                     borderRadius: '6px',
                     border: isActive
-                      ? '1px solid rgb(99 102 241)'
-                      : '1px solid rgba(255,255,255,0.08)',
+                      ? '1px solid var(--accent-primary)'
+                      : '1px solid var(--border)',
                     backgroundColor: isActive
-                      ? 'rgb(99 102 241 / 0.15)'
-                      : 'rgba(255,255,255,0.03)',
-                    color: isActive ? 'rgb(199 210 254)' : 'rgba(255,255,255,0.75)',
+                      ? 'var(--accent-soft)'
+                      : 'var(--bg-tertiary)',
+                    color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
                     fontSize: '13px',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -203,7 +203,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
           <div
             style={{
               fontSize: '11px',
-              color: 'rgba(255,255,255,0.45)',
+              color: 'var(--text-muted)',
               marginTop: '6px',
               minHeight: '14px',
             }}

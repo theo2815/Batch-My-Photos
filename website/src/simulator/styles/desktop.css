@@ -7,32 +7,32 @@
  */
 
 /* ============================================================================
-   DESIGN TOKENS (originally ported from desktop variables.css)
+   DESIGN TOKENS — QuickPitik "Finish Line" (synced with the desktop app)
 
-   NOTE: This palette has intentionally DIVERGED from the shipped Electron app.
-   The web demo was re-themed to the site's "Darkroom" identity (warm near-black
-   + safelight amber). Do NOT re-sync these values back from the desktop app's
-   variables.css — the divergence is deliberate. Variable NAMES are unchanged so
-   the 2000+ lines of component rules below keep working untouched.
+   These mirror the shipped Electron app's desktop/src/styles/variables.css so
+   the web demo reads as the same product: `.sim-app` is Finish Line DARK and
+   `.sim-app.light` is Finish Line LIGHT (the desktop's default). Variable NAMES
+   are unchanged so the component rules below keep working untouched.
    ============================================================================ */
 
 .sim-app {
-  --bg-primary: #17120f;
-  --bg-secondary: #211a15;
-  --bg-tertiary: #2a211b;
-  --bg-glass: rgba(33, 26, 21, 0.95);
+  --bg-primary: #15130e;
+  --bg-secondary: #201c15;
+  --bg-tertiary: #2a251c;
+  --bg-glass: rgba(21, 19, 14, 0.85);
 
-  --text-primary: #f4ece2;
-  --text-secondary: #a89a8c;
-  --text-muted: #6f6257;
+  --text-primary: #f8f5ee;
+  --text-secondary: #b8b0a0;
+  --text-muted: #8a8272;
 
-  --accent-primary: #ff7a45;
-  --accent-secondary: #c7472a;
-  --accent-gradient: linear-gradient(135deg, #ff7a45 0%, #c7472a 100%);
+  --accent-primary: #34a867;
+  --accent-secondary: #1b7a46;
+  --accent-gradient: #34a867;
+  --accent-soft: rgba(52, 168, 103, 0.14);
 
-  --success: #5fa86b;
-  --warning: #e0a340;
-  --error: #d6594a;
+  --success: #34a867;
+  --warning: #e0922a;
+  --error: #f26b6b;
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -41,15 +41,16 @@
   --space-xl: 32px;
   --space-2xl: 48px;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 10px rgba(255, 122, 69, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5), 0 24px 48px -18px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 4px 18px -4px rgba(52, 168, 103, 0.35);
 
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
@@ -62,24 +63,30 @@
   transition: background var(--transition-normal), color var(--transition-normal);
 }
 
-/* Light "print-proof" theme — warm photo paper + deep-ember accent */
+/* Finish Line LIGHT — the desktop's default (paper + ink + forest green) */
 .sim-app.light {
-  --bg-primary: #f4ece2;
-  --bg-secondary: #fbf6ee;
-  --bg-tertiary: #efe5d8;
-  --bg-glass: rgba(251, 246, 238, 0.92);
+  --bg-primary: #f8f5ee;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #efeae0;
+  --bg-glass: rgba(248, 245, 238, 0.85);
 
-  --text-primary: #2a211b;
-  --text-secondary: #6f6257;
-  --text-muted: #a89a8c;
+  --text-primary: #111111;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
 
-  --accent-primary: #c7472a;
-  --accent-secondary: #a83b22;
-  --accent-gradient: linear-gradient(135deg, #c7472a 0%, #a83b22 100%);
+  --accent-primary: #1b7a46;
+  --accent-secondary: #14562f;
+  --accent-gradient: #1b7a46;
+  --accent-soft: rgba(27, 122, 70, 0.1);
 
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --success: #1b7a46;
+  --warning: #d97706;
+  --error: #dc2626;
+
+  --shadow-sm: 0 1px 2px rgba(17, 17, 20, 0.04);
+  --shadow-md: 0 1px 2px rgba(17, 17, 20, 0.04), 0 8px 24px -12px rgba(17, 17, 20, 0.12);
+  --shadow-lg: 0 2px 4px rgba(17, 17, 20, 0.05), 0 20px 40px -16px rgba(17, 17, 20, 0.22);
+  --shadow-glow: 0 4px 16px -4px rgba(27, 122, 70, 0.25);
 }
 
 /* ============================================================================
@@ -104,26 +111,34 @@
 }
 
 .sim-header h1 {
+  font-family: var(--font-hero);
   font-size: 2rem;
-  font-weight: 700;
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 var(--space-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm);
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
 }
 
-.sim-header h1 svg {
-  -webkit-text-fill-color: initial;
-  color: var(--accent-primary);
+.sim-header h1 img {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .sim-header p {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 500;
   color: var(--text-secondary);
-  font-size: 0.95rem;
   margin: 0;
 }
 
@@ -223,10 +238,10 @@
 
 .sim-app .btn {
   padding: var(--space-md) var(--space-xl);
-  border: none;
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all var(--transition-fast);
   display: inline-flex;
@@ -289,7 +304,7 @@
 .sim-app .loader {
   width: 48px;
   height: 48px;
-  background: var(--text-primary);
+  background: var(--accent-primary);
   display: block;
   margin: 20px auto;
   position: relative;
@@ -307,7 +322,7 @@
   position: absolute;
   width: 48px;
   height: 48px;
-  background: var(--text-primary);
+  background: var(--accent-primary);
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
 }
 
@@ -467,7 +482,7 @@
 
 .sim-app .folder-card.selected {
   border-color: var(--accent-primary);
-  background: rgba(255, 122, 69, 0.08);
+  background: rgba(27, 122, 70, 0.08);
 }
 
 .sim-app .folder-card-title {
@@ -533,9 +548,9 @@
 }
 
 .sim-app .folder-card-tags .tag.raw {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(217, 119, 6, 0.1);
   color: var(--warning);
-  border-color: rgba(245, 158, 11, 0.2);
+  border-color: rgba(217, 119, 6, 0.2);
 }
 
 /* ============================================================================
@@ -635,7 +650,7 @@
 }
 
 .sim-app .result-row .folder-name {
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: var(--accent-primary);
 }
 
@@ -678,7 +693,7 @@
 .sim-app .folder-path {
   color: var(--text-muted);
   font-size: 0.85rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   word-break: break-all;
 }
 
@@ -711,7 +726,7 @@
 }
 
 .sim-app .stat-card.blur-stat {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: var(--warning);
 }
 
 .sim-app .stat-value {
@@ -999,8 +1014,8 @@
 }
 
 .sim-app .toggle-switch input:checked + .toggle-track {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border-color: #d97706;
+  background: var(--warning);
+  border-color: var(--warning);
 }
 
 .sim-app .toggle-switch input:checked + .toggle-track .toggle-knob {
@@ -1034,7 +1049,7 @@
 
 .sim-app .change-sensitivity-btn:hover {
   border-color: var(--accent-primary);
-  background: rgba(255, 122, 69, 0.05);
+  background: rgba(27, 122, 70, 0.05);
 }
 
 .sim-app .blur-sensitivity-row {
@@ -1240,16 +1255,16 @@
 }
 
 .sim-app .batch-header.blur-batch {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(217, 119, 6, 0.15);
 }
 
 .sim-app .batch-header.blur-batch:hover,
 .sim-app .batch-header.blur-batch.expanded {
-  background: rgba(245, 158, 11, 0.3);
+  background: rgba(217, 119, 6, 0.3);
 }
 
 .sim-app .batch-name {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
 }
 
@@ -1281,7 +1296,7 @@
   align-items: center;
   gap: var(--space-sm);
   padding: 4px 0;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
@@ -1456,7 +1471,7 @@
 
 .sim-app .sensitivity-card.selected {
   border-color: var(--accent-primary);
-  background: rgba(255, 122, 69, 0.1);
+  background: rgba(27, 122, 70, 0.1);
 }
 
 .sim-app .sensitivity-radio {
@@ -1586,8 +1601,8 @@
   gap: var(--space-md);
   padding: var(--space-md) var(--space-lg);
   margin-top: var(--space-lg);
-  background: rgba(255, 122, 69, 0.08);
-  border: 1px solid rgba(255, 122, 69, 0.2);
+  background: rgba(27, 122, 70, 0.08);
+  border: 1px solid rgba(27, 122, 70, 0.2);
   border-radius: var(--radius-lg);
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -1748,7 +1763,7 @@
 .image-preview-dimensions,
 .image-preview-meta {
   color: rgba(255, 255, 255, 0.55);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
 }
 
@@ -1763,7 +1778,7 @@
 
 .image-preview-position {
   color: rgba(255, 255, 255, 0.45);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   margin-left: auto;
 }
@@ -1776,7 +1791,7 @@
 
 .sim-app .file-item .thumbnail-placeholder:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 10px rgba(255, 122, 69, 0.5);
+  box-shadow: 0 0 10px rgba(27, 122, 70, 0.5);
 }
 
 
@@ -2004,8 +2019,8 @@
 }
 
 .explorer-folder-card:active {
-  background: rgba(255, 122, 69, 0.08);
-  border-color: rgba(255, 122, 69, 0.25);
+  background: rgba(27, 122, 70, 0.08);
+  border-color: rgba(27, 122, 70, 0.25);
 }
 
 .explorer-folder-icon {
@@ -2058,8 +2073,8 @@
 }
 
 .explorer-file-card:active {
-  background: rgba(255, 122, 69, 0.1);
-  border-color: rgba(255, 122, 69, 0.3);
+  background: rgba(27, 122, 70, 0.1);
+  border-color: rgba(27, 122, 70, 0.3);
 }
 
 .explorer-file-thumb {
@@ -2148,7 +2163,7 @@
 .explorer-file-row-meta {
   font-size: 0.72rem;
   color: var(--text-muted);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
 }
 
 .explorer-file-row-blur {

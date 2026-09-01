@@ -26,7 +26,7 @@ const DemoPage = () => {
     } = useAppSimulator();
 
     const [historyOpen, setHistoryOpen] = useState(false);
-    const [simTheme, setSimTheme] = useState('dark');
+    const [simTheme, setSimTheme] = useState('light');
 
     const toggleSimTheme = useCallback(() => {
         setSimTheme(prev => prev === 'dark' ? 'light' : 'dark');

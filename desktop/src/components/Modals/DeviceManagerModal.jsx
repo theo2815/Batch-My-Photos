@@ -215,18 +215,18 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
         {/* Device count bar */}
         <div style={{ 
           padding: '12px 16px',
-          background: 'var(--bg-secondary, #1a1a2e)',
-          borderBottom: '1px solid var(--border-color, #333)',
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           fontSize: '13px',
         }}>
-          <span style={{ color: 'var(--text-secondary, #888)' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>
             Devices used
           </span>
           <span style={{ 
-            color: devices.length >= deviceLimit ? 'var(--warning-color, #f59e0b)' : 'var(--text-primary, #e0e0e0)',
+            color: devices.length >= deviceLimit ? 'var(--warning)' : 'var(--text-primary)',
             fontWeight: 600,
           }}>
             {devices.length} / {deviceLimit}
@@ -236,8 +236,8 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
         {/* Removal limits info bar */}
         <div style={{
           padding: '8px 16px',
-          background: 'var(--bg-secondary, #1a1a2e)',
-          borderBottom: '1px solid var(--border-color, #333)',
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -245,7 +245,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
           gap: '12px',
         }}>
           <span style={{ 
-            color: atRemovalLimit ? 'var(--error-color, #ef4444)' : 'var(--text-tertiary, #666)',
+            color: atRemovalLimit ? 'var(--error)' : 'var(--text-muted)',
             display: 'flex', alignItems: 'center', gap: '4px',
           }}>
             <Trash2 size={12} />
@@ -253,7 +253,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
           </span>
           {hasCooldown && (
             <span style={{
-              color: 'var(--warning-color, #f59e0b)',
+              color: 'var(--warning)',
               display: 'flex', alignItems: 'center', gap: '4px',
               fontSize: '11px',
             }}>
@@ -270,10 +270,10 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
             <div style={{
               display: 'flex', alignItems: 'flex-start', gap: '8px',
               padding: '10px 12px', marginBottom: '12px',
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              background: 'rgba(217, 119, 6, 0.1)',
+              border: '1px solid rgba(217, 119, 6, 0.3)',
               borderRadius: '8px', fontSize: '12px',
-              color: 'var(--warning-color, #f59e0b)',
+              color: 'var(--warning)',
               lineHeight: '1.4',
             }}>
               <Timer size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
@@ -286,10 +286,10 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
             <div style={{
               display: 'flex', alignItems: 'flex-start', gap: '8px',
               padding: '10px 12px', marginBottom: '12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'rgba(220, 38, 38, 0.1)',
+              border: '1px solid rgba(220, 38, 38, 0.3)',
               borderRadius: '8px', fontSize: '12px',
-              color: 'var(--error-color, #ef4444)',
+              color: 'var(--error)',
               lineHeight: '1.4',
             }}>
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
@@ -302,10 +302,10 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
             <div style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '10px 12px', marginBottom: '12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'rgba(220, 38, 38, 0.1)',
+              border: '1px solid rgba(220, 38, 38, 0.3)',
               borderRadius: '8px', fontSize: '13px',
-              color: 'var(--error-color, #ef4444)',
+              color: 'var(--error)',
             }}>
               <AlertTriangle size={16} />
               <span>{error}</span>
@@ -317,10 +317,10 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
             <div style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '10px 12px', marginBottom: '12px',
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
+              background: 'rgba(27, 122, 70, 0.1)',
+              border: '1px solid rgba(27, 122, 70, 0.3)',
               borderRadius: '8px', fontSize: '13px',
-              color: 'var(--success-color, #22c55e)',
+              color: 'var(--success)',
             }}>
               <CheckCircle size={16} />
               <span>&ldquo;{removeSuccess}&rdquo; removed successfully</span>
@@ -332,15 +332,15 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
             <div style={{
               padding: '14px',
               marginBottom: '12px',
-              background: 'rgba(245, 158, 11, 0.08)',
-              border: '1px solid rgba(245, 158, 11, 0.25)',
+              background: 'rgba(217, 119, 6, 0.08)',
+              border: '1px solid rgba(217, 119, 6, 0.25)',
               borderRadius: '10px',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
-                <AlertTriangle size={18} style={{ color: 'var(--warning-color, #f59e0b)', flexShrink: 0, marginTop: '1px' }} />
-                <div style={{ fontSize: '13px', color: 'var(--text-primary, #e0e0e0)', lineHeight: '1.5' }}>
+                <AlertTriangle size={18} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: '1px' }} />
+                <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5' }}>
                   <strong>Remove &ldquo;{confirmDevice.label}&rdquo;?</strong>
-                  <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--text-secondary, #999)', fontSize: '12px' }}>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: '12px' }}>
                     <li>A <strong>24-hour cooldown</strong> will start — no new devices can be added during this time.</li>
                     <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left this month.</li>
                     <li>Re-adding the same device later will bypass the cooldown.</li>
@@ -352,12 +352,12 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                   onClick={() => setConfirmDevice(null)}
                   style={{
                     background: 'transparent',
-                    border: '1px solid var(--border-color, #444)',
+                    border: '1px solid var(--border)',
                     borderRadius: '6px',
                     padding: '6px 14px',
                     cursor: 'pointer',
                     fontSize: '12px',
-                    color: 'var(--text-secondary, #888)',
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   Cancel
@@ -365,14 +365,14 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                 <button
                   onClick={executeRemoveDevice}
                   style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    background: 'rgba(220, 38, 38, 0.15)',
+                    border: '1px solid rgba(220, 38, 38, 0.4)',
                     borderRadius: '6px',
                     padding: '6px 14px',
                     cursor: 'pointer',
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: 'var(--error-color, #ef4444)',
+                    color: 'var(--error)',
                   }}
                 >
                   Remove Device
@@ -383,7 +383,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
 
           {/* Loading state */}
           {loading && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-secondary, #888)' }}>
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-secondary)' }}>
               <Loader size={24} className="spin" />
               <p style={{ marginTop: '8px', fontSize: '13px' }}>Loading devices...</p>
             </div>
@@ -391,7 +391,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
 
           {/* Empty state */}
           {!loading && devices.length === 0 && !error && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-secondary, #888)' }}>
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-secondary)' }}>
               <Monitor size={32} style={{ opacity: 0.5 }} />
               <p style={{ marginTop: '8px', fontSize: '13px' }}>No devices registered yet.</p>
             </div>
@@ -415,29 +415,29 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                   marginBottom: '8px',
                   borderRadius: '8px',
                   border: isCurrent
-                    ? '1px solid var(--accent-color, #6366f1)'
-                    : '1px solid var(--border-color, #333)',
+                    ? '1px solid var(--accent-primary)'
+                    : '1px solid var(--border)',
                   background: isCurrent
-                    ? 'rgba(99, 102, 241, 0.05)'
-                    : 'var(--bg-tertiary, #111)',
+                    ? 'rgba(27, 122, 70, 0.05)'
+                    : 'var(--bg-tertiary)',
                 }}
               >
                 {/* Device info */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                   <div style={{
                     width: '36px', height: '36px', borderRadius: '8px',
-                    background: isCurrent ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary, #1a1a2e)',
+                    background: isCurrent ? 'rgba(27, 122, 70, 0.15)' : 'var(--bg-secondary)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <Monitor size={18} style={{ color: isCurrent ? 'var(--accent-color, #6366f1)' : 'var(--text-secondary, #888)' }} />
+                    <Monitor size={18} style={{ color: isCurrent ? 'var(--accent-primary)' : 'var(--text-secondary)' }} />
                   </div>
 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{
                         fontSize: '14px', fontWeight: 500,
-                        color: 'var(--text-primary, #e0e0e0)',
+                        color: 'var(--text-primary)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {device.device_label || 'Unknown Device'}
@@ -446,7 +446,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                         <span style={{
                           fontSize: '10px', fontWeight: 600,
                           padding: '2px 6px', borderRadius: '4px',
-                          background: 'var(--accent-color, #6366f1)',
+                          background: 'var(--accent-primary)',
                           color: '#fff', textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                         }}>
@@ -455,7 +455,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                       )}
                     </div>
                     <div style={{
-                      fontSize: '11px', color: 'var(--text-tertiary, #666)',
+                      fontSize: '11px', color: 'var(--text-muted)',
                       display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px',
                     }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -463,11 +463,11 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                         Added {formatRelativeTime(device.bound_at)}
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <Wifi size={10} style={{ color: isActive ? '#22c55e' : '#666' }} />
+                        <Wifi size={10} style={{ color: isActive ? 'var(--success)' : 'var(--text-muted)' }} />
                         {isActive ? 'Active now' : `Last seen ${formatRelativeTime(device.last_seen_at)}`}
                       </span>
                     </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-tertiary, #555)', marginTop: '2px', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace' }}>
                       ID: {truncateHwid(device.hwid_hash)}
                     </div>
                   </div>
@@ -480,13 +480,13 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
                     disabled={!canRemove}
                     style={{
                       background: 'transparent',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      border: '1px solid rgba(220, 38, 38, 0.3)',
                       borderRadius: '6px',
                       padding: '6px 10px',
                       cursor: canRemove ? 'pointer' : 'not-allowed',
                       display: 'flex', alignItems: 'center', gap: '4px',
                       fontSize: '12px',
-                      color: 'var(--error-color, #ef4444)',
+                      color: 'var(--error)',
                       opacity: canRemove ? 1 : 0.4,
                       transition: 'all 0.15s ease',
                       flexShrink: 0,
@@ -506,20 +506,20 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
         <div className="modal-footer" style={{ 
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '12px 16px',
-          borderTop: '1px solid var(--border-color, #333)',
+          borderTop: '1px solid var(--border)',
         }}>
           <button
             onClick={fetchDevices}
             disabled={loading}
             style={{
               background: 'transparent',
-              border: '1px solid var(--border-color, #333)',
+              border: '1px solid var(--border)',
               borderRadius: '6px',
               padding: '6px 12px',
               cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '4px',
               fontSize: '12px',
-              color: 'var(--text-secondary, #888)',
+              color: 'var(--text-secondary)',
             }}
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
@@ -529,7 +529,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
           <button
             onClick={onClose}
             style={{
-              background: 'var(--accent-color, #6366f1)',
+              background: 'var(--accent-primary)',
               border: 'none',
               borderRadius: '6px',
               padding: '8px 20px',

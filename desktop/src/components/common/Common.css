@@ -8,7 +8,7 @@
 .loader {
   width: 48px;
   height: 48px;
-  background: var(--text-primary);
+  background: var(--accent-primary);
   display: block;
   margin: 20px auto;
   position: relative;
@@ -26,7 +26,7 @@
   position: absolute;
   width: 48px;
   height: 48px;
-  background: var(--text-primary);
+  background: var(--accent-primary);
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
 }
 

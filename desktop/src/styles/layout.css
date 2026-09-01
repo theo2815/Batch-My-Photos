@@ -1,7 +1,9 @@
 /**
  * Layout Styles
- * 
- * App shell: header, main, footer, theme toggle
+ *
+ * App shell: header, main, footer, theme toggle.
+ * QuickPitik "Finish Line" — paper/ink surfaces, Anton wordmark, mono kicker,
+ * race-stripe finish-line strip capping the header and footer.
  */
 
 .app {
@@ -13,27 +15,45 @@
 
 .app-header {
   text-align: center;
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-lg) var(--space-lg);
   background: var(--bg-glass);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
   position: relative;
   z-index: 10;
 }
 
 .app-header h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-hero);
   font-size: 2rem;
-  font-weight: 700;
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: var(--space-xs);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
 }
 
+/* Folded-B brand mark in the header */
+.app-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Subtitle rendered as a Finish Line mono kicker */
 .app-header p {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 500;
   color: var(--text-secondary);
-  font-size: 0.95rem;
 }
 
 /* Header Actions Container */
@@ -56,9 +76,9 @@
 
 /* Toggle Buttons */
 .header-btn {
-  background: var(--bg-tertiary);
-  border: none;
-  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   padding: var(--space-sm) var(--space-md);
   font-size: 1.25rem;
   cursor: pointer;
@@ -70,8 +90,8 @@
 }
 
 .header-btn:hover {
-  background: var(--bg-secondary);
-  transform: scale(1.1);
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
 }
 
 .header-btn.disabled,
@@ -81,8 +101,8 @@
 }
 
 .header-btn:disabled:hover {
-  background: var(--bg-tertiary);
-  transform: none;
+  background: var(--bg-secondary);
+  border-color: var(--border);
 }
 
 .app-main {
@@ -98,7 +118,7 @@
   padding: var(--space-lg);
   color: var(--text-muted);
   font-size: 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border);
 }
 
 .app-footer .contact-text {
@@ -113,7 +133,7 @@
 }
 
 .app-footer .email-link:hover {
-  color: var(--accent-secondary);
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 

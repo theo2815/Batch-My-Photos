@@ -7,7 +7,7 @@
   justify-content: space-between;
   width: 100%;
   padding: 8px 20px;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary, #2563eb) 100%);
+  background: var(--accent-primary);
   color: #ffffff;
   font-size: 13px;
   font-family: inherit;
@@ -39,8 +39,8 @@
 .update-banner-download {
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   padding: 4px 14px;
   font-size: 12px;
   font-weight: 600;
@@ -51,7 +51,7 @@
 
 .update-banner-download:hover {
   background: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: var(--border);
 }
 
 .update-banner-dismiss {
