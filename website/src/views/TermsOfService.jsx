@@ -37,8 +37,8 @@ const TermsOfService = () => {
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Free &amp; Pro plans</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
-                <li>• The <strong className="text-text-secondary">Free plan</strong> lets you process up to 2 batches per month.</li>
-                <li>• The <strong className="text-text-secondary">Pro plan</strong> gives you unlimited batch processing. Monthly billing. Cancel anytime.</li>
+                <li>• The <strong className="text-text-secondary">Free plan</strong> lets you process unlimited batches and requires an internet connection.</li>
+                <li>• The <strong className="text-text-secondary">Pro plan</strong> adds offline batching and additional devices. Monthly billing. Cancel anytime.</li>
               </ul>
             </div>
             <div>

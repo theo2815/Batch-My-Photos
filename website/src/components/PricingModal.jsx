@@ -91,7 +91,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
           <ul className="space-y-4 text-sm">
             <li className="flex items-center gap-3 text-text-secondary">
               <Check className="w-4 h-4 shrink-0 text-text-muted" />
-              <span>2 batches / month</span>
+              <span>Unlimited batches</span>
             </li>
             <li className="flex items-center gap-3 text-text-secondary">
               <Check className="w-4 h-4 shrink-0 text-text-muted" />

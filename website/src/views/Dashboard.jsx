@@ -209,7 +209,7 @@ export default function Dashboard() {
       if (daysExpired <= 7) {
         setPaymentMsg({
           type: 'warning',
-          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to continue using unlimited batches.`
+          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to restore offline batching and your extra device.`
         })
       }
     }
@@ -427,7 +427,7 @@ export default function Dashboard() {
                 {[
                   { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱299/mo' },
                   { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
-                  { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 2} batches`, full: true },
+                  { label: 'Usage',   value: `${sub?.usage?.used ?? 0} batches this month`, full: true },
                 ].map(d => (
                   <div key={d.label} className={`rounded-xl bg-bg-elevated border border-border-subtle px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
                     <p className="text-[11px] uppercase tracking-wider text-text-muted mb-0.5">{d.label}</p>
@@ -836,7 +836,7 @@ export default function Dashboard() {
                       { label: 'Status', value: sub?.status === 'active' ? 'Active' : (sub?.status || 'Unknown') },
                       { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
                       { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 2 used` },
+                      { label: 'Batches', value: `${sub?.usage?.used || 0} this month` },
                     ].map((item) => (
                       <div key={item.label} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-bg-elevated">
                         <span className="text-sm text-text-secondary">{item.label}</span>
@@ -850,7 +850,7 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-text-muted">Included Features</p>
                     <ul className="space-y-2.5 text-sm">
                       {[
-                        { text: 'Unlimited batches', included: sub?.plan === 'pro' },
+                        { text: 'Unlimited batches', included: true },
                         { text: 'Offline batching', included: sub?.plan === 'pro' },
                         { text: 'Up to 2 devices', included: sub?.plan === 'pro' },
                       ].map((f) => (
