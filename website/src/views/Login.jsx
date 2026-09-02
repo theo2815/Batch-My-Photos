@@ -90,9 +90,6 @@ export default function Login() {
     <div className="relative min-h-screen flex items-center justify-center bg-bg-main overflow-hidden px-4 py-20">
       {/* ── Background orbs (matching hero) ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="hero-orb-1 absolute top-1/4 -left-32 w-96 h-96 rounded-full blur-3xl bg-primary/15" />
-        <div className="hero-orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full blur-3xl bg-accent/15" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(255,122,69,0.05)_0%,transparent_70%)]" />
       </div>
 
       {/* ── Card ── */}
@@ -102,7 +99,7 @@ export default function Login() {
           {/* Logo + heading */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center gap-2.5 group mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-bg-surface to-bg-main border border-border-subtle shadow-xl shadow-black/30 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-bg-elevated border border-border-subtle shadow-card flex items-center justify-center">
                 <img src="/app_icon.png" alt="Logo" className="w-7 h-7 rounded-md" />
               </div>
               <span className="text-lg font-bold text-text-primary group-hover:text-accent transition-colors">Batch My Photos</span>
@@ -125,7 +122,7 @@ export default function Login() {
 
           {/* Error */}
           {error && (
-            <div className="mb-6 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-300 flex items-start gap-2">
+            <div className="mb-6 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
               <span className="shrink-0 mt-0.5">⚠</span>
               <span>{error}</span>
             </div>
@@ -197,7 +194,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary-hover hover:shadow-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98] cursor-pointer"
             >
               {loading ? (
                 <>

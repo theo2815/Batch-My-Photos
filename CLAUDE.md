@@ -60,7 +60,7 @@ The main process is service-oriented. Key services:
 - **batchEngine.js** - Core algorithm: groups files by basename (JPG+RAW pairing), then bin-packs with First-Fit-Decreasing. Supports 50+ image formats.
 - **batchExecutor.js** - Executes file move/copy operations with concurrency limits. Detects same-drive for instant moves vs cross-drive copies.
 - **authService.js** - JWT + refresh token auth via deep links (`batchmyphotos://auth/callback`). Offline session recovery.
-- **subscriptionService.js** - Enforces batch limits (Free: 2/month, Pro: unlimited). Offline enforcement with 3-day cache grace. Clock-tampering detection via monotonic high-water mark.
+- **subscriptionService.js** - Enforces subscription gating (batch processing is unlimited for all users as of 2026-09-02; offline batching stays Pro-only). Offline enforcement with 3-day cache grace. Clock-tampering detection via monotonic high-water mark.
 - **rollbackManager.js** - Persists encrypted operation manifests for full undo capability (max 20 history entries).
 - **progressManager.js** - Tracks file operation progress with interrupt recovery (resume/discard).
 - **securityManager.js** - Path whitelist validation, prevents directory traversal.

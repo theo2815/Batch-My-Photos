@@ -31,7 +31,7 @@
   align-items: center;
   justify-content: space-between;
   transition: 300ms;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   gap: 15px; /* Added spacing between text and arrow */
 }
 
@@ -68,7 +68,8 @@
   transform: translateY(-10px);
   transition: 300ms;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
   margin-top: 8px;
   pointer-events: none; /* Prevent ghost clicks when hidden */
 }

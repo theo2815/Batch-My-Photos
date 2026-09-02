@@ -10,11 +10,14 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Camera, Sun, Moon, Mail, History, Loader2 } from 'lucide-react';
+import { Sun, Moon, Mail, History, Loader2 } from 'lucide-react';
 
 // Constants
 import { STATES } from './constants/appStates';
 import { STRINGS } from './constants/strings';
+
+// Brand
+import appLogo from './images/app_icon.png';
 
 // Custom hooks
 import { useTheme } from './hooks/useTheme';
@@ -483,12 +486,12 @@ function App() {
           <Loader2
             size={36}
             style={{
-              color: '#3b82f6',
+              color: 'var(--accent-primary)',
               animation: 'spin 1.2s linear infinite',
             }}
           />
           <p style={{
-            color: '#a1a1aa',
+            color: 'var(--text-secondary)',
             fontSize: '15px',
             fontWeight: 500,
           }}>
@@ -515,7 +518,7 @@ function App() {
         />
       )}
       <header className="app-header">
-        <h1><Camera className="icon-inline" size={32} strokeWidth={2.5} /> {STRINGS.APP_TITLE}</h1>
+        <h1><img src={appLogo} className="app-logo" alt="" /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>
         <div className="header-actions">
           <ProfileDropdown

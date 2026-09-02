@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
  * Hook for managing theme state and persistence.
  */
 export function useTheme() {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState('light');
 
   // Load saved theme on mount
   useEffect(() => {

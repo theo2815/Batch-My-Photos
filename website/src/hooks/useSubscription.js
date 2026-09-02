@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-const FREE_DEFAULTS = { plan: 'free', status: 'active', usage: { used: 0, limit: 2 } }
+const FREE_DEFAULTS = { plan: 'free', status: 'active', usage: { used: 0, limit: null } }
 
 /**
  * Read the error payload out of a supabase.functions.invoke error.

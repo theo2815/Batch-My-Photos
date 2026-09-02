@@ -91,7 +91,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
           <ul className="space-y-4 text-sm">
             <li className="flex items-center gap-3 text-text-secondary">
               <Check className="w-4 h-4 shrink-0 text-text-muted" />
-              <span>2 batches / month</span>
+              <span>Unlimited batches</span>
             </li>
             <li className="flex items-center gap-3 text-text-secondary">
               <Check className="w-4 h-4 shrink-0 text-text-muted" />
@@ -111,9 +111,9 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
 
           <div className="flex items-center gap-2 mb-3 relative z-10">
             {isPro ? (
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/30">{isTrialActive ? 'Current Plan (Free Trial)' : 'Current Plan'}</span>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-600 text-white">{isTrialActive ? 'Current Plan (Free Trial)' : 'Current Plan'}</span>
             ) : (
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-primary to-deep-ember text-white shadow-md shadow-primary/30">Recommended</span>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary text-white">Recommended</span>
             )}
           </div>
           <div className="flex items-baseline gap-1 mb-2 relative z-10">
@@ -139,7 +139,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
               'Up to 2 devices',
             ].map((input) => (
               <li key={input} className="flex items-center gap-3 text-text-primary font-medium">
-                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                <Check className="w-4 h-4 shrink-0 text-emerald-700" />
                 <span>{input}</span>
               </li>
             ))}
@@ -182,7 +182,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
                           </button>
                         </div>
                         {couponError && (
-                          <p className="text-[11px] text-red-400 px-1">{couponError}</p>
+                          <p className="text-[11px] text-red-700 px-1">{couponError}</p>
                         )}
                         <a
                           href="https://web.facebook.com/people/Batch-My-Photos/61588309656493/"
@@ -196,7 +196,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
                     ) : (
                       <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-success/30 bg-success/10">
                         <div className="flex items-center gap-2">
-                          <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                          <Tag className="w-3.5 h-3.5 text-emerald-700" />
                           <span className="text-xs font-semibold font-mono text-success">{appliedCoupon.code}</span>
                           <span className="text-[11px] text-success/70">— First month only</span>
                         </div>
@@ -209,7 +209,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
                 )}
 
                 {checkoutError && (
-                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs border-red-500/30 bg-red-500/10 text-red-300">
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs border-red-500/30 bg-red-500/10 text-red-700">
                     <X className="w-3.5 h-3.5 shrink-0" />
                     <span>{checkoutError}</span>
                   </div>
@@ -218,7 +218,7 @@ export default function PricingModal({ isOpen, onClose, onUpgrade, onStartTrial,
                 <button
                   onClick={handleUpgradeClick}
                   disabled={checkoutLoading || trialLoading}
-                  className={`w-full py-3 rounded-xl bg-gradient-to-r from-primary to-deep-ember hover:from-primary-hover hover:to-accent text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all cursor-pointer flex items-center justify-center gap-2 ${(checkoutLoading || trialLoading) ? 'opacity-75 cursor-wait' : ''}`}
+                  className={`w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-sm font-semibold text-white transition-all cursor-pointer flex items-center justify-center gap-2 ${(checkoutLoading || trialLoading) ? 'opacity-75 cursor-wait' : ''}`}
                 >
                   {(checkoutLoading || trialLoading) ? (
                     <div className="flex items-center gap-2">

@@ -1,28 +1,45 @@
 /**
  * CSS Variables - Design System
- * 
- * Contains all CSS custom properties for theming
+ *
+ * QuickPitik "Finish Line" — shared with the BatchMyPhotos website.
+ * Light is the default (:root); the dark theme is a cohesive Finish Line
+ * variant applied via [data-theme="dark"]. Token NAMES are unchanged from the
+ * previous system so existing call sites keep working; only values changed,
+ * plus a few previously-undefined tokens are now defined.
  */
 
 :root {
-  /* Color Palette - Studio Pro (Neutral & Professional) */
-  --bg-primary: #1e1e1e;   /* Deep Charcoal */
-  --bg-secondary: #2d2d2d; /* Panel Grey */
-  --bg-tertiary: #383838;  /* Light Grey */
-  --bg-glass: rgba(45, 45, 45, 0.95); /* High opacity for cleaner look */
+  /* Type — bundled locally (see base.css @font-face) */
+  --font-hero: 'Anton', 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Courier New', Courier, monospace;
 
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa; /* Silver */
-  --text-muted: #71717a;
+  /* Color Palette — Finish Line (light, default) */
+  --bg-primary: #f8f5ee;   /* paper — warm bone canvas */
+  --bg-secondary: #ffffff; /* white card/panel surface */
+  --bg-tertiary: #efeae0;  /* paper-deep — chips, inputs, insets */
+  --bg-glass: rgba(248, 245, 238, 0.85);
+  --bg-hover: #efeae0;     /* was undefined */
 
-  --accent-primary: #3b82f6; /* Electric Blue */
-  --accent-secondary: #2563eb;
-  /* Subtle gradient instead of strong purple/pink */
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --text-primary: #111111;   /* ink */
+  --text-secondary: #475569; /* slate */
+  --text-muted: #64748b;     /* slate-soft */
 
-  --success: #10b981; /* Emerald */
-  --warning: #f59e0b;
-  --error: #ef4444;
+  --border: #e5e2d9;         /* line — was undefined */
+  --border-color: #e5e2d9;   /* alias — was undefined */
+  --border-primary: #e5e2d9; /* alias — was undefined */
+
+  --accent-primary: #1b7a46;  /* forest green */
+  --accent-secondary: #14562f;/* deep green */
+  --accent: #1b7a46;          /* was undefined (ErrorBoundary rendered purple) */
+  --accent-hover: #14562f;    /* was undefined */
+  --accent-pine: #0c3321;     /* deepest — race-stripe segment 3 */
+  --accent-gradient: #1b7a46; /* solid (Finish Line uses no gradients); keeps call sites working */
+  --accent-soft: rgba(27, 122, 70, 0.1); /* tinted green surface fill */
+
+  --success: #1b7a46;
+  --warning: #d97706; /* amber — also the blur-detection feature color */
+  --error: #dc2626;
 
   /* Spacing */
   --space-xs: 4px;
@@ -32,17 +49,20 @@
   --space-xl: 32px;
   --space-2xl: 48px;
 
-  /* Border Radius */
-  --radius-sm: 4px;   /* Sharper corners for professional feel */
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  /* Border Radius — softer, Finish Line */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;   /* large cards */
+  --radius-pill: 999px; /* buttons, badges, chips, toggle */
 
-  /* Shadows - More subtle */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 10px rgba(59, 130, 246, 0.2); /* Blue glow */
+  /* Shadows — soft, ink-tinted; no glows */
+  --shadow-sm: 0 1px 2px rgba(17, 17, 20, 0.04);
+  --shadow-md: 0 1px 2px rgba(17, 17, 20, 0.04), 0 8px 24px -12px rgba(17, 17, 20, 0.12);
+  --shadow-lg: 0 2px 4px rgba(17, 17, 20, 0.05), 0 20px 40px -16px rgba(17, 17, 20, 0.22);
+  --shadow-glow: 0 4px 16px -4px rgba(27, 122, 70, 0.25); /* soft green lift on hover (not a glow ring) */
+  --focus-ring: 0 0 0 3px rgba(27, 122, 70, 0.22);       /* green focus ring */
 
   /* Transitions */
   --transition-fast: 150ms ease;
@@ -50,18 +70,40 @@
   --transition-slow: 400ms ease;
 }
 
-/* Light Theme */
-[data-theme="light"] {
-  --bg-primary: #f5f7fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #e8ecf1;
-  --bg-glass: rgba(255, 255, 255, 0.9);
+/* Finish Line — Dark (photographer-friendly; warm ink canvas + green) */
+[data-theme="dark"] {
+  --bg-primary: #15130e;   /* warm ink */
+  --bg-secondary: #201c15; /* raised panel */
+  --bg-tertiary: #2a251c;  /* chips, inputs, insets */
+  --bg-glass: rgba(21, 19, 14, 0.85);
+  --bg-hover: #2a251c;
 
-  --text-primary: #1a1a2e;
-  --text-secondary: #4a4a6a;
-  --text-muted: #8888a8;
+  --text-primary: #f8f5ee; /* paper */
+  --text-secondary: #b8b0a0;
+  --text-muted: #8a8272;
 
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --border: rgba(248, 245, 238, 0.1);
+  --border-color: rgba(248, 245, 238, 0.1);
+  --border-primary: rgba(248, 245, 238, 0.14);
+
+  --accent-primary: #34a867;  /* lifted green for AA on ink */
+  --accent-secondary: #1b7a46;
+  --accent: #34a867;
+  --accent-hover: #2e9e5f;
+  --accent-pine: #14562f;     /* keep all 3 stripe bars visible on ink */
+  --accent-gradient: #34a867;
+  --accent-soft: rgba(52, 168, 103, 0.14);
+
+  --success: #34a867;
+  --warning: #e0922a;
+  --error: #f26b6b;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5), 0 24px 48px -18px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 4px 18px -4px rgba(52, 168, 103, 0.35);
+  --focus-ring: 0 0 0 3px rgba(52, 168, 103, 0.3);
 }
+
+/* Legacy alias: the old [data-theme="light"] block is gone — light is now :root.
+   A stored preference of "light" simply matches :root; "dark" hits the block above. */

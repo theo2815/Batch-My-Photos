@@ -212,13 +212,13 @@ export default function AdminCoupons() {
   const isExpired = (d) => d && new Date(d) < new Date()
 
   const getStatusBadge = (coupon) => {
-    if (!coupon.is_active) return { text: 'Inactive', bg: 'bg-red-500/10', ring: 'ring-red-500/20', text_color: 'text-red-400', dot: 'bg-red-400' }
-    if (isExpired(coupon.expires_at)) return { text: 'Expired', bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text_color: 'text-amber-400', dot: 'bg-amber-400' }
-    return { text: 'Active', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text_color: 'text-emerald-400', dot: 'bg-emerald-400' }
+    if (!coupon.is_active) return { text: 'Inactive', bg: 'bg-red-500/10', ring: 'ring-red-500/20', text_color: 'text-red-700', dot: 'bg-red-400' }
+    if (isExpired(coupon.expires_at)) return { text: 'Expired', bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text_color: 'text-amber-700', dot: 'bg-amber-400' }
+    return { text: 'Active', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text_color: 'text-emerald-700', dot: 'bg-emerald-400' }
   }
 
   // ── Reusable Styles ────────────────────────────────────────────────────────
-  const card = 'bg-gradient-to-br from-bg-surface/80 to-bg-main/40 border-border-subtle backdrop-blur-sm'
+  const card = 'bg-bg-elevated border-border-subtle'
   const inputClass = 'w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none transition-all duration-200 bg-bg-elevated/80 border-border-subtle text-text-primary placeholder-text-muted focus:border-primary focus:ring-1 focus:ring-primary/30'
   const labelClass = 'block text-xs font-semibold uppercase tracking-wider mb-1.5 text-text-secondary'
 
@@ -234,7 +234,7 @@ export default function AdminCoupons() {
             </div>
             <div>
               <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-                <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                <span className="text-primary">
                   Referral Coupons
                 </span>
               </h1>
@@ -248,7 +248,7 @@ export default function AdminCoupons() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
               showCreate
                 ? 'bg-bg-elevated text-text-secondary hover:bg-bg-surface'
-                : 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/25 hover:shadow-primary/40'
+                : 'bg-primary hover:bg-primary-hover text-white'
             }`}
           >
             {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -258,7 +258,7 @@ export default function AdminCoupons() {
 
         {/* ── Alerts ──────────────────────────────────────────────────────── */}
         {error && (
-          <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-sm animate-in fade-in slide-in-from-top-2 bg-red-500/10 border border-red-500/20 text-red-300">
+          <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-sm animate-in fade-in slide-in-from-top-2 bg-red-500/10 border border-red-500/20 text-red-700">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span className="flex-1">{error}</span>
             <button onClick={() => setError('')} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity">
@@ -267,7 +267,7 @@ export default function AdminCoupons() {
           </div>
         )}
         {success && (
-          <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-sm animate-in fade-in slide-in-from-top-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+          <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-sm animate-in fade-in slide-in-from-top-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span className="flex-1">{success}</span>
             <button onClick={() => setSuccess('')} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity">
@@ -346,7 +346,7 @@ export default function AdminCoupons() {
                 <button
                   type="submit"
                   disabled={createLoading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-50"
                 >
                   {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {createLoading ? 'Creating…' : 'Create Coupon'}
@@ -516,8 +516,8 @@ export default function AdminCoupons() {
                           onClick={() => handleToggleActive(coupon)}
                           className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                             coupon.is_active
-                              ? 'text-amber-400 hover:bg-amber-500/10'
-                              : 'text-emerald-400 hover:bg-emerald-500/10'
+                              ? 'text-amber-700 hover:bg-amber-500/10'
+                              : 'text-emerald-700 hover:bg-emerald-500/10'
                           }`}
                           title={coupon.is_active ? 'Deactivate' : 'Activate'}
                         >
@@ -526,7 +526,7 @@ export default function AdminCoupons() {
                         </button>
                         <button
                           onClick={() => handleDelete(coupon)}
-                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all text-text-muted hover:text-red-400 hover:bg-red-500/10"
+                          className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all text-text-muted hover:text-red-700 hover:bg-red-500/10"
                           title="Delete"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

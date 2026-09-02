@@ -42,3 +42,7 @@ backend/migrations/
 
 # Claude Code local settings
 .claude/
+
+# AI agent skills installed via `npx skills add` (local tooling, not vendored)
+.agents/
+skills-lock.json

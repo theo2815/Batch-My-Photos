@@ -34,10 +34,11 @@
 
 .btn {
   padding: var(--space-md) var(--space-xl);
-  border: none;
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all var(--transition-fast);
   display: inline-flex;
@@ -46,28 +47,29 @@
 }
 
 .btn.primary {
-  background: var(--accent-gradient);
+  background: var(--accent-primary);
   color: #ffffff;
-  box-shadow: var(--shadow-md);
 }
 
 .btn.primary:hover {
+  background: var(--accent-hover);
   transform: translateY(-2px);
   box-shadow: var(--shadow-glow);
 }
 
 .btn.secondary {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 .btn.secondary:hover {
-  background: var(--bg-secondary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .btn.danger {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--bg-secondary);
   color: var(--error);
   border: 1px solid var(--error);
 }
@@ -75,11 +77,15 @@
 .btn.danger:hover {
   background: var(--error);
   color: #ffffff;
-  box-shadow: var(--shadow-glow-red, 0 0 10px rgba(239, 68, 68, 0.4));
 }
 
 .btn:active {
   transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ============================================================================
@@ -126,7 +132,7 @@
 /* Input Error State */
 .input-error {
   border-color: var(--error) !important;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
 }
 
 .input-error:focus {
@@ -142,7 +148,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-md);
-  background: rgba(30, 30, 30, 0.85);
+  background: var(--bg-glass);
   backdrop-filter: blur(4px);
   z-index: 100;
 }

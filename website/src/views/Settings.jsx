@@ -3,21 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
-import { useTheme } from '../context/ThemeContext'
 import {
   User, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2,
-  Check, Sun, Moon, Monitor, ShieldCheck, Palette,
+  Check, ShieldCheck,
 } from 'lucide-react'
 import { getPasswordStrength } from '../utils/passwordStrength'
-
-
-
-/* ─── Theme options ──────────────────────────────────────────────────────── */
-const THEMES = [
-  { key: 'light', label: 'Light', icon: Sun, desc: 'Clean & bright interface' },
-  { key: 'dark',  label: 'Dark',  icon: Moon, desc: 'Easy on the eyes' },
-  { key: 'system', label: 'System', icon: Monitor, desc: 'Match your OS setting' },
-]
 
 export default function Settings() {
   const router = useRouter()
@@ -108,9 +98,6 @@ export default function Settings() {
   }
 
 
-  /* ── Theme (from context) ── */
-  const { theme, setTheme } = useTheme()
-
   /* ── Derived ── */
   const initials = user?.user_metadata?.full_name
     ? user.user_metadata.full_name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -127,13 +114,6 @@ export default function Settings() {
 
   return (
     <div className="relative min-h-screen bg-bg-main overflow-hidden">
-      {/* ── Ambient orbs ── */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="hero-orb-1 absolute top-20 -left-40 w-[500px] h-[500px] rounded-full blur-3xl bg-primary/10" />
-        <div className="hero-orb-2 absolute bottom-20 -right-40 w-[500px] h-[500px] rounded-full blur-3xl bg-purple-600/10" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.04)_0%,transparent_50%)]" />
-      </div>
-
       {/* ── Content ── */}
       <div className="relative z-10 max-w-2xl mx-auto px-4 sm:px-6 pt-28 pb-20">
 
@@ -147,7 +127,7 @@ export default function Settings() {
             Back to Dashboard
           </button>
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-lg font-bold text-white shadow-lg shadow-primary/20 shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-lg font-bold text-white shrink-0">
               {initials}
             </div>
             <div>
@@ -182,8 +162,8 @@ export default function Settings() {
             {profileMsg && (
               <div className={`mb-5 rounded-xl px-4 py-3 text-sm flex items-start gap-2 ${
                 profileMsg.type === 'error'
-                  ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+                  ? 'bg-red-500/10 border border-red-500/20 text-red-700'
+                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700'
               }`}>
                 <span className="shrink-0 mt-0.5">{profileMsg.type === 'error' ? '⚠' : '✓'}</span>
                 <span>{profileMsg.text}</span>
@@ -234,7 +214,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={profileSaving}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary-hover hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     Save Changes
@@ -268,8 +248,8 @@ export default function Settings() {
             {pwMsg && (
               <div className={`mb-5 rounded-xl px-4 py-3 text-sm flex items-start gap-2 ${
                 pwMsg.type === 'error'
-                  ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+                  ? 'bg-red-500/10 border border-red-500/20 text-red-700'
+                  : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700'
               }`}>
                 <span className="shrink-0 mt-0.5">{pwMsg.type === 'error' ? '⚠' : '✓'}</span>
                 <span>{pwMsg.text}</span>
@@ -308,10 +288,10 @@ export default function Settings() {
                   <div className="mt-2.5 space-y-1.5">
                     <div className="flex gap-1">
                       {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.color : 'bg-bg-elevated'}`} />
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.color : 'bg-bg-surface'}`} />
                       ))}
                     </div>
-                    <p className={`text-xs ${strength.level <= 1 ? 'text-red-400' : strength.level <= 2 ? 'text-amber-400' : strength.level <= 3 ? 'text-accent' : 'text-emerald-400'}`}>
+                    <p className={`text-xs ${strength.level <= 1 ? 'text-red-700' : strength.level <= 2 ? 'text-amber-700' : strength.level <= 3 ? 'text-accent' : 'text-emerald-700'}`}>
                       {strength.label}
                     </p>
                   </div>
@@ -351,65 +331,19 @@ export default function Settings() {
                   </button>
                 </div>
                 {confirmPassword && confirmPassword !== newPassword && (
-                  <p className="mt-1.5 text-xs text-red-400">Passwords don't match</p>
+                  <p className="mt-1.5 text-xs text-red-700">Passwords don't match</p>
                 )}
               </div>
 
               <button
                 type="submit"
                 disabled={pwSaving || !newPassword || !confirmPassword}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white shadow-md shadow-primary/20 hover:bg-primary-hover hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] cursor-pointer"
               >
                 {pwSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
                 Update Password
               </button>
             </form>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            THEME
-           ═══════════════════════════════════════════════════════════════════ */}
-        <section id="preferences" className="auth-card-in mb-6" style={{ animationDelay: '0.2s' }}>
-          <div className="rounded-2xl border border-border-subtle bg-bg-elevated p-6 sm:p-7">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="w-8 h-8 rounded-lg bg-bg-surface flex items-center justify-center">
-                <Palette className="w-4 h-4 text-text-secondary" />
-              </div>
-              <h2 className="text-[15px] font-display font-bold text-text-primary">Appearance</h2>
-            </div>
-
-            <p className="text-sm text-text-muted mb-5">Choose how Batch My Photos looks. This applies across the entire site.</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {THEMES.map(({ key, label, icon: I, desc }) => (
-                <button
-                  key={key}
-                  onClick={() => setTheme(key)}
-                  className={`group relative rounded-xl border p-4 text-left transition-all cursor-pointer ${
-                    theme === key
-                      ? 'border-primary/40 bg-primary/[0.06] shadow-lg shadow-primary/5'
-                      : 'border-border-subtle bg-bg-elevated hover:bg-bg-surface hover:border-border-subtle'
-                  }`}
-                >
-                  {/* Selected indicator */}
-                  {theme === key && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 transition-colors ${
-                    theme === key
-                      ? 'bg-primary/15 border border-primary/20'
-                      : 'bg-bg-elevated border border-border-subtle group-hover:border-border-subtle'
-                  }`}>
-                    <I className={`w-4.5 h-4.5 transition-colors ${theme === key ? 'text-accent' : 'text-text-muted group-hover:text-text-secondary'}`} />
-                  </div>
-                  <p className={`text-sm font-semibold transition-colors ${theme === key ? 'text-text-primary' : 'text-text-secondary'}`}>{label}</p>
-                  <p className="text-[12px] text-text-muted mt-0.5">{desc}</p>
-                </button>
-              ))}
-            </div>
           </div>
         </section>
 

@@ -209,7 +209,7 @@ export default function Dashboard() {
       if (daysExpired <= 7) {
         setPaymentMsg({
           type: 'warning',
-          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to continue using unlimited batches.`
+          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to restore offline batching and your extra device.`
         })
       }
     }
@@ -273,9 +273,6 @@ export default function Dashboard() {
 
       {/* ── Ambient background (matches auth pages) ── */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="hero-orb-1 absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-primary/8 blur-3xl" />
-        <div className="hero-orb-2 absolute -bottom-32 -right-32 w-[420px] h-[420px] rounded-full bg-deep-ember/8 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,122,69,0.04)_0%,transparent_60%)]" />
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-24 pb-20">
@@ -283,8 +280,8 @@ export default function Dashboard() {
         {/* Payment notification toast */}
         {paymentMsg && (
           <div className={`mb-6 rounded-xl px-5 py-4 text-sm flex items-center gap-3 animate-[footerModalIn_0.2s_ease-out] ${
-            paymentMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-            : paymentMsg.type === 'error'   ? 'bg-red-500/10 border border-red-500/20 text-red-300'
+            paymentMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700'
+            : paymentMsg.type === 'error'   ? 'bg-red-500/10 border border-red-500/20 text-red-700'
             : 'bg-primary/10 border border-primary/20 text-accent'
           }`}>
             <span>{paymentMsg.text}</span>
@@ -300,7 +297,7 @@ export default function Dashboard() {
             {/* Left: greeting */}
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
-                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-lg font-bold text-white shadow-md shadow-primary/20">
+                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-lg font-bold text-white">
                   {initials}
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-bg-main" title="Online" />
@@ -331,12 +328,12 @@ export default function Dashboard() {
         <section className="auth-card-in mb-8" style={{ animationDelay: '0.05s' }}>
           <div className="relative group rounded-2xl border border-border-subtle bg-bg-elevated overflow-hidden">
             {/* Gradient shimmer on hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/[0.04] to-accent/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-primary/[0.03] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="absolute top-0 right-0 w-72 h-72 bg-primary/[0.03] rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/4" />
 
             <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
               {/* App icon */}
-              <div className="shrink-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-gradient-to-br from-bg-surface to-bg-main border border-border-subtle shadow-xl shadow-black/30 flex items-center justify-center">
+              <div className="shrink-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-bg-elevated border border-border-subtle shadow-card flex items-center justify-center">
                 <img src="/app_icon.png" alt="BatchMyPhotos" className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg" />
               </div>
 
@@ -402,8 +399,8 @@ export default function Dashboard() {
                   <h3 className="text-[15px] font-display font-bold text-text-primary">Your Plan</h3>
                 </div>
                 <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full ${
-                  sub?.status === 'active'  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-                : sub?.status === 'past_due'? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20'
+                  sub?.status === 'active'  ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20'
+                : sub?.status === 'past_due'? 'bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/20'
                 :                            'bg-bg-elevated text-text-muted ring-1 ring-border-subtle'
                 }`}>
                   {sub?.status === 'active' ? 'Active' : sub?.status === 'past_due' ? 'Past Due' : sub?.status === 'trialing' ? 'Trial' : isFree ? 'Free' : 'Unknown'}
@@ -412,10 +409,10 @@ export default function Dashboard() {
 
               {/* Plan name + badge */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/15 to-accent/15 border border-primary/10 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/10 flex items-center justify-center">
                   {isFree
                     ? <Sparkles className="w-5 h-5 text-accent" />
-                    : <Crown  className="w-5 h-5 text-amber-400" />}
+                    : <Crown  className="w-5 h-5 text-amber-700" />}
                 </div>
                 <div>
                   <p className="text-xl font-display font-bold text-text-primary tracking-tight">{isFree ? 'Free' : 'Pro'}</p>
@@ -430,7 +427,7 @@ export default function Dashboard() {
                 {[
                   { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱299/mo' },
                   { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
-                  { label: 'Usage',   value: !isFree ? 'Unlimited' : `${sub?.usage?.used ?? 0} / ${sub?.usage?.limit ?? 2} batches`, full: true },
+                  { label: 'Usage',   value: `${sub?.usage?.used ?? 0} batches this month`, full: true },
                 ].map(d => (
                   <div key={d.label} className={`rounded-xl bg-bg-elevated border border-border-subtle px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
                     <p className="text-[11px] uppercase tracking-wider text-text-muted mb-0.5">{d.label}</p>
@@ -448,7 +445,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <code className="flex-1 text-sm font-mono text-accent bg-bg-surface/60 rounded-lg px-3 py-1.5 truncate select-all">{sub.licenseKey}</code>
                     <button onClick={copyKey} className="shrink-0 p-2 rounded-lg hover:bg-bg-surface text-text-muted hover:text-text-primary transition-colors cursor-pointer">
-                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {copied ? <Check className="w-4 h-4 text-emerald-700" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -460,7 +457,7 @@ export default function Dashboard() {
                   <div className="flex flex-col gap-1.5">
                     <button
                       onClick={() => setActiveModal('pricing')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-accent hover:brightness-110 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover px-4 py-2.5 text-sm font-semibold text-white transition-all cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4 text-white" /> {!sub?.free_trial_used ? 'Start Free Trial' : 'Upgrade to Pro'}
                     </button>
@@ -492,7 +489,7 @@ export default function Dashboard() {
 
               {/* Avatar row */}
               <div className="flex items-center gap-3.5 mb-5">
-                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-base font-bold text-white shadow-md shadow-primary/20 shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-base font-bold text-white shrink-0">
                   {initials}
                 </div>
                 <div className="min-w-0">
@@ -554,19 +551,19 @@ export default function Dashboard() {
               {/* Usage bar */}
               <div className="w-full h-2 rounded-full bg-bg-elevated mb-4 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                  className="h-full rounded-full bg-primary transition-all duration-500"
                   style={{ width: `${Math.min((devices.length / Math.max(deviceLimit, 1)) * 100, 100)}%` }}
                 />
               </div>
 
               {/* Removal limits info */}
               <div className="flex items-center justify-between mb-4 text-[11px] text-text-muted">
-                <span className={`flex items-center gap-1 ${atRemovalLimit ? 'text-red-400' : ''}`}>
+                <span className={`flex items-center gap-1 ${atRemovalLimit ? 'text-red-700' : ''}`}>
                   <Trash2 className="w-3 h-3" />
                   <span className="font-mono">{removalsUsed} / {removalsLimit}</span> removals used this month
                 </span>
                 {hasCooldown && (
-                  <span className="flex items-center gap-1 text-amber-400">
+                  <span className="flex items-center gap-1 text-amber-700">
                     <Timer className="w-3 h-3" />
                     Cooldown: <span className="font-mono">{cooldownText}</span>
                   </span>
@@ -575,7 +572,7 @@ export default function Dashboard() {
 
               {/* Cooldown warning banner */}
               {hasCooldown && (
-                <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed bg-amber-500/10 border border-amber-500/20 text-amber-700">
                   <Timer className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>A device was recently removed. New devices cannot be added for another <strong>{cooldownText}</strong>. Re-adding a previously used device is not affected.</span>
                 </div>
@@ -583,7 +580,7 @@ export default function Dashboard() {
 
               {/* At removal limit banner */}
               {atRemovalLimit && (
-                <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed bg-red-500/10 border border-red-500/20 text-red-300">
+                <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed bg-red-500/10 border border-red-500/20 text-red-700">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>You&apos;ve used all {removalsLimit} device removals for this billing period. Removals will reset next month.</span>
                 </div>
@@ -591,7 +588,7 @@ export default function Dashboard() {
 
               {/* Error */}
               {(devicesError || removeError) && (
-                <div className="mb-4 rounded-xl px-4 py-3 text-sm bg-red-500/10 border border-red-500/20 text-red-300">
+                <div className="mb-4 rounded-xl px-4 py-3 text-sm bg-red-500/10 border border-red-500/20 text-red-700">
                   {devicesError || removeError}
                 </div>
               )}
@@ -600,7 +597,7 @@ export default function Dashboard() {
               {confirmRemoveDevice && (
                 <div className="mb-4 rounded-xl p-4 bg-amber-500/5 border border-amber-500/15">
                   <div className="flex items-start gap-2.5 mb-3">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
                     <div className="text-xs leading-relaxed text-text-secondary">
                       <p className="font-semibold mb-1">Remove &ldquo;{confirmRemoveDevice.label}&rdquo;?</p>
                       <ul className="list-disc pl-4 space-y-0.5 text-text-muted">
@@ -619,7 +616,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={executeRemoveDevice}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-700 border border-red-500/30 hover:bg-red-500/25 transition-colors cursor-pointer"
                     >
                       Remove Device
                     </button>
@@ -664,13 +661,13 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-3">
-                          <span className={`text-[11px] font-mono ${isActive ? 'text-emerald-400' : 'text-text-muted'}`}>
+                          <span className={`text-[11px] font-mono ${isActive ? 'text-emerald-700' : 'text-text-muted'}`}>
                             {isActive ? 'Active now' : device.last_seen_at ? `Last seen ${new Date(device.last_seen_at).toLocaleDateString()}` : 'Never seen'}
                           </span>
                           <button
                             onClick={() => promptRemoveDevice(device.id, device.device_label)}
                             disabled={!canRemove}
-                            className="p-2 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="p-2 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             title={atRemovalLimit ? 'Monthly removal limit reached' : removingDeviceId === device.id ? 'Removing…' : 'Remove device'}
                           >
                             {removingDeviceId === device.id ? (
@@ -781,8 +778,8 @@ export default function Dashboard() {
                   <div className="p-4 rounded-xl border bg-red-500/10 border-red-500/20 flex gap-3">
                     <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="font-bold text-sm text-red-400 mb-1">Cancel Subscription?</h4>
-                      <p className="text-sm text-red-200 leading-relaxed">
+                      <h4 className="font-bold text-sm text-red-700 mb-1">Cancel Subscription?</h4>
+                      <p className="text-sm text-red-800 leading-relaxed">
                         This will <strong>immediately</strong> downgrade your account to the Free plan. You will lose access to Pro features right now.
                       </p>
                     </div>
@@ -824,7 +821,7 @@ export default function Dashboard() {
                   <div className="rounded-xl p-4 bg-primary/[0.06] border border-primary/20">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-accent">Current Plan</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gradient-to-r from-primary to-accent text-white">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary text-white">
                         {sub?.plan === 'pro' ? 'Pro' : 'Free'}
                       </span>
                     </div>
@@ -839,7 +836,7 @@ export default function Dashboard() {
                       { label: 'Status', value: sub?.status === 'active' ? 'Active' : (sub?.status || 'Unknown') },
                       { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
                       { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Batches', value: sub?.plan === 'pro' ? 'Unlimited' : `${sub?.usage?.used || 0} / 2 used` },
+                      { label: 'Batches', value: `${sub?.usage?.used || 0} this month` },
                     ].map((item) => (
                       <div key={item.label} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-bg-elevated">
                         <span className="text-sm text-text-secondary">{item.label}</span>
@@ -853,13 +850,13 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-text-muted">Included Features</p>
                     <ul className="space-y-2.5 text-sm">
                       {[
-                        { text: 'Unlimited batches', included: sub?.plan === 'pro' },
+                        { text: 'Unlimited batches', included: true },
                         { text: 'Offline batching', included: sub?.plan === 'pro' },
                         { text: 'Up to 2 devices', included: sub?.plan === 'pro' },
                       ].map((f) => (
                         <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? 'text-text-primary' : 'text-text-muted'}`}>
                           {f.included
-                            ? <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                            ? <Check className="w-4 h-4 shrink-0 text-emerald-700" />
                             : <X className="w-4 h-4 shrink-0 opacity-50" />
                           }
                           <span>{f.text}</span>
@@ -880,7 +877,7 @@ export default function Dashboard() {
                     {sub?.plan === 'pro' && (
                       <button
                         onClick={() => setConfirmCancel(true)}
-                        className="w-full py-2 text-xs font-medium text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                        className="w-full py-2 text-xs font-medium text-red-700 hover:text-red-800 transition-colors cursor-pointer"
                       >
                         Cancel Subscription
                       </button>

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react';
-import { Camera, X, Minus, Square, Command, History, Sun, Moon, ArrowLeft } from 'lucide-react';
+import { X, Minus, Square, Command, History, Sun, Moon, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import '../styles/desktop.css';
 
@@ -19,12 +19,12 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
   return (
     <div className="min-h-screen bg-bg-main flex items-center justify-center p-4 font-sans selection:bg-primary/30">
       <div className={`sim-app ${simTheme === 'light' ? 'light' : ''} w-full max-w-[900px] h-[700px] rounded-xl border shadow-2xl flex flex-col overflow-hidden relative`}
-           style={{ background: simTheme === 'light' ? '#f4ece2' : '#17120f', borderColor: simTheme === 'light' ? '#d8cab8' : '#2a211b' }}>
+           style={{ background: simTheme === 'light' ? '#f8f5ee' : '#15130e', borderColor: simTheme === 'light' ? '#e5e2d9' : '#2a251c' }}>
         
         {/* ─── macOS Title Bar ────────────────────────────────────────── */}
         <div className="h-10 flex items-center justify-between px-4 border-b shrink-0 select-none"
-             style={{ background: simTheme === 'light' ? '#efe5d8' : '#2a211b', borderColor: simTheme === 'light' ? '#d8cab8' : '#3f3f46' }}>
-          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#6f6257' : '#94a3b8' }}>
+             style={{ background: simTheme === 'light' ? '#efeae0' : '#201c15', borderColor: simTheme === 'light' ? '#e5e2d9' : '#2a251c' }}>
+          <div className="flex items-center space-x-2 text-xs font-medium" style={{ color: simTheme === 'light' ? '#475569' : '#b8b0a0' }}>
             <div className="flex space-x-2 mr-4">
               <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors cursor-pointer group flex items-center justify-center">
                 <Link href="/" className="opacity-0 group-hover:opacity-100 text-black">
@@ -41,7 +41,7 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
             <Command size={14} className="text-accent" />
             <span>BatchMyPhotos - Demo Mode</span>
           </div>
-          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: simTheme === 'light' ? '#a89a8c' : '#64748b' }}>
+          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: simTheme === 'light' ? '#64748b' : '#8a8272' }}>
             Interactive Web Demo
           </div>
         </div>
@@ -52,7 +52,7 @@ const SimulatorLayout = ({ children, scrollMain = false, onShowHistory, hasHisto
           {/* App Header — gradient title + subtitle (matches desktop layout.css) */}
           <div className="sim-header">
             <h1>
-              <Camera size={28} />
+              <img src="/app_icon.png" alt="" />
               Batch My Photos
             </h1>
             <p>Organize your photos into batch folders</p>

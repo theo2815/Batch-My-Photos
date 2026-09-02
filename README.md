@@ -73,7 +73,7 @@ BatchMyPhotos is a desktop client + a Next.js marketing/dashboard website, with 
 - **batchEngine.js** — groups files by basename, then bin-packs with First-Fit-Decreasing.
 - **batchExecutor.js** — executes moves/copies with concurrency limits and cross-drive detection.
 - **authService.js** — JWT + refresh-token auth via deep links (`batchmyphotos://auth/callback`).
-- **subscriptionService.js** — enforces batch limits (Free: 2/month, Pro: unlimited) with offline grace and monotonic clock-tampering detection.
+- **subscriptionService.js** — enforces subscription gating (batch processing unlimited for all; offline batching stays Pro-only) with offline grace and monotonic clock-tampering detection.
 - **rollbackManager.js** — persists encrypted operation manifests for full undo.
 - **progressManager.js** — tracks progress with interrupt recovery.
 - **deviceService.js** — hardware-ID binding via node-machine-id (Pro: 2 devices, Pro+: 5).
