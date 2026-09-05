@@ -80,7 +80,7 @@ export function useSubscription() {
       if (!mounted || !session) return
 
       realtimeChannel = supabase
-        .channel('public:subscriptions')
+        .channel(`subscriptions:${session.user.id}:${Math.random().toString(36).slice(2)}`) // unique per hook instance — Navbar + Dashboard both mount this hook
         .on(
           'postgres_changes',
           {
