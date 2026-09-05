@@ -740,13 +740,15 @@ function App() {
         onProceed={handleOverrideSafetyCheck}
       />
 
-      <BlurSensitivityModal
-        isOpen={showBlurSensitivityModal}
-        currentCategories={blurCategories}
-        currentSensitivity={blurSensitivity}
-        onStart={handleConfirmBlurAnalysis}
-        onCancel={handleDismissBlurModal}
-      />
+      {showBlurSensitivityModal && (
+        <BlurSensitivityModal
+          isOpen
+          currentCategories={blurCategories}
+          currentSensitivity={blurSensitivity}
+          onStart={handleConfirmBlurAnalysis}
+          onCancel={handleDismissBlurModal}
+        />
+      )}
 
       <DeviceManagerModal
         isOpen={showDeviceManagerModal}

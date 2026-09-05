@@ -319,12 +319,10 @@ async function checkAuthStatus() {
       }
     }
     // Server explicitly rejected the session (401/403) — session is truly invalid.
-    // Auto-open the login page so the user can re-authenticate with one click
-    // instead of having to manually navigate to Settings → Login.
+    // The renderer shows the login screen with a "session expired" notice; the
+    // user opens the browser themselves (no unsolicited browser launch).
     logger.warn('⚠️ [AUTH] Stored session is invalid, clearing')
     clearSession()
-    logger.log('🔄 [AUTH] Auto-opening login page for seamless re-authentication...')
-    openLoginPage()
     return { isAuthenticated: false, user: null, subscription: null, sessionExpired: true }
   }
 

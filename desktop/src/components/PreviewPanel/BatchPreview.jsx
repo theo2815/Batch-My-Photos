@@ -228,10 +228,16 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
   const [visibleCount, setVisibleCount] = useState(20);
   const [blurThumbnails, setBlurThumbnails] = useState({});
   const requestedRef = useRef(new Set());
+  const lastResultsRef = useRef(blurResults);
 
   // Fetch thumbnails for currently VISIBLE blurry files only.
   // Tied to visibleCount so each "Load More" triggers a new batch fetch.
   useEffect(() => {
+    // New analysis run → forget which files were already requested
+    if (lastResultsRef.current !== blurResults) {
+      lastResultsRef.current = blurResults;
+      requestedRef.current = new Set();
+    }
     if (!expanded || !folderPath || !blurResults || blurryGroups.length === 0) return;
 
     // Only look at files the user can currently see
@@ -265,12 +271,13 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
     fetchThumbs();
   }, [expanded, visibleCount, folderPath, blurResults, blurryGroups, parentThumbnails, blurThumbnails]);
 
-  // Reset thumbnails and pagination when blur results change
-  useEffect(() => {
+  // Reset thumbnails and pagination when blur results change (adjust-state-during-render pattern)
+  const [prevBlurResults, setPrevBlurResults] = useState(blurResults);
+  if (blurResults !== prevBlurResults) {
+    setPrevBlurResults(blurResults);
     setBlurThumbnails({});
     setVisibleCount(20);
-    requestedRef.current = new Set();
-  }, [blurResults]);
+  }
 
   if (isAnalyzing) {
     return (

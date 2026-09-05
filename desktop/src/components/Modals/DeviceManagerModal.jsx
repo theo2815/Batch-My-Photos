@@ -62,7 +62,7 @@ function truncateHwid(hwid) {
   return `${hwid.substring(0, 8)}…${hwid.substring(hwid.length - 4)}`;
 }
 
-export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sessionTokenProp }) {
+export default function DeviceManagerModal({ isOpen, onClose }) {
   const [devices, setDevices] = useState([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
   const [currentHwid, setCurrentHwid] = useState(null);
@@ -70,7 +70,6 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
   const [error, setError] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const [removeSuccess, setRemoveSuccess] = useState(null);
-  const [sessionToken, setSessionToken] = useState(sessionTokenProp || null);
 
   // Removal limit state
   const [removalsUsed, setRemovalsUsed] = useState(0);
@@ -102,27 +101,15 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
     }
   }, [cooldownEndsAt]);
 
-  // Resolve session token on open if not provided as prop
-  useEffect(() => {
-    if (isOpen && !sessionTokenProp) {
-      window.electronAPI.authGetSession().then(({ sessionToken: token }) => {
-        setSessionToken(token || null);
-      }).catch(() => setSessionToken(null));
-    } else if (sessionTokenProp) {
-      setSessionToken(sessionTokenProp);
-    }
-  }, [isOpen, sessionTokenProp]);
-
   /**
-   * Fetch the device list from the backend
+   * Fetch the device list from the backend (main process supplies the JWT)
    */
   const fetchDevices = useCallback(async () => {
-    if (!sessionToken) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await window.electronAPI.deviceGetList(sessionToken);
+      const result = await window.electronAPI.deviceGetList();
       if (result.error) {
         setError(result.error);
       } else {
@@ -138,14 +125,14 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
     } finally {
       setLoading(false);
     }
-  }, [sessionToken]);
+  }, []);
 
   // Fetch devices when modal opens
   useEffect(() => {
-    if (isOpen && sessionToken) {
+    if (isOpen) {
       fetchDevices();
     }
-  }, [isOpen, sessionToken, fetchDevices]);
+  }, [isOpen, fetchDevices]);
 
   /**
    * Show the in-modal confirmation dialog
@@ -166,7 +153,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
     setRemoveSuccess(null);
 
     try {
-      const result = await window.electronAPI.deviceDeauthorize(sessionToken, deviceId);
+      const result = await window.electronAPI.deviceDeauthorize(deviceId);
       if (result.success) {
         setRemoveSuccess(deviceLabel);
         // Update removal metrics from the response
@@ -184,7 +171,7 @@ export default function DeviceManagerModal({ isOpen, onClose, sessionToken: sess
     } finally {
       setRemovingId(null);
     }
-  }, [sessionToken, confirmDevice, fetchDevices]);
+  }, [confirmDevice, fetchDevices]);
 
   if (!isOpen) return null;
 

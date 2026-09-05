@@ -470,7 +470,7 @@ async function trackBatchExecution(sessionToken, batchCount = 1) {
     }
 
     logger.log(`✅ [SUBSCRIPTION] Tracked ${batchCount} batch(es) successfully`)
-    logger.log(`   Usage: ${data.usage.used}/${data.usage.limit == null ? '∞' : data.usage.limit}`)
+    logger.log(`   Usage: ${data.usage.used}/${data.usage.limit === null || data.usage.limit === undefined ? '∞' : data.usage.limit}`)
 
     // Update cache with latest usage (preserve expiresAt from existing cache)
     const currentState = _readSecureCache()

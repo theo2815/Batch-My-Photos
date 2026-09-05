@@ -111,32 +111,6 @@ function registerAuthHandlers(ipcMain) {
   });
 
   /**
-   * Handler: Save session after login
-   * User pastes their session token from the website into the desktop app
-   * Verifies the token is valid before storing it
-   */
-  handle(ipcMain, 'auth-save-session', async (event, { sessionToken, userProfile }) => {
-    try {
-      // Verify token is valid before saving
-      const verification = await authService.verifySession(sessionToken);
-      if (!verification.valid && !verification.networkError) {
-        return { success: false, error: 'Invalid session token' };
-      }
-
-      // Mark as unverified if saved during network error so it gets re-checked later
-      if (verification.networkError && userProfile) {
-        userProfile.unverified = true;
-      }
-
-      authService.saveSession(sessionToken, userProfile);
-      return { success: true, subscription: verification.subscription || null };
-    } catch (error) {
-      logger.error('❌ [IPC] auth-save-session failed:', error);
-      return { success: false, error: sanitizeError(error, 'auth-save-session') };
-    }
-  });
-
-  /**
    * Handler: Logout
    * Clears stored session and user profile
    */
@@ -152,17 +126,16 @@ function registerAuthHandlers(ipcMain) {
   });
 
   /**
-   * Handler: Get current session token
-   * Used by the renderer process to make authenticated API calls
+   * Handler: Get current user profile.
+   * SECURITY: the JWT never leaves the main process — authenticated calls read
+   * it from the secure store themselves.
    */
   handle(ipcMain, 'auth-get-session', async () => {
     try {
-      const sessionToken = authService.getStoredSession();
-      const userProfile = authService.getStoredUser();
-      return { sessionToken, user: userProfile };
+      return { user: authService.getStoredUser() };
     } catch (error) {
       logger.error('❌ [IPC] auth-get-session failed:', error);
-      return { sessionToken: null, user: null };
+      return { user: null };
     }
   });
 
@@ -186,14 +159,16 @@ function registerAuthHandlers(ipcMain) {
 // ============================================================================
 
 function registerSubscriptionHandlers(ipcMain) {
+  // SECURITY: the JWT is read from the secure store, never taken from the renderer
+  const token = () => authService.getStoredSession();
 
   /**
    * Handler: Check if user can execute a batch
    * Verifies current usage against subscription limits
    */
-  handle(ipcMain, 'subscription-check-batch-limit', async (event, sessionToken) => {
+  handle(ipcMain, 'subscription-check-batch-limit', async () => {
     try {
-      return await subscriptionService.checkBatchLimit(sessionToken);
+      return await subscriptionService.checkBatchLimit(token());
     } catch (error) {
       logger.error('❌ [IPC] subscription-check-batch-limit failed:', error);
       // Fail-CLOSED: deny execution when limit check throws unexpectedly
@@ -205,9 +180,9 @@ function registerSubscriptionHandlers(ipcMain) {
    * Handler: Track batch execution
    * Records usage in backend after successful batch completion
    */
-  handle(ipcMain, 'subscription-track-batch', async (event, sessionToken, batchCount) => {
+  handle(ipcMain, 'subscription-track-batch', async (event, batchCount) => {
     try {
-      return await subscriptionService.trackBatchExecution(sessionToken, batchCount);
+      return await subscriptionService.trackBatchExecution(token(), batchCount);
     } catch (error) {
       logger.error('❌ [IPC] subscription-track-batch failed:', error);
       return { success: false, error: sanitizeError(error, 'subscription-track-batch') };
@@ -218,9 +193,9 @@ function registerSubscriptionHandlers(ipcMain) {
    * Handler: Refresh subscription status
    * Fetches latest subscription info from backend
    */
-  handle(ipcMain, 'subscription-refresh', async (event, sessionToken) => {
+  handle(ipcMain, 'subscription-refresh', async () => {
     try {
-      return await subscriptionService.refreshSubscription(sessionToken);
+      return await subscriptionService.refreshSubscription(token());
     } catch (error) {
       logger.error('❌ [IPC] subscription-refresh failed:', error);
       return { error: sanitizeError(error, 'subscription-refresh') };
@@ -232,9 +207,9 @@ function registerSubscriptionHandlers(ipcMain) {
    * Retries any queued batch-tracking calls that failed while offline.
    * Called on app startup and periodically by the renderer.
    */
-  handle(ipcMain, 'subscription-flush-pending', async (event, sessionToken) => {
+  handle(ipcMain, 'subscription-flush-pending', async () => {
     try {
-      return await subscriptionService.flushPendingTracks(sessionToken);
+      return await subscriptionService.flushPendingTracks(token());
     } catch (error) {
       logger.error('❌ [IPC] subscription-flush-pending failed:', error);
       return { flushed: 0, remaining: -1, error: sanitizeError(error, 'subscription-flush-pending') };
@@ -275,9 +250,9 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: List all devices bound to the user's subscription
    */
-  handle(ipcMain, 'device-get-list', async (event, sessionToken) => {
+  handle(ipcMain, 'device-get-list', async () => {
     try {
-      return await deviceService.listDevices(sessionToken);
+      return await deviceService.listDevices(authService.getStoredSession());
     } catch (error) {
       logger.error('❌ [IPC] device-get-list failed:', error);
       return { error: sanitizeError(error, 'device-get-list') };
@@ -287,9 +262,9 @@ function registerDeviceHandlers(ipcMain) {
   /**
    * Handler: De-authorize (remove) a device binding
    */
-  handle(ipcMain, 'device-deauthorize', async (event, sessionToken, deviceId) => {
+  handle(ipcMain, 'device-deauthorize', async (event, deviceId) => {
     try {
-      return await deviceService.deauthorizeDevice(sessionToken, deviceId);
+      return await deviceService.deauthorizeDevice(authService.getStoredSession(), deviceId);
     } catch (error) {
       logger.error('❌ [IPC] device-deauthorize failed:', error);
       return { success: false, error: sanitizeError(error, 'device-deauthorize') };
@@ -1838,7 +1813,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
     // Restrict to known domains for security
-    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'supabase.co'];
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com'];
     try {
       const parsed = new URL(url);
       const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
@@ -2006,11 +1981,13 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 }
 
 /**
- * Escape a value for CSV: wrap in quotes if it contains commas, quotes, or newlines.
+ * Escape a value for CSV: neutralise spreadsheet formulas (leading = + - @ tab CR),
+ * then wrap in quotes if it contains commas, quotes, or newlines.
  */
 function csvEscape(val) {
-  if (val == null) return '';
-  const str = String(val);
+  if (val === null || val === undefined) return '';
+  let str = String(val);
+  if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return '"' + str.replace(/"/g, '""') + '"';
   }

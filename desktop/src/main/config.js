@@ -191,21 +191,22 @@ const limits = {
 // Auth/subscription/device calls go DIRECTLY to Supabase (GoTrue + PostgREST
 // RPCs) — the Express backend is retired. The anon (publishable) key is
 // public by design: RLS + SECURITY DEFINER RPCs are the security boundary.
-// For local testing against `supabase start`, override both via env.
+// For local testing against `supabase start`, override both via env —
+// honoured only when unpackaged so an env var cannot repoint a Store install.
 
 const PROD_URL = 'https://www.batchmyphotos.com'
 
 const urls = {
   /** Supabase project base URL (no trailing slash) */
-  SUPABASE_URL: process.env.BATCH_SUPABASE_URL
+  SUPABASE_URL: (!isProduction && process.env.BATCH_SUPABASE_URL)
     || 'https://hhkwmryvvenkmlsuinld.supabase.co',
 
   /** Supabase anon/publishable API key (public; sent as `apikey` header) */
-  SUPABASE_ANON_KEY: process.env.BATCH_SUPABASE_ANON_KEY
+  SUPABASE_ANON_KEY: (!isProduction && process.env.BATCH_SUPABASE_ANON_KEY)
     || 'sb_publishable_NjMEpJILZHOwg1Ea0z8GRA_7Ljgf0Cg',
 
   /** Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version */
-  FRONTEND_URL: process.env.BATCH_FRONTEND_URL
+  FRONTEND_URL: (!isProduction && process.env.BATCH_FRONTEND_URL)
     || (isProduction ? PROD_URL : 'http://localhost:3000'),
 };
 
