@@ -43,6 +43,8 @@ export function useSubscription() {
       let query = supabase.rpc('get_my_subscription')
       if (signal) query = query.abortSignal(signal)
       const { data, error: rpcError } = await query
+      // Unmount/StrictMode abort resolves as { error } rather than throwing — bail before we wrap it
+      if (signal?.aborted) return
 
       if (rpcError) {
         throw new Error(rpcError.message || 'Failed to fetch subscription')
