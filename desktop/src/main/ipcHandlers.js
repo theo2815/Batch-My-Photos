@@ -40,6 +40,7 @@ const {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  VERSION_CHECK_TIMEOUT_MS,
 } = require('./constants');
 
 // Module-level storage for last batch operations (used by export-batch-report on demand).
@@ -1766,7 +1767,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;
-      const response = await net.fetch(url, { method: 'GET', signal: AbortSignal.timeout(10_000) });
+      const response = await net.fetch(url, { method: 'GET', signal: AbortSignal.timeout(VERSION_CHECK_TIMEOUT_MS) });
 
       if (!response.ok) {
         return { updateAvailable: false, currentVersion };

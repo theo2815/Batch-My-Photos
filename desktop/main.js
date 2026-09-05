@@ -225,9 +225,24 @@ if (!gotTheLock) {
 // logger → electron-log: these also land in %APPDATA%/Batch My Photos/logs/main.log
 process.on('uncaughtException', (err) => logger.error('💥 [MAIN] Uncaught exception:', err));
 process.on('unhandledRejection', (reason) => logger.error('💥 [MAIN] Unhandled rejection:', reason));
+// ponytail: cap renderer auto-reloads so a deterministic crash-on-load can't reload-storm.
+// On give-up we leave the window as-is (may be blank) — add dialog.showErrorBox if users hit it.
+const MAX_RENDERER_RELOADS = 3;
+const RENDERER_CRASH_WINDOW_MS = 60_000; // a renderer alive longer than this resets the budget
+let rendererReloads = 0;
+let lastRendererCrash = 0;
 app.on('render-process-gone', (_event, webContents, details) => {
   logger.error('💥 [RENDERER] Process gone:', details.reason, 'exit code', details.exitCode);
-  if (details.reason !== 'clean-exit' && !webContents.isDestroyed()) webContents.reload();
+  if (details.reason === 'clean-exit' || webContents.isDestroyed()) return;
+  const now = Date.now();
+  if (now - lastRendererCrash > RENDERER_CRASH_WINDOW_MS) rendererReloads = 0;
+  lastRendererCrash = now;
+  if (rendererReloads >= MAX_RENDERER_RELOADS) {
+    logger.error('💥 [RENDERER] Too many crashes in a row — not reloading again to avoid a loop');
+    return;
+  }
+  rendererReloads++;
+  webContents.reload();
 });
 
 app.whenReady().then(() => {

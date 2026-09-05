@@ -213,6 +213,13 @@ const DEVICE_LIMIT_PRO_PLUS = 5;
  */
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Timeout (ms) for the in-app update check (GET /api/version). Kept short so a
+ * captive portal or blackholed connection can't stall it — the check fails
+ * silently and the app proceeds.
+ */
+const VERSION_CHECK_TIMEOUT_MS = 10000;
+
 // ============================================================================
 // AI BLUR DETECTION
 // ============================================================================
@@ -302,4 +309,5 @@ module.exports = {
   DEVICE_LIMIT_PRO,
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,
+  VERSION_CHECK_TIMEOUT_MS,
 };
