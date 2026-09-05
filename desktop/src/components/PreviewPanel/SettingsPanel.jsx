@@ -46,6 +46,16 @@ function SettingsPanel({
   const [showValidationWarning, setShowValidationWarning] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Blur detection is feature-flagged off for release (main: BLUR_DETECTION_ENABLED).
+  // Keep the toggle visible but disabled until the feature is ready. Defaults to
+  // false so the toggle is disabled until the main process confirms otherwise.
+  const [blurFeatureAvailable, setBlurFeatureAvailable] = useState(false);
+  useEffect(() => {
+    window.electronAPI?.getBlurDetectionEnabled?.()
+      .then((enabled) => setBlurFeatureAvailable(!!enabled))
+      .catch(() => setBlurFeatureAvailable(false));
+  }, []);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -393,17 +403,21 @@ function SettingsPanel({
         />
       </div>
 
-      {/* Blur Detection */}
+      {/* Blur Detection — feature-flagged off for release; toggle stays visible but disabled */}
       <div className="setting-row blur-detection-row">
         <label>
           <ScanEye size={14} className="icon-inline" /> Detect Blurry Photos:
           {isAnalyzingBlur && <Loader2 size={14} className="settings-loading-spinner" />}
         </label>
-        <label className="toggle-switch">
+        <label
+          className="toggle-switch"
+          title={!blurFeatureAvailable ? 'Blur detection is coming soon' : undefined}
+        >
           <input
             type="checkbox"
             checked={blurDetectionEnabled}
             onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
+            disabled={!blurFeatureAvailable}
             role="switch"
             aria-checked={blurDetectionEnabled}
           />

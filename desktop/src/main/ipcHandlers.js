@@ -886,6 +886,14 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    */
   handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null }) => {
     try {
+      // Feature gate (config.features.BLUR_DETECTION_ENABLED, default false): blur
+      // detection is disabled for release. Backstop for the disabled UI toggle —
+      // never run analysis when the feature is off. success:false is handled
+      // gracefully by useBlurDetection (logs, no results, batch proceeds).
+      if (!config.features.BLUR_DETECTION_ENABLED) {
+        return { success: false, error: 'Blur detection is currently unavailable.' };
+      }
+
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
         logger.warn('🔒 [SECURITY] Blocked analyze-blur on unregistered path:', folderPath);
@@ -1119,6 +1127,11 @@ function registerPreferenceHandlers(ipcMain, store) {
   });
 
   handle(ipcMain, 'get-theme', async () => store.get('theme', 'dark'));
+
+  // Whether the blur-detection feature is available (disabled for release —
+  // config.features.BLUR_DETECTION_ENABLED). The renderer uses this to disable
+  // the "Detect Blurry Photos" toggle without hiding it.
+  handle(ipcMain, 'get-blur-detection-enabled', async () => config.features.BLUR_DETECTION_ENABLED);
 
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'

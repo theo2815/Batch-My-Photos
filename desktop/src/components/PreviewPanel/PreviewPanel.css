@@ -777,6 +777,17 @@
   border-color: var(--accent-primary);
 }
 
+/* --- Disabled (feature not available, e.g. blur detection off for release) --- */
+
+.toggle-switch:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.toggle-switch:has(input:disabled):hover .toggle-track {
+  border-color: var(--border);
+}
+
 .blur-sensitivity-row {
   margin-top: -4px;
   padding-left: 8px;

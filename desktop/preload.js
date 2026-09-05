@@ -268,6 +268,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories }),
 
   /**
+   * Whether blur detection is available (feature-flagged off for release).
+   * The settings toggle stays visible but is disabled when this is false.
+   * @returns {Promise<boolean>}
+   */
+  getBlurDetectionEnabled: () => ipcRenderer.invoke('get-blur-detection-enabled'),
+
+  /**
    * Listen for blur analysis progress updates
    * 
    * @param {Function} callback - Called with { current, total }
