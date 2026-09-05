@@ -11,7 +11,7 @@ export const metadata = {
     description: 'Organize 10,000+ photos into smart batches in seconds. Try the free interactive demo.',
     type: 'website',
   },
-  icons: { icon: '/app_icon.png' },
+  icons: { icon: '/app_icon.png?v=2' }, // ?v= busts the browser's cached pre-rebrand favicon
 }
 
 export default function RootLayout({ children }) {
