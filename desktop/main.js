@@ -19,14 +19,8 @@ const { UV_THREADPOOL_SIZE } = require('./src/main/constants');
 process.env.UV_THREADPOOL_SIZE = UV_THREADPOOL_SIZE;
 console.log('🚀 [STARTUP] UV_THREADPOOL_SIZE set to:', process.env.UV_THREADPOOL_SIZE);
 
-const { app, ipcMain, protocol } = require('electron');
+const { app, ipcMain } = require('electron');
 const path = require('path');
-
-// Register custom protocol for local media access
-// Must be done before app.on('ready')
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, standard: true } }
-]);
 
 // Register batchmyphotos:// as default protocol client (deep link auth)
 // In development, pass the script path so Electron handles the protocol
@@ -40,11 +34,9 @@ if (process.defaultApp) {
 
 const fs = require('fs');
 const os = require('os');
-const { Readable } = require('stream');
 const SecureStore = require('./src/main/secureStore');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
-const { isPathAllowedAsync } = require('./src/main/securityManager');
 const authService = require('./src/main/authService');
 const deviceService = require('./src/main/deviceService');
 const logger = require('./src/utils/logger');
@@ -76,7 +68,7 @@ try {
   store = new SecureStore({
     name: 'config',
     defaults: {
-      theme: 'dark',
+      theme: 'light',
       recentFolders: [],
     },
   });
@@ -87,7 +79,7 @@ try {
   store = new SecureStore({
     name: 'config',
     defaults: {
-      theme: 'dark',
+      theme: 'light',
       recentFolders: [],
     },
   });
@@ -142,27 +134,27 @@ async function handleDeepLink(url) {
     }
 
     // SECURITY: Verify the token is valid before trusting it
-    const verification = await authService.verifySession(token);
-    if (!verification.valid && !verification.networkError) {
-      // Server explicitly rejected the token (401/403) — do not save
-      logger.warn('[DEEP-LINK] Token verification failed — refusing to save session');
+    // allowRefresh:false — a forged token must never be validated by the real user's stored refresh token
+    // Never save a token we could not verify — rejected OR unreachable.
+    // The user just had a browser open, so a retry when online costs one click.
+    const verification = await authService.verifySession(token, { allowRefresh: false });
+    if (!verification.valid) {
+      logger.warn('[DEEP-LINK] Token not verified — refusing to save session', verification.networkError ? '(backend unreachable)' : '(rejected)');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('auth-callback', { success: false, error: 'Invalid or expired token' });
+        mainWindow.webContents.send('auth-callback', {
+          success: false,
+          error: verification.networkError
+            ? 'Could not verify your login — check your connection and try again'
+            : 'Invalid or expired token',
+        });
       }
       return;
     }
-    // If networkError: token just came from the browser auth flow — safe to save
-    // but mark as unverified so it gets re-checked when online
-    if (verification.networkError) {
-      logger.warn('[DEEP-LINK] Backend unreachable — saving session as unverified (token from live auth flow)');
-    }
 
-    // Token verified (or unverified due to network error) — save session
     authService.saveSession(token, {
       email: decodeURIComponent(email),
       name: decodeURIComponent(name || ''),
-      ...(verification.networkError ? { unverified: true } : {}),
     });
 
     // Store refresh token for persistent sessions (silent re-auth on JWT expiry)
@@ -227,94 +219,48 @@ if (!gotTheLock) {
 // APP LIFECYCLE
 // ============================================================================
 
+// ============================================================================
+// CRASH DIAGNOSTICS
+// ============================================================================
+// logger → electron-log: these also land in %APPDATA%/Batch My Photos/logs/main.log
+process.on('uncaughtException', (err) => logger.error('💥 [MAIN] Uncaught exception:', err));
+process.on('unhandledRejection', (reason) => logger.error('💥 [MAIN] Unhandled rejection:', reason));
+// ponytail: cap renderer auto-reloads so a deterministic crash-on-load can't reload-storm.
+// On give-up we leave the window as-is (may be blank) — add dialog.showErrorBox if users hit it.
+const MAX_RENDERER_RELOADS = 3;
+const RENDERER_CRASH_WINDOW_MS = 60_000; // a renderer alive longer than this resets the budget
+let rendererReloads = 0;
+let lastRendererCrash = 0;
+app.on('render-process-gone', (_event, webContents, details) => {
+  logger.error('💥 [RENDERER] Process gone:', details.reason, 'exit code', details.exitCode);
+  if (details.reason === 'clean-exit' || webContents.isDestroyed()) return;
+  const now = Date.now();
+  if (now - lastRendererCrash > RENDERER_CRASH_WINDOW_MS) rendererReloads = 0;
+  lastRendererCrash = now;
+  if (rendererReloads >= MAX_RENDERER_RELOADS) {
+    logger.error('💥 [RENDERER] Too many crashes in a row — not reloading again to avoid a loop');
+    return;
+  }
+  rendererReloads++;
+  webContents.reload();
+});
+
 app.whenReady().then(() => {
-  // Handle media:// protocol to serve local files securely
-  protocol.handle('media', async (request) => {
-    // 1. Strip protocol (media:// or media:///)
-    const filePath = request.url.replace(/^media:\/\/+/, '');
-    
-    // 2. Decode to get raw path (handles %20 for spaces, etc.)
-    let decodedPath = decodeURIComponent(filePath);
-    
-    // 3. Windows-specific fix: remove leading slash before drive letter
-    if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(decodedPath)) {
-      decodedPath = decodedPath.slice(1);
-    }
-    
-    // 4. Normalize path to use correct OS separators (fixes mixed / and \)
-    decodedPath = path.normalize(decodedPath);
-    
-    logger.debug('🔍 [MEDIA] Serving:', decodedPath);
-
-    // SECURITY FIX: Validate path is within allowed directories
-    if (!(await isPathAllowedAsync(decodedPath))) {
-      logger.warn('🔒 [SECURITY] Media request blocked for unregistered path:', decodedPath);
-      return new Response('Access Denied', { status: 403 });
-    }
-
-    try {
-      // PROPOSE FIX: Use Node.js fs directly instead of net.fetch for reliability
-      // MEMORY FIX: Use createReadStream to avoid loading entire file into RAM using fs.promises.readFile
-      const stream = fs.createReadStream(decodedPath);
-      
-      // Convert Node stream to Web Stream for Response
-      const webStream = Readable.toWeb(stream);
-
-      // Simple mime type detection
-      const ext = path.extname(decodedPath).toLowerCase();
-      let mimeType = 'application/octet-stream';
-      if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
-      else if (ext === '.png') mimeType = 'image/png';
-      else if (ext === '.webp') mimeType = 'image/webp';
-      else if (ext === '.gif') mimeType = 'image/gif';
-      
-      return new Response(webStream, {
-        headers: { 
-          'Content-Type': mimeType
-        }
-      });
-    } catch (e) {
-      logger.error('❌ [MEDIA] Error serving file:', decodedPath, e.message);
-      return new Response('Not Found', { status: 404 });
-    }
-  });
-  
-  createWindow();
+  const mainWindow = createWindow();
 
   // Start device heartbeat if user is already authenticated
-  const storedSession = authService.getStoredSession();
-  if (storedSession) {
+  if (authService.getStoredSession()) {
     logger.log('💓 [STARTUP] Starting device heartbeat for existing session');
     deviceService.startHeartbeat(() => authService.getStoredSession());
-
-    // Re-verify unverified tokens (saved during network outage) now that we're online
-    const profile = authService.getStoredUser?.();
-    if (profile?.unverified) {
-      logger.log('🔄 [STARTUP] Re-verifying unverified session token...');
-      authService.verifySession(storedSession).then(result => {
-        if (result.valid) {
-          // Token is valid — clear the unverified flag
-          logger.log('✅ [STARTUP] Unverified session re-verified successfully');
-          const cleanProfile = { ...profile };
-          delete cleanProfile.unverified;
-          authService.saveSession(storedSession, cleanProfile);
-        } else if (!result.networkError) {
-          // Token is invalid and server is reachable — clear session
-          logger.warn('⚠️ [STARTUP] Unverified session token is invalid — clearing session');
-          authService.clearSession();
-        }
-        // If still networkError, keep waiting until next launch
-      }).catch(() => {});
-    }
   }
 
   // Handle cold-start deep link (app was launched by clicking a deep link)
+  // once the renderer has loaded and registered its auth-callback listener
   const deepLinkUrl = process.argv.find(arg => arg.startsWith('batchmyphotos://'));
   if (deepLinkUrl) {
-    // Small delay to ensure the window is ready to receive IPC messages
-    setTimeout(() => handleDeepLink(deepLinkUrl), 1000);
+    mainWindow.webContents.once('did-finish-load', () => handleDeepLink(deepLinkUrl));
   }
-});
+}).catch((err) => logger.error('💥 [STARTUP] whenReady failed:', err));
 
 app.on('window-all-closed', () => {
   // Stop heartbeat when all windows close
@@ -338,7 +284,7 @@ const { initAutoUpdater } = require('./src/main/updateManager');
 app.whenReady().then(() => {
   // Initialize auto-updater (it will check process.windowsStore internally)
   initAutoUpdater(getMainWindow);
-});
+}).catch((err) => logger.error('💥 [UPDATER] init failed:', err));
 
 // ============================================================================
 // IPC HANDLERS REGISTRATION

@@ -114,17 +114,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authOpenLogin: () => ipcRenderer.invoke('auth-open-login'),
 
   /**
-   * Save session after user logs in
-   * Verifies token validity before storing
-   *
-   * @param {string} sessionToken - JWT token from website
-   * @param {Object} userProfile - User profile data
-   * @returns {Promise<Object>} { success, subscription? }
-   */
-  authSaveSession: (sessionToken, userProfile) =>
-    ipcRenderer.invoke('auth-save-session', { sessionToken, userProfile }),
-
-  /**
    * Logout and clear stored session
    *
    * @returns {Promise<Object>} { success }
@@ -132,10 +121,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authLogout: () => ipcRenderer.invoke('auth-logout'),
 
   /**
-   * Get current session token and user profile
-   * Used for making authenticated API calls
+   * Get current user profile (the JWT itself never reaches the renderer)
    *
-   * @returns {Promise<Object>} { sessionToken, user }
+   * @returns {Promise<Object>} { user }
    */
   authGetSession: () => ipcRenderer.invoke('auth-get-session'),
 
@@ -166,46 +154,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // SUBSCRIPTION APIs
   // ============================================================================
 
+  // The main process reads the JWT from its secure store — no token args.
+
   /**
    * Check if user can execute a batch operation
    * Verifies current usage against subscription limits
    *
-   * @param {string} sessionToken - User's session token
    * @returns {Promise<Object>} { canExecute, usage, isPro, needsRenewal, offline?, error? }
    */
-  subscriptionCheckBatchLimit: (sessionToken) =>
-    ipcRenderer.invoke('subscription-check-batch-limit', sessionToken),
+  subscriptionCheckBatchLimit: () =>
+    ipcRenderer.invoke('subscription-check-batch-limit'),
 
   /**
    * Track batch execution after successful completion
    * Records usage in backend database
    *
-   * @param {string} sessionToken - User's session token
    * @param {number} batchCount - Number of batches executed
    * @returns {Promise<Object>} { success, usage?, offline?, error? }
    */
-  subscriptionTrackBatch: (sessionToken, batchCount) =>
-    ipcRenderer.invoke('subscription-track-batch', sessionToken, batchCount),
+  subscriptionTrackBatch: (batchCount) =>
+    ipcRenderer.invoke('subscription-track-batch', batchCount),
 
   /**
    * Refresh subscription status from backend
    * Used to update local subscription info after payment/renewal
    *
-   * @param {string} sessionToken - User's session token
    * @returns {Promise<Object>} { subscription?, error? }
    */
-  subscriptionRefresh: (sessionToken) =>
-    ipcRenderer.invoke('subscription-refresh', sessionToken),
+  subscriptionRefresh: () =>
+    ipcRenderer.invoke('subscription-refresh'),
 
   /**
    * Flush pending batch tracking queue
    * Retries any batch-tracking calls that failed while offline.
    *
-   * @param {string} sessionToken - User's session token
    * @returns {Promise<Object>} { flushed, remaining }
    */
-  subscriptionFlushPending: (sessionToken) =>
-    ipcRenderer.invoke('subscription-flush-pending', sessionToken),
+  subscriptionFlushPending: () =>
+    ipcRenderer.invoke('subscription-flush-pending'),
 
   // ============================================================================
   // DEVICE MANAGEMENT APIs
@@ -225,20 +211,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   /**
    * List all devices bound to the user's subscription
-   * @param {string} sessionToken - User's session token
    * @returns {Promise<Object>} { devices, currentHwid, device_limit, device_count }
    */
-  deviceGetList: (sessionToken) =>
-    ipcRenderer.invoke('device-get-list', sessionToken),
+  deviceGetList: () => ipcRenderer.invoke('device-get-list'),
 
   /**
    * De-authorize (remove) a device binding
-   * @param {string} sessionToken - User's session token
    * @param {string} deviceId - UUID of the device_bindings row to remove
    * @returns {Promise<Object>} { success, error? }
    */
-  deviceDeauthorize: (sessionToken, deviceId) =>
-    ipcRenderer.invoke('device-deauthorize', sessionToken, deviceId),
+  deviceDeauthorize: (deviceId) =>
+    ipcRenderer.invoke('device-deauthorize', deviceId),
 
   /**
    * Start the heartbeat loop (call after successful authentication)
@@ -266,6 +249,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   analyzeBlur: (folderPath, threshold = 'moderate', categories = null) =>
     ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories }),
+
+  /**
+   * Whether blur detection is available (feature-flagged off for release).
+   * The settings toggle stays visible but is disabled when this is false.
+   * @returns {Promise<boolean>}
+   */
+  getBlurDetectionEnabled: () => ipcRenderer.invoke('get-blur-detection-enabled'),
 
   /**
    * Listen for blur analysis progress updates

@@ -6,14 +6,6 @@ export function LoginScreen({ onLoginSuccess, sessionExpired = false }) {
   const [isWaiting, setIsWaiting] = useState(false)
   const [error, setError] = useState(null)
 
-  // If session expired, auto-set the waiting state (login page was already opened
-  // by the main process). User just needs to click the email link.
-  useEffect(() => {
-    if (sessionExpired) {
-      setIsWaiting(true)
-    }
-  }, [sessionExpired])
-
   // Listen for deep link auth callback from main process
   useEffect(() => {
     if (!window.electronAPI?.onAuthCallback) return
@@ -59,6 +51,12 @@ export function LoginScreen({ onLoginSuccess, sessionExpired = false }) {
         <div className="login-content">
           {!isWaiting ? (
             <>
+              {sessionExpired && (
+                <div className="error-message">
+                  <AlertCircle className="error-icon" />
+                  Your session has expired. Please sign in again.
+                </div>
+              )}
               <button
                 onClick={handleOpenBrowser}
                 className="browser-login-button"
@@ -79,21 +77,10 @@ export function LoginScreen({ onLoginSuccess, sessionExpired = false }) {
               <div className="waiting-spinner">
                 <Loader2 className="spinner-icon" />
               </div>
-              {sessionExpired ? (
-                <>
-                  <p className="waiting-text">Session refreshed — please sign in again</p>
-                  <p className="waiting-hint">
-                    Your sign-in page has been opened automatically. Complete sign-in in your browser and this page will update.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="waiting-text">Waiting for authentication...</p>
-                  <p className="waiting-hint">
-                    Complete sign-in in your browser. This page will update automatically.
-                  </p>
-                </>
-              )}
+              <p className="waiting-text">Waiting for authentication...</p>
+              <p className="waiting-hint">
+                Complete sign-in in your browser. This page will update automatically.
+              </p>
               <button
                 onClick={handleCancel}
                 className="cancel-button"
@@ -106,7 +93,7 @@ export function LoginScreen({ onLoginSuccess, sessionExpired = false }) {
         </div>
 
         <p className="login-footer">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <a href="#" onClick={handleOpenBrowser} className="signup-link">
             Sign up on our website
           </a>

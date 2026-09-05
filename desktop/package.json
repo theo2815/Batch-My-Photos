@@ -1,6 +1,6 @@
 {
   "name": "batchmyphotos",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Desktop utility for photographers to batch-split image folders",
   "main": "main.js",
   "scripts": {
@@ -8,8 +8,8 @@
     "build": "vite build",
     "electron": "electron .",
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "dist": "npm run build && electron-builder",
-    "dist:appx": "npm run build && electron-builder --win appx",
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:appx": "npm run build && electron-builder --win appx --publish never",
     "pack": "electron-builder --dir",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -58,6 +58,8 @@
       "applicationId": "BatchMyPhotos",
       "displayName": "Batch My Photos",
       "publisherDisplayName": "Theo Cedric Chan",
+      "backgroundColor": "#f8f5ee",
+      "maxVersionTested": "10.0.26100.0",
       "languages": [
         "en-US"
       ]

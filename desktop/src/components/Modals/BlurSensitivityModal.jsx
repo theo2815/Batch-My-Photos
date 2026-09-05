@@ -56,16 +56,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
   const [selected, setSelected] = useState(new Set(initial));
   const [sensitivity, setSensitivity] = useState(currentSensitivity || 'moderate');
 
-  // Sync internal state when the modal opens
-  useEffect(() => {
-    if (isOpen) {
-      const next = Array.isArray(currentCategories) && currentCategories.length > 0
-        ? currentCategories
-        : DEFAULT_SELECTION;
-      setSelected(new Set(next));
-      setSensitivity(currentSensitivity || 'moderate');
-    }
-  }, [isOpen, currentCategories, currentSensitivity]);
+  // State seeds from props on mount — App only mounts this modal while it is open.
 
   // ESC key to dismiss
   useEffect(() => {

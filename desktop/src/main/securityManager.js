@@ -7,6 +7,7 @@
  */
 
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const config = require('./config');
@@ -39,8 +40,13 @@ const BLOCKED_PATHS = [
   process.env.SYSTEMROOT,     // C:\Windows
   process.env.PROGRAMFILES,   // C:\Program Files
   process.env['PROGRAMFILES(X86)'], // C:\Program Files (x86)
+  process.env.APPDATA,        // app data (incl. our own encrypted stores)
+  process.env.LOCALAPPDATA,
   '/etc', '/usr', '/bin', '/sbin', '/var', '/boot', '/sys', '/proc',
 ].filter(Boolean).map(p => path.normalize(p));
+
+/** Exact-match blocks: the directory itself, not its subfolders. */
+const BLOCKED_EXACT = [os.homedir()].map(p => path.normalize(p));
 
 /**
  * Check if a path is within a sensitive system directory.
@@ -51,6 +57,10 @@ const BLOCKED_PATHS = [
 function isSensitivePath(normalizedPath) {
   const isCaseInsensitive = process.platform === 'win32';
   const target = isCaseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
+
+  // Drive / filesystem roots (C:\, /) and the home directory itself are never a photo folder
+  if (path.parse(normalizedPath).root === normalizedPath) return true;
+  if (BLOCKED_EXACT.some(b => (isCaseInsensitive ? b.toLowerCase() : b) === target)) return true;
   
   return BLOCKED_PATHS.some(blocked => {
     const normalizedBlocked = isCaseInsensitive ? blocked.toLowerCase() : blocked;

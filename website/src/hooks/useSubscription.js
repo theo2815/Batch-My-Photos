@@ -43,6 +43,8 @@ export function useSubscription() {
       let query = supabase.rpc('get_my_subscription')
       if (signal) query = query.abortSignal(signal)
       const { data, error: rpcError } = await query
+      // Unmount/StrictMode abort resolves as { error } rather than throwing — bail before we wrap it
+      if (signal?.aborted) return
 
       if (rpcError) {
         throw new Error(rpcError.message || 'Failed to fetch subscription')
@@ -78,7 +80,7 @@ export function useSubscription() {
       if (!mounted || !session) return
 
       realtimeChannel = supabase
-        .channel('public:subscriptions')
+        .channel(`subscriptions:${session.user.id}:${Math.random().toString(36).slice(2)}`) // unique per hook instance — Navbar + Dashboard both mount this hook
         .on(
           'postgres_changes',
           {

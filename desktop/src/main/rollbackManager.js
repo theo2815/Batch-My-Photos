@@ -23,6 +23,7 @@ const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const { FILE_MOVE_CHUNK_SIZE, MAX_FILE_CONCURRENCY } = require('./constants');
 const { isSameDrive } = require('./fileUtils');
+const { isSensitivePath } = require('./securityManager');
 const config = require('./config');
 const logger = require('../utils/logger');
 
@@ -683,7 +684,7 @@ async function checkInterruptedRollback() {
   // If errors are permanent (files deleted, permissions locked), the user
   // would otherwise see "Resume Rollback" on every app restart forever.
   const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
-  if (state.lastUpdated || state.restoredFiles != null) {
+  if (state.lastUpdated || state.restoredFiles !== null && state.restoredFiles !== undefined) {
     const age = Date.now() - new Date(state.lastUpdated || 0).getTime();
     if (age > STALE_THRESHOLD_MS) {
       logger.log('🧹 [ROLLBACK] Auto-expiring stale rollback progress (', Math.round(age / 86400000), 'days old)');
@@ -811,6 +812,12 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
 
   logger.log('🔄 [ROLLBACK] Starting rollback operation');
   logger.log('   - Files to restore:', operations.length);
+
+  // SECURITY: manifest paths come from disk — never move files into/out of system locations
+  if (operations.some(op => isSensitivePath(path.dirname(op.originalPath)) || isSensitivePath(path.dirname(op.currentPath)))) {
+    logger.warn('🔒 [SECURITY] Rollback manifest references a sensitive path — refusing');
+    return { success: false, error: 'Rollback manifest references a protected system location' };
+  }
 
   let restoredFiles = resumeState?.initialRestored || 0;
   const restoredFileNames = resumeState?.existingRestoredNames ? [...resumeState.existingRestoredNames] : [];

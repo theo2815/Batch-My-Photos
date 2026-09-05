@@ -21,26 +21,22 @@ const ANON_KEY = config.urls.SUPABASE_ANON_KEY
  * @param {object} args - Named arguments (e.g. { p_hwid: '...' })
  * @param {string} token - User JWT (Authorization bearer)
  * @param {object} [opts]
- * @param {number} [opts.timeoutMs] - Abort after this many ms (default: none)
+ * @param {number} [opts.timeoutMs] - Abort after this many ms (default: 15s)
  * @returns {Promise<Response>}
  */
-async function rpc(name, args, token, { timeoutMs } = {}) {
-  const controller = timeoutMs ? new AbortController() : null
-  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null
-  try {
-    return await net.fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-      method: 'POST',
-      headers: {
-        apikey: ANON_KEY,
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(args || {}),
-      signal: controller?.signal,
-    })
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
+const DEFAULT_TIMEOUT_MS = 15_000
+
+async function rpc(name, args, token, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  return net.fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: {
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args || {}),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
 }
 
-module.exports = { rpc, SUPABASE_URL, ANON_KEY }
+module.exports = { rpc, SUPABASE_URL, ANON_KEY, DEFAULT_TIMEOUT_MS }

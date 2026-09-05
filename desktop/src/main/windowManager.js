@@ -3,7 +3,7 @@
  * Handles the creation and management of the main application window
  */
 
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../utils/logger');
@@ -36,9 +36,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true, // SECURITY: Sandboxes the renderer — safe because preload only uses contextBridge
-      v8Code: false, // Disable V8 code cache to avoid Windows permission errors
     },
-    backgroundColor: '#1a1a2e',
+    // ponytail: light --bg-primary; dark-theme users get a bone pre-paint frame — read the stored theme here if it's ever noticed
+    backgroundColor: '#f8f5ee',
     show: false,
   });
 
@@ -76,8 +76,8 @@ function createWindow() {
     // - Dev: Allow localhost and unsafe-eval for Vite HMR
     // - Prod: Strict policy, only allow self
     const cspPolicy = shouldUseDistBuild && isPackaged
-      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: media:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.batchmyphotos.com;"
-      : "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: media: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
+      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.batchmyphotos.com;"
+      : "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
     
     callback({
       responseHeaders: {
@@ -89,7 +89,18 @@ function createWindow() {
   
   if (isPackaged) {
     logger.log('🔒 [SECURITY] CSP headers enabled (strict mode)');
+    Menu.setApplicationMenu(null); // no DevTools / reload accelerators in the Store build
   }
+
+  // SECURITY: no popups, and never leave the bundle (dev server in dev)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = shouldUseDistBuild ? url.startsWith('file://') : url.startsWith('http://localhost:');
+    if (!allowed) {
+      event.preventDefault();
+      logger.warn('🔒 [SECURITY] Blocked navigation to:', url);
+    }
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
