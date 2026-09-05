@@ -76,7 +76,7 @@ try {
   store = new SecureStore({
     name: 'config',
     defaults: {
-      theme: 'dark',
+      theme: 'light',
       recentFolders: [],
     },
   });
@@ -87,7 +87,7 @@ try {
   store = new SecureStore({
     name: 'config',
     defaults: {
-      theme: 'dark',
+      theme: 'light',
       recentFolders: [],
     },
   });
@@ -142,7 +142,8 @@ async function handleDeepLink(url) {
     }
 
     // SECURITY: Verify the token is valid before trusting it
-    const verification = await authService.verifySession(token);
+    // allowRefresh:false — a forged token must never be validated by the real user's stored refresh token
+    const verification = await authService.verifySession(token, { allowRefresh: false });
     if (!verification.valid && !verification.networkError) {
       // Server explicitly rejected the token (401/403) — do not save
       logger.warn('[DEEP-LINK] Token verification failed — refusing to save session');
@@ -226,6 +227,18 @@ if (!gotTheLock) {
 // ============================================================================
 // APP LIFECYCLE
 // ============================================================================
+
+// ============================================================================
+// CRASH DIAGNOSTICS
+// ============================================================================
+// ponytail: logger writes to stderr, which a packaged GUI app discards — route
+// through the already-shipped electron-log when file logging lands (M1).
+process.on('uncaughtException', (err) => logger.error('💥 [MAIN] Uncaught exception:', err));
+process.on('unhandledRejection', (reason) => logger.error('💥 [MAIN] Unhandled rejection:', reason));
+app.on('render-process-gone', (_event, webContents, details) => {
+  logger.error('💥 [RENDERER] Process gone:', details.reason, 'exit code', details.exitCode);
+  if (details.reason !== 'clean-exit' && !webContents.isDestroyed()) webContents.reload();
+});
 
 app.whenReady().then(() => {
   // Handle media:// protocol to serve local files securely
@@ -314,7 +327,7 @@ app.whenReady().then(() => {
     // Small delay to ensure the window is ready to receive IPC messages
     setTimeout(() => handleDeepLink(deepLinkUrl), 1000);
   }
-});
+}).catch((err) => logger.error('💥 [STARTUP] whenReady failed:', err));
 
 app.on('window-all-closed', () => {
   // Stop heartbeat when all windows close
@@ -338,7 +351,7 @@ const { initAutoUpdater } = require('./src/main/updateManager');
 app.whenReady().then(() => {
   // Initialize auto-updater (it will check process.windowsStore internally)
   initAutoUpdater(getMainWindow);
-});
+}).catch((err) => logger.error('💥 [UPDATER] init failed:', err));
 
 // ============================================================================
 // IPC HANDLERS REGISTRATION

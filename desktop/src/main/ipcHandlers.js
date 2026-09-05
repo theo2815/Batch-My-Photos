@@ -1126,7 +1126,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     }
   });
 
-  handle(ipcMain, 'get-theme', async () => store.get('theme', 'dark'));
+  handle(ipcMain, 'get-theme', async () => store.get('theme', 'light'));
 
   // Whether the blur-detection feature is available (disabled for release —
   // config.features.BLUR_DETECTION_ENABLED). The renderer uses this to disable
@@ -1136,7 +1136,7 @@ function registerPreferenceHandlers(ipcMain, store) {
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'
     const validThemes = ['dark', 'light'];
-    const safeTheme = validThemes.includes(theme) ? theme : 'dark';
+    const safeTheme = validThemes.includes(theme) ? theme : 'light';
     store.set('theme', safeTheme);
     logger.log('🎨 [THEME] Theme set to:', safeTheme);
     return safeTheme;
@@ -1791,7 +1791,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;
-      const response = await net.fetch(url, { method: 'GET' });
+      const response = await net.fetch(url, { method: 'GET', signal: AbortSignal.timeout(10_000) });
 
       if (!response.ok) {
         return { updateAvailable: false, currentVersion };

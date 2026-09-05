@@ -91,6 +91,16 @@ function createWindow() {
     logger.log('🔒 [SECURITY] CSP headers enabled (strict mode)');
   }
 
+  // SECURITY: no popups, and never leave the bundle (dev server in dev)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = shouldUseDistBuild ? url.startsWith('file://') : url.startsWith('http://localhost:');
+    if (!allowed) {
+      event.preventDefault();
+      logger.warn('🔒 [SECURITY] Blocked navigation to:', url);
+    }
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
