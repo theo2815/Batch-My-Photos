@@ -6,6 +6,7 @@ build/
 desktop/build/*
 !desktop/build/appx/
 release/
+release-106
 
 # OS files
 .DS_Store
