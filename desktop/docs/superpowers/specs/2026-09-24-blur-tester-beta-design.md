@@ -1,7 +1,7 @@
 # BatchMyPhotos blur tester beta design
 
 Date: 2026-09-24
-Status: design approved in chat; written spec awaiting review
+Status: written spec approved by Theo on 2026-09-24
 Scope: BatchMyPhotos Electron desktop and its Supabase backend; QuickPitik blur staging API is an existing dependency
 
 ## Goal and release boundary
