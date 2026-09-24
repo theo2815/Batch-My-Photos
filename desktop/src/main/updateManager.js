@@ -1,6 +1,7 @@
 const { autoUpdater } = require("electron-updater");
 const { ipcMain, app } = require("electron");
 const logger = require("../utils/logger");
+const config = require("./config");
 
 // Configure logging
 autoUpdater.logger = logger;
@@ -11,6 +12,12 @@ autoUpdater.autoDownload = false; // Let user decide, or set to true for backgro
  * @param {Function} getMainWindow - Function to get the main browser window
  */
 function initAutoUpdater(getMainWindow) {
+  if (config.features.BLUR_BETA_ENABLED) {
+    for (const channel of ['check-for-updates', 'download-update', 'install-update']) {
+      ipcMain.handle(channel, async () => ({ status: 'disabled-beta' }));
+    }
+    return;
+  }
   // 1. CHECK ENVIRONMENT: If running as a Windows Store app, DISABLE auto-updates.
   // The Store handles updates automatically.
   if (process.windowsStore) {

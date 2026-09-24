@@ -578,7 +578,8 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   const base = (config.features.BLUR_AI_URL || '').replace(/\/+$/, '');
   const streamUrl = `${base}/api/v1/blur/classify/stream`;
   const classifyUrl = `${base}/api/v1/blur/classify`;
-  const apiKey = config.features.BLUR_AI_API_KEY;
+  const apiKey = config.isProduction && config.features.BLUR_BETA_ENABLED
+    ? require('./blurBetaKeyStore').get() : config.features.BLUR_AI_API_KEY;
   const threshold = SENSITIVITY_TO_THRESHOLD[sensitivity] ?? SENSITIVITY_TO_THRESHOLD.moderate;
   const categoriesFilter = Array.isArray(categories) && categories.length > 0
     ? new Set(categories)

@@ -9,6 +9,8 @@
     "electron": "electron .",
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build && electron-builder --win nsis",
+    "dist:blur-beta": "node scripts/write-blur-beta-config.cjs && npm run build && electron-builder --config electron-builder.blur-beta.cjs --win nsis --publish never",
+    "pack:blur-beta": "node scripts/write-blur-beta-config.cjs && npm run build && electron-builder --config electron-builder.blur-beta.cjs --win --dir --publish never",
     "dist:appx": "npm run build && electron-builder --win appx --publish never",
     "pack": "electron-builder --dir",
     "lint": "eslint .",

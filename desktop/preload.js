@@ -530,6 +530,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
 
+  // Write-only beta key setup; queries expose status, never the secret.
+  blurBetaKey: (key) => ipcRenderer.invoke('blur-beta-key', { key }),
+
   /**
    * Open a URL in the user's default browser (HTTPS only)
    * @param {string} url - The URL to open

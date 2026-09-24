@@ -56,3 +56,6 @@ skills-lock.json
 # Local agent workspaces
 .worktrees/
 .superpowers/
+
+# Generated private beta configuration (no secrets)
+desktop/blur-beta.json

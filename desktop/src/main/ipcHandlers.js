@@ -1105,6 +1105,13 @@ function registerPreferenceHandlers(ipcMain, store) {
 
   handle(ipcMain, 'get-theme', async () => store.get('theme', 'light'));
 
+  handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
+    if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
+    const keyStore = require('./blurBetaKeyStore');
+    if (key !== undefined) keyStore.set(key);
+    return { enabled: true, configured: !!keyStore.get() };
+  });
+
   // Whether the blur-detection feature is available (disabled for release —
   // config.features.BLUR_DETECTION_ENABLED). The renderer uses this to disable
   // the "Detect Blurry Photos" toggle without hiding it.
@@ -1767,6 +1774,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
+    if (config.features.BLUR_BETA_ENABLED) return { updateAvailable: false, currentVersion };
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;

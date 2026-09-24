@@ -22,6 +22,8 @@
  */
 
 const { app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 // ============================================================================
 // HELPERS — Parse environment variables with type safety
@@ -70,6 +72,19 @@ const isDevelopment = !app.isPackaged;
 
 /** True when running as a packaged/distributed application */
 const isProduction = app.isPackaged;
+
+// Only the private beta artifact contains this nonsecret staging manifest.
+function readBetaManifest() {
+  if (!isProduction) return null;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, 'blur-beta.json'), 'utf8'));
+    const url = new URL(manifest.blurApiUrl);
+    if (manifest.environment !== 'staging' || url.protocol !== 'https:' ||
+        url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    return { blurApiUrl: url.origin };
+  } catch { return null; }
+}
+const betaManifest = readBetaManifest();
 
 // ============================================================================
 // FEATURE FLAGS
@@ -121,10 +136,10 @@ const features = {
    *
    * DISABLED FOR INITIAL RELEASE - Feature under development
    */
-  BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', false),
+  BLUR_DETECTION_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_DETECTION_ENABLED', false),
 
-  /** Source-run beta keeps blur suggestions out of batch routing. */
-  BLUR_BETA_ENABLED: !isProduction && envBool('BATCH_BLUR_BETA_ENABLED', false),
+  /** Beta suggestions never change batch routing. */
+  BLUR_BETA_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_BETA_ENABLED', false),
 
   /**
    * Enable the AI-powered blur detection backend.
@@ -132,7 +147,7 @@ const features = {
    * instead of using the local Laplacian-based algorithm.
    * Set to false to use the local Laplacian backend (offline baseline).
    */
-  BLUR_AI_ENABLED: envBool('BATCH_BLUR_AI_ENABLED', false),
+  BLUR_AI_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_AI_ENABLED', false),
 
   /**
    * Enable Hardware ID (HWID) device binding.
@@ -149,14 +164,14 @@ const features = {
    * Defaults to a local ai-api in development; set BATCH_BLUR_AI_URL to a
    * deployed ai-api host for production.
    */
-  BLUR_AI_URL: process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
+  BLUR_AI_URL: isProduction ? betaManifest?.blurApiUrl || '' : process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
 
   /**
    * API key sent as X-API-Key to ai-api. Empty by default — a local ai-api in
    * DEBUG mode accepts requests without a key. For a deployed ai-api, set
    * BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
    */
-  BLUR_AI_API_KEY: process.env.BATCH_BLUR_AI_API_KEY || '',
+  BLUR_AI_API_KEY: isProduction ? '' : process.env.BATCH_BLUR_AI_API_KEY || '',
 };
 
 // ============================================================================
