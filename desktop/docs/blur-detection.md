@@ -1,245 +1,83 @@
-# Blur Detection Feature
+# Blur Detection
 
-## Overview
+Blur suggestions are experimental. The private tester beta is **advisory only**: suggested blurry photos remain in ordinary batches. It never automatically deletes photos or sends them to a Blurry output folder. The normal public package keeps blur features disabled.
 
-Blur Detection is an AI-powered feature that analyzes photos for blur before batching, allowing users to automatically separate blurry images from sharp ones. When enabled, detected blurry photos are excluded from normal batches and placed into a dedicated "Blurry" folder.
+## Private beta configuration
 
-The feature is currently **feature-flagged off** (`BATCH_BLUR_DETECTION_ENABLED=false`) and under active development.
+Build from `desktop/` using the existing private scripts:
 
-## Blur Types
-
-Users select one of three blur detection modes depending on their use case:
-
-### 1. Portrait/Object Out-of-Focus
-
-Detects images where the primary subject (person, object) is not in sharp focus, while the background may or may not be blurred. This mode is designed for portrait and product photography where the subject itself must be tack-sharp.
-
-**Use cases:**
-- Portrait sessions where the subject's face/eyes must be sharp
-- Product photography where the item must be in crisp focus
-- Any scenario where shallow depth-of-field is intentional but mis-focus is not
-
-**Behavior:** Analyzes the detected subject region for sharpness. A photo with an intentionally blurred background but a sharp subject passes; a photo where focus landed on the background instead of the subject is flagged.
-
-### 2. General Out-of-Focus
-
-Detects images that are globally soft or out-of-focus across the entire frame. This is the broadest mode and catches photos where the camera missed focus entirely or where lens softness/diffraction produced an unusable result.
-
-**Use cases:**
-- Landscape photography where the entire frame should be sharp
-- Architecture and real estate photos
-- General-purpose batch culling across mixed shooting scenarios
-
-**Behavior:** Evaluates overall image sharpness across the full frame. Photos that are uniformly soft are flagged. Intentional shallow depth-of-field (sharp subject, blurred background) is not penalized.
-
-### 3. Motion Blur
-
-Detects images affected by camera shake or subject movement during exposure, producing directional streaking or smearing. This mode specifically targets blur caused by motion rather than focus errors.
-
-**Use cases:**
-- Sports and action photography where shutter speed was too slow
-- Event photography with moving subjects under low light
-- Handheld shooting at slow shutter speeds
-
-**Behavior:** Analyzes the image for directional blur patterns characteristic of motion (as opposed to the uniform softness of defocus). A photo with intentional motion blur (e.g., panning) may still be flagged; users can manually un-flag such images.
-
-## Architecture
-
-### Components
-
-```
-Desktop App (Electron)
-  src/main/blurDetectionService.js   -- AI API client (upload, poll, cache)
-  src/main/config.js                 -- Feature flag + API URL/key config
-  src/main/constants.js              -- Batch size, timeouts, poll intervals
-  src/main/ipcHandlers.js            -- IPC: analyzeBlur, onBlurProgress
-  src/hooks/useBlurDetection.js      -- React hook: state, progress, ETA, un-flagging
-  src/components/Modals/BlurSensitivityModal.jsx  -- Sensitivity selection UI
-  src/components/PreviewPanel/       -- Blur badges, stats, preview integration
-
-External AI Service (CNN Classifier)
-  POST /api/v1/blur/classify/batch   -- Up to 50 images (job_id + polling)
-  POST /api/v1/blur/classify/mega    -- Up to 500 images (auto-splits, job_id + polling)
-  GET  /api/v1/jobs/{job_id}         -- Poll job status/results
-  GET  /api/v1/health/ready          -- Health check (authenticated)
+```powershell
+$env:BATCH_BLUR_AI_URL = 'https://your-authorized-staging-host.example'
+$env:BATCH_BETA_VERSION = '1.0.6-beta.1'
+npm run dist:blur-beta
 ```
 
-### Data Flow
+`BATCH_BLUR_AI_URL` is the **host base URL, without `/api/v1`**. The main process appends `/api/v1/blur/classify/stream` or `/api/v1/blur/classify`. Private builds require HTTPS without credentials, a path, query, or fragment. Use the authorized staging host, never production inference.
 
-```
-User toggles "Detect Blurry Photos" ON
-  --> BlurSensitivityModal opens (select sensitivity + blur type)
-  --> User clicks "Start Analysis"
-  --> useBlurDetection.runBlurAnalysis()
-  --> IPC: analyzeBlur(folderPath, sensitivity)
-  --> blurDetectionService.analyzeBlur()
-      1. Check in-memory cache (SHA-256 key from folder + groups)
-      2. Pick analyzable file per group (first JPEG/PNG/WebP; skip RAW)
-      3. Health check: GET /health/ready
-      4. Chunk into batches of 20
-      5. For each batch:
-         - 1 file  --> POST /blur/detect (synchronous result)
-         - 2+ files --> POST /blur/detect/batch --> poll GET /jobs/{job_id}
-      6. Map API results to blurMap: { baseName: { score, isBlurry, confidence, metrics } }
-      7. Cache results in memory
-  --> Renderer receives blurMap
-  --> blurryGroups derived (excluding user-unflagged groups)
-  --> Blurry groups excluded from normal batches during execution
-  --> Blurry files placed in dedicated "Blurry" output folder
+The ignored `blur-beta.json` contains only `environment: "staging"` and `blurApiUrl`. A packaged app enables all three blur flags only when this manifest is valid. A public package or missing/malformed manifest disables blur even if environment flags are set. Packaged apps ignore blur API keys in environment variables.
+
+The beta build sets its own prerelease package metadata, retains the existing app/protocol identity, targets NSIS, and uses `--publish never`. It leaves the public version in `package.json` unchanged. GitHub auto-update, manual updater actions, and the separate public version banner are disabled in beta. This build command creates a private candidate; it does not authorize distribution.
+
+Each invited tester enters their own staging key in the **Blur beta key** field after installation. Use restricted `blur:read` and `jobs:read` scopes. Do not embed keys in the manifest, installer, renderer bundle, or documentation. The main process saves the key in a dedicated `blur-beta-key` SecureStore using OS encryption; status requests return only enabled/configured booleans. Saving fails if OS encryption is unavailable.
+
+Source runs retain environment configuration. For an advisory AI development run:
+
+```powershell
+$env:BATCH_BLUR_DETECTION_ENABLED = 'true'
+$env:BATCH_BLUR_BETA_ENABLED = 'true'
+$env:BATCH_BLUR_AI_ENABLED = 'true'
+$env:BATCH_BLUR_AI_URL = 'http://localhost:8000'
+# Supply BATCH_BLUR_AI_API_KEY privately if the development service requires it.
+npm start
 ```
 
-### API Contract
+Source-only legacy local analysis is selected by `BATCH_BLUR_AI_ENABLED=false`. An AI outage does not automatically switch to that implementation.
 
-**Request:** Multipart form-data with `X-API-Key` header.
+## Analysis and review
 
-**Response envelope:**
-```json
-{
-  "success": true,
-  "data": {
-    "is_blurry": true,
-    "confidence": 0.87,
-    "blur_type": "motion",
-    "metrics": { ... }
-  }
-}
-```
+1. Select a folder and enable blur suggestions.
+2. Set sensitivity and blur categories, review the advisory notice, then choose **Start Analysis**. Folder, preset, sensitivity, and category changes do not start a beta analysis automatically.
+3. Review suggestions in the existing preview. They do not change batch routing.
+4. Optionally label a selected analyzed image **Sharp** or **Blurry**. A label alone uploads nothing.
+5. Read the retention disclosure and choose **Submit this example** as a separate affirmative action.
 
-**Batch response (poll result):**
-```json
-{
-  "success": true,
-  "data": {
-    "job_id": "abc-123",
-    "status": "completed",
-    "progress": 1.0,
-    "results": [
-      { "filename": "IMG_001.jpg", "is_blurry": false, "confidence": 0.12, "blur_type": null, "metrics": {} },
-      { "filename": "IMG_002.jpg", "is_blurry": true, "confidence": 0.91, "blur_type": "motion", "metrics": {} }
-    ]
-  }
-}
-```
+Sensitivity and selected categories filter model probabilities in the main process. The four model classes are `sharp`, `defocused_object_portrait`, `defocused_blurred`, and `motion_blurred`. Suggested blur uses the highest non-sharp class probability and selected category; the reported blur score is `1 - P(sharp)`. The authoritative thresholds live in `SENSITIVITY_TO_THRESHOLD` in `src/main/blurDetectionService.js`.
 
-Job statuses: `pending` -> `processing` -> `completed` | `failed`
+## Current AI transport
 
-### Analyzable File Types
+The Electron main process calls the external ai-api directly with `X-API-Key`. No local inference sidecar is started.
 
-Only raster web-friendly formats are sent to the API. RAW files are skipped because the JPEG/PNG companion from the same file group provides the same blur information and is significantly smaller to upload.
+- Choose the first supported raster companion in each file group; RAW-only groups are not analyzed. Supported extensions are defined by `ANALYZABLE_EXTENSIONS`; actual decoding depends on the installed Sharp codec support.
+- Prepare an auto-rotated, resized JPEG through Sharp without retaining EXIF metadata. Resize dimensions, JPEG quality, concurrency, batch size, and timeouts are defined in `src/main/constants.js`.
+- Send multipart images to `POST /api/v1/blur/classify/stream` and parse NDJSON rows. Success requires a valid terminal summary with consistent requested/success/error counts. Rows before a truncated stream are not committed as a successful result.
+- Recover omitted rows through `POST /api/v1/blur/classify` only after a valid summary. HTTP 404/405 from the stream endpoint switches to per-image classification. There is no job polling or Celery path in this desktop client.
+- Retry a retryable stream failure once. Unavailable service, authentication/rate-limit failures, malformed results, or incomplete streams fail analysis visibly. Unreadable/undecodable individual images are marked unanalyzable, not classified as sharp.
 
-Supported: `jpg`, `jpeg`, `png`, `webp`, `tiff`, `tif`, `bmp`, `gif`, `heic`, `heif`
+Results are held in memory for one folder. The cache discriminator includes folder/group sampling, mode, sensitivity, and categories. Explicit analysis clears the cache; beta feedback additionally matches the exact analyzed filename and a hash of its prepared JPEG, rejecting changed content. The main process retains those hashes; they are not sent to the renderer.
 
-## Sensitivity Levels
+Key implementation files: `src/main/blurDetectionService.js`, `src/hooks/useBlurDetection.js`, `src/main/blurFeedbackService.js`, `src/main/blurBetaKeyStore.js`, `src/main/config.js`, and the existing preview/settings modals.
 
-Sensitivity controls how aggressively the AI flags images as blurry. The selected level is passed to the API as a parameter.
+## Explicit feedback and privacy
 
-| Level      | Behavior                 | Best for                                   |
-|------------|--------------------------|--------------------------------------------|
-| **Strict** | Catches subtle blur      | Critical shoots (weddings, commercial)      |
-| **Moderate** | Balanced detection     | General-purpose culling                     |
-| **Lenient** | Obvious blur only       | Quick pass, keeping borderline-sharp images |
+Normal analysis sends resized images to staging inference. **Retaining a feedback example is a separate opt-in action.** Only the selected analyzed JPEG is submitted, with model class/score, the tester's Sharp/Blurry label, app version, and staging environment. Folder paths, original filenames, RAW companions, and EXIF are not included in feedback metadata. An opaque UUID object name sits under the signed-in user's UUID.
 
-## User Interaction
+Feedback is used to evaluate and improve blur detection. It is private to the submitter and authorized research reviewers. The coordinator must delete examples **within 30 days, or sooner on request**. This is a manual operational commitment; the migration does not install an automatic purge job.
 
-### Enabling
+The desktop uses its existing Supabase session for the private `blur-beta-feedback` Storage bucket and `public.blur_beta_feedback` metadata. Owner policies permit insert/read/delete, with no overwrite; admins have review reads only. JPEG uploads are limited to 2 MB. If saving fails, the client attempts Storage HTTP cleanup; a cleanup failure tells the tester to contact the coordinator.
 
-1. In the Settings Panel, toggle **"Detect Blurry Photos"** ON
-2. The BlurSensitivityModal appears prompting blur type and sensitivity selection
-3. Click **"Start Analysis"** to begin
-4. Dismissing the modal (Cancel / ESC / click outside) reverts the toggle to OFF
+Coordinator purge procedure:
 
-### During Analysis
+1. Identify the owner's requested examples, or records due for deletion, retaining their exact object names until byte deletion is confirmed. Include orphaned objects from failed submissions when reviewing the bucket.
+2. Delete bytes through the **Supabase Storage API** using the owner session or an authorized server-side operational credential. Admin review access alone cannot delete another user's object. Never delete directly from `storage.objects` with SQL, and never place an operational credential in the desktop.
+3. Confirm each object is no longer readable, then delete its `public.blur_beta_feedback` row. Retry and escalate failed byte deletion before discarding its metadata reference.
+4. Confirm row absence and record date, count, and outcome in the private release journal without image content, personal paths, or credentials. Schedule the remaining 30-day purge before inviting testers.
 
-- A progress indicator shows `current / total` with an ETA (displayed after 5% completion to avoid unreliable early estimates)
-- Progress events stream from the main process via `onBlurProgress` IPC channel
-- Concurrent analysis runs are prevented (ref-based guard)
+## Verification and release boundary
 
-### After Analysis
+Run `npm test`, `npm run lint`, and `npm run build` in `desktop/`. From the repo root, run `npx supabase test db supabase/tests/blur_beta_feedback.test.sql` against local Supabase. Verify real Storage upload/read/deletion and cross-account denial locally as well as SQL policies.
 
-- Blurry groups are highlighted in the batch preview with a blur badge
-- The StatsGrid shows the count of detected blurry images
-- Users can **un-flag** individual groups they want to keep (e.g., intentional motion blur)
-- Un-flagged groups return to normal batches
-- Re-flagging is also supported (toggle behavior)
+A packaged candidate still uses production Supabase for sign-in and feedback; packaged environment overrides cannot redirect it. Until the feedback migration is separately authorized and applied there, verify feedback only through a development app/service configured for local Supabase. Do not claim packaged feedback works from local evidence.
 
-### During Batch Execution
+Before distribution, test the candidate on a clean Windows VM and a dedicated existing **direct-installer** profile: sign-in, settings and rollback history, disabled updates, staging analysis with a test-only key entered after install, key/path redaction, ordinary offline batching under existing subscription rules, and reinstalling the current public installer without data loss. Never use an unapproved candidate on a Store-installed client.
 
-- Blurry groups (minus user-unflagged ones) are passed to `executeBatch` as the `blurryGroups` parameter
-- These files are separated into a dedicated output folder instead of being distributed across normal batches
-
-## Configuration
-
-### Feature Flag
-
-```
-BATCH_BLUR_DETECTION_ENABLED=true   # Enable the feature (default: false)
-```
-
-### API Connection
-
-```
-BATCH_BLUR_AI_URL=http://localhost:8000/api/v1   # AI service base URL
-BATCH_BLUR_AI_API_KEY=sk_...                      # API key (X-API-Key header)
-```
-
-### Performance Tuning (constants.js)
-
-| Constant                    | Default  | Description                                      |
-|-----------------------------|----------|--------------------------------------------------|
-| `BLUR_AI_MEGA_BATCH_SIZE`   | 500      | Max images per /classify/mega request             |
-| `BLUR_AI_MEGA_TIMEOUT_MS`   | 300,000  | Timeout for mega classify requests (ms)           |
-| `BLUR_AI_BATCH_SIZE`        | 50       | Max images per /classify/batch request            |
-| `BLUR_AI_BATCH_CONCURRENCY` | 3        | Concurrent classify requests                      |
-| `BLUR_AI_MAX_DIMENSION`     | 1,600    | Max image dimension (px) before upload            |
-| `BLUR_AI_JPEG_QUALITY`      | 80       | JPEG quality for resized uploads                  |
-| `BLUR_AI_POLL_INITIAL_MS`   | 300      | Initial polling interval (ms)                     |
-| `BLUR_AI_POLL_MAX_MS`       | 3,000    | Max polling interval after backoff (ms)           |
-
-## Classification vs Detection
-
-The app uses the **CNN classifier** (`/classify`), not the Laplacian detector (`/detect`):
-
-- `/detect` computes a global sharpness score (Laplacian variance). It misses spatially-varying blur like portrait defocus where the subject is blurry but background elements are sharp.
-- `/classify` uses a CNN that classifies into four categories: `sharp`, `defocused_object_portrait`, `defocused_blurred`, `motion_blurred`. It correctly detects out-of-focus subjects.
-
-User blur type selection maps to the classify API's `blur_type` query parameter:
-- **portrait** → `blur_type=defocused_object_portrait` (API returns `detected: true/false`)
-- **general** → no filter (any `predicted_class !== 'sharp'` is blurry)
-- **motion** → `blur_type=motion_blurred`
-
-## Error Handling
-
-- **AI service unavailable:** Health check fails before analysis starts. The `aiUnavailable` flag is set in the UI, and no fallback/local detection is attempted. The user sees a clear error state.
-- **Classify job failure:** Polling detects `status: "failed"` and throws with the server-provided reason.
-- **Polling timeout:** If a job doesn't complete within `BLUR_AI_MAX_POLL_MS` (5 min), analysis throws a timeout error.
-- **File read failure:** Individual unreadable files get `score: -1` and `isBlurry: false` (fail-open per file, not per batch).
-- **Network errors during polling:** Transient `AbortError` on individual poll requests logs a warning and retries on the next interval. Non-transient errors propagate immediately.
-
-## Caching
-
-Results are cached in memory keyed by a SHA-256 hash of `folderPath + groupCount + first/last/middle group names`. The cache holds one folder at a time and is invalidated when:
-
-- The folder changes
-- The file group list changes
-- The user explicitly clicks "Start Analysis" again (clears via `clearAnalysisCache()`)
-- The feature is toggled off (`resetBlurState()`)
-
-## Implementation Status
-
-### Existing (built, feature-flagged off)
-- AI API client with single/batch endpoints and polling
-- In-memory caching with automatic invalidation
-- React hook with full state management (progress, ETA, un-flagging)
-- BlurSensitivityModal with sensitivity selection
-- IPC handlers registered
-- Feature flag and config plumbing
-- UI integration points in PreviewPanel, StatsGrid, BatchPreview
-
-### To Be Implemented
-- Blur type selection UI (Portrait/Object, General, Motion) in BlurSensitivityModal
-- Pass selected blur type to the AI API as a request parameter
-- AI service endpoint support for blur type parameter
-- Blur type display in results (badges, preview indicators)
-- Dedicated "Blurry" output folder logic during batch execution
-- End-to-end integration testing with live AI service
-- Production AI service deployment and URL configuration
+Applying the production migration, issuing real tester keys, and distributing the installer require separate final authorization. Beta examples alone do not complete the held-out model evaluation task.

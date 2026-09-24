@@ -873,7 +873,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
 
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
-        logger.warn('🔒 [SECURITY] Blocked analyze-blur on unregistered path:', folderPath);
+        logger.warn('[SECURITY] Blocked analyze-blur on unregistered folder');
         return { success: false, error: 'Access denied: folder not selected through dialog' };
       }
 
@@ -921,7 +921,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         success: false,
         error: isAiError
           ? 'Blur analysis service is currently unavailable. Please try again later.'
-          : sanitizeError(error, 'analyze-blur'),
+          : sanitizeError({ code: error.code }, 'analyze-blur'),
         aiUnavailable: isAiError,
       };
     }

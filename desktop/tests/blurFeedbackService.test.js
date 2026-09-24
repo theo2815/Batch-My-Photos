@@ -111,6 +111,13 @@ describe('explicit single-image feedback', () => {
     await expect(submit(input())).rejects.toThrow(/sign in/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+  it('does not log an absolute path when preparing an unavailable image', async () => {
+    const warning = vi.spyOn(logger, 'warn');
+    expect(await blur.prepareImageForUpload(path.join(photoFolder, 'missing.jpg'))).toBeNull();
+    expect(warning).toHaveBeenCalled();
+    expect(JSON.stringify(warning.mock.calls)).not.toContain(photoFolder.replaceAll('\\', '\\\\'));
+    expect(JSON.stringify(warning.mock.calls)).toContain('ENOENT');
+  });
   it('bounds the encoded upload before networking', async () => {
     vi.spyOn(blur, 'prepareImageForUpload').mockResolvedValue(Buffer.alloc(2097153));
     await expect(submit(input())).rejects.toThrow(/2 MB/i);
@@ -143,6 +150,29 @@ describe('explicit single-image feedback', () => {
     expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
     expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ prefixes: [fetchMock.mock.calls[0][0].split('/blur-beta-feedback/')[1]] });
   });
+  it('removes the exact object when the upload response is lost', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('Lost upload response'));
+    await expect(submit(input())).rejects.toThrow(/save/i);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      prefixes: [fetchMock.mock.calls[0][0].split('/blur-beta-feedback/')[1]],
+    });
+  });
+  it('never retries with another account after refresh changes the session owner', async () => {
+    const otherToken = 'stub.' + Buffer.from(JSON.stringify({
+      sub: '22222222-2222-4222-8222-222222222222',
+    })).toString('base64url') + '.signature';
+    auth.refreshAccessToken.mockResolvedValueOnce({ refreshed: true, accessToken: otherToken });
+    fetchMock.mockResolvedValueOnce(new Response('{}'))
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }));
+    await expect(submit(input())).rejects.toThrow(/save/i);
+    expect(auth.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.map(([, options]) => options.method)).toEqual(['POST', 'POST', 'DELETE']);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options.headers.Authorization).toBe('Bearer ' + token(1));
+    }
+  });
   it('refreshes metadata authorization once without uploading a second object', async () => {
     fetchMock.mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('{}', { status: 401 }));
     expect(await submit(input())).toEqual({ success: true });
@@ -169,6 +199,35 @@ describe('explicit single-image feedback', () => {
 
 
 describe('feedback IPC boundary', () => {
+  it('keeps rejected and unavailable blur folder paths out of logs and renderer errors', async () => {
+    const handlers = new Map();
+    const warning = vi.spyOn(logger, 'warn');
+    const error = vi.spyOn(logger, 'error');
+    config.features.BLUR_DETECTION_ENABLED = true;
+    const allowed = vi.fn().mockResolvedValue(false);
+    const mocks = {
+      electron: { dialog: {}, shell: {} }, './config': config, '../utils/logger': logger,
+      './securityManager': { isPathAllowedAsync: allowed },
+      './ipcRateLimiter': { rateLimitedHandle: (ipc, name, fn) => ipc.handle(name, fn) },
+      './rollbackManager': { init() {} },
+      '../utils/errorSanitizer': load('src/utils/errorSanitizer.js', { './logger': logger }),
+    };
+    for (const name of ['progressManager', 'authService', 'subscriptionService', 'deviceService',
+      'batchEngine', 'exifService', 'blurDetectionService', 'batchExecutor', 'fileUtils']) mocks['./' + name] = {};
+    load('src/main/ipcHandlers.js', mocks).registerIpcHandlers(
+      { handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {});
+    const missing = path.join(photoFolder, 'missing-folder');
+    const invoke = () => handlers.get('analyze-blur')({}, { folderPath: missing });
+    expect((await invoke()).success).toBe(false);
+    allowed.mockResolvedValue(true);
+    const result = await invoke();
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found/i);
+    const output = [...warning.mock.calls, ...error.mock.calls].flat().map(value => typeof value === 'object' ? JSON.stringify(value) : String(value)).join(' ');
+    expect(output).not.toContain(photoFolder);
+    expect(output).toContain('ENOENT');
+    expect(JSON.stringify(result)).not.toContain('missing-folder');
+  });
   it('exposes only the selected image and label, and never forwards service errors', async () => {
     const handlers = new Map();
     const call = vi.fn().mockRejectedValue(new Error(`secret-token ${photoFolder}`));

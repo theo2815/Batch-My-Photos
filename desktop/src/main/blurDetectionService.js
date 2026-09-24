@@ -394,7 +394,7 @@ async function prepareImageForUpload(filePath) {
       .jpeg({ quality: BLUR_AI_JPEG_QUALITY })
       .toBuffer();
   } catch (err) {
-    logger.warn(`⚠️ [BLUR-AI] Failed to resize ${path.basename(filePath)}: ${err.message}`);
+    logger.warn('[BLUR-AI] Image preparation failed:', err.code || 'IMAGE_DECODE_FAILED');
     return null;
   }
 }
