@@ -124,7 +124,9 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     // Prevent concurrent analysis runs — ref check is synchronous and
     // immune to React batching race conditions (unlike state).
     if (analysisInFlightRef.current) {
+      const queuedRun = analysisRunRef.current;
       await analysisSettledRef.current;
+      if (queuedRun !== analysisRunRef.current) return;
       if (blurDetectionEnabled) return runBlurAnalysis();
       return;
     }

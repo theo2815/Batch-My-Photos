@@ -244,6 +244,36 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(2);
     expect(render(useBlurDetection, p).blurResults).toEqual({ NEW: { predictedClass: 'sharp' } });
   });
+  it('drops a queued restart when blur is switched off again', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { STALE: { predictedClass: 'sharp' } } });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    const queued = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, { ...p, blurDetectionEnabled: false }).resetBlurState();
+    finishOld({ success: true, blurResults: { OLD: { predictedClass: 'sharp' } } });
+    await Promise.all([old, queued]);
+    expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(1);
+    expect(render(useBlurDetection, { ...p, blurDetectionEnabled: false }).blurResults).toBeNull();
+  });
+  it('drops a queued restart when the selected folder changes again', async () => {
+    const p = { folderPath: 'C:/first', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { STALE: { predictedClass: 'sharp' } } });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    const queued = render(useBlurDetection, { ...p, folderPath: 'C:/second' }).runBlurAnalysis();
+    render(useBlurDetection, { ...p, folderPath: 'C:/third' }).resetBlurState();
+    finishOld({ success: true, blurResults: { OLD: { predictedClass: 'sharp' } } });
+    await Promise.all([old, queued]);
+    expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(1);
+    expect(render(useBlurDetection, { ...p, folderPath: 'C:/third' }).blurResults).toBeNull();
+  });
   it('ignores progress from an obsolete run after the blur toggle resets', async () => {
     let emit, finish;
     globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };
