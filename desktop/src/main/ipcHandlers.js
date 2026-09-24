@@ -1105,6 +1105,19 @@ function registerPreferenceHandlers(ipcMain, store) {
 
   handle(ipcMain, 'get-theme', async () => store.get('theme', 'light'));
 
+  handle(ipcMain, 'submit-blur-example', async (_event, input) => {
+    try {
+      await require('./blurFeedbackService').submitBlurExample(input);
+      return { success: true };
+    } catch (_error) {
+      return {
+        success: false,
+        error: 'Could not submit this example. Check your sign-in and analyze the image again. ' +
+          'If this continues, contact the beta coordinator.',
+      };
+    }
+  });
+
   handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
     if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
     const keyStore = require('./blurBetaKeyStore');

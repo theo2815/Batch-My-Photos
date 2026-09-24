@@ -53,6 +53,8 @@ sharp.concurrency(1);
  * Only one folder is cached at a time (the current working folder).
  * Cleared automatically when the folder or file list changes.
  */
+// Keep content fingerprints in main only; blurMap crosses the renderer boundary.
+let analyzedImageHashes = new WeakMap();
 let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 
 /**
@@ -189,14 +191,20 @@ async function computeBlurScore(filePath) {
  * Clear the blur cache (e.g. when switching folders).
  */
 function clearCache() {
+  analyzedImageHashes = new WeakMap();
   blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 }
 
-function getCachedBlurResult(folderPath, fileName) {
+function getCachedBlurResult(folderPath, fileName, jpeg = null) {
   if (blurCache.folderPath !== folderPath || blurCache.mode !== 'ai') return null;
-  return Object.values(blurCache.blurMap || {}).find(
+  const result = Object.values(blurCache.blurMap || {}).find(
     result => result.analyzedFile === fileName && result.score >= 0 && result.predictedClass
   ) || null;
+  if (jpeg && analyzedImageHashes.get(result) !== crypto.createHash('sha256').update(jpeg).digest('hex')) {
+    clearCache();
+    return null;
+  }
+  return result;
 }
 
 // ============================================================================
@@ -307,10 +315,10 @@ function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
  * caller fails loud. Returns an un-analyzable marker for per-image decode/size
  * rejections (400/413/422) so one bad file does not abort the whole scan.
  */
-async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile) {
+async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer) {
   let buffer;
   try {
-    buffer = fs.readFileSync(filePath);
+    buffer = preparedBuffer || fs.readFileSync(filePath);
   } catch (err) {
     logger.warn(`⚠️ [BLUR-AI] Failed to read ${analyzedFile}: ${err.message}`);
     return { score: -1, isBlurry: false, analyzedFile, confidence: 0 };
@@ -376,7 +384,8 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
  */
 async function prepareImageForUpload(filePath) {
   try {
-    return await sharp(filePath, { sequentialRead: true })
+    // Read fresh bytes so libvips cannot reuse a stale filename-based decode.
+    return await sharp(await fs.promises.readFile(filePath), { sequentialRead: true })
       .rotate()                       // auto-orient from EXIF before re-encode
       .resize(BLUR_AI_MAX_DIMENSION, BLUR_AI_MAX_DIMENSION, {
         fit: 'inside',
@@ -593,10 +602,14 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   };
 
   // Per-image fallback (single /classify) for one work item.
-  const classifyItemSingle = (item) => classifyOne(
+  const rememberImage = (item, result) => {
+    analyzedImageHashes.set(result, crypto.createHash('sha256').update(item.buffer).digest('hex'));
+    return result;
+  };
+  const classifyItemSingle = async (item) => rememberImage(item, await classifyOne(
     classifyUrl, apiKey, path.join(folderPath, item.analyzableFile),
-    threshold, categoriesFilter, item.analyzableFile,
-  );
+    threshold, categoriesFilter, item.analyzableFile, item.buffer,
+  ));
 
   // Split the work list into streaming chunks.
   const chunks = [];
@@ -645,7 +658,10 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
           blurMap[item.baseName] = await classifyItemSingle(item);
           tick();
         }
-        for (const item of sendable) item.buffer = null;   // release memory
+        for (const item of sendable) {
+          rememberImage(item, blurMap[item.baseName]);
+          item.buffer = null;   // release memory
+        }
         return;
       } catch (err) {
         if (err.code === 'STREAM_UNSUPPORTED') {
@@ -791,5 +807,6 @@ module.exports = {
   analyzeBlur,
   clearCache,
   getCachedBlurResult,
+  prepareImageForUpload,
   computeBlurScore,
 };

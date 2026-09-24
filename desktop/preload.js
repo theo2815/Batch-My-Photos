@@ -530,6 +530,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
 
+  // Explicitly share one analyzed image and its human label.
+  submitBlurExample: ({ folderPath, fileName, label }) =>
+    ipcRenderer.invoke('submit-blur-example', { folderPath, fileName, label }),
   // Write-only beta key setup; queries expose status, never the secret.
   blurBetaKey: (key) => ipcRenderer.invoke('blur-beta-key', { key }),
 
