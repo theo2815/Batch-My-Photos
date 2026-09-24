@@ -29,9 +29,36 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   const [aiUnavailable, setAiUnavailable] = useState(false); // AI service down
 
   const [labels, setLabels] = useState(new Map());
+  const [submissions, setSubmissions] = useState(new Map());
+  const pendingSubmissions = useRef(new Set());
+  const submissionKey = useCallback(fileName => JSON.stringify([folderPath, fileName]), [folderPath]);
   const setLabel = useCallback((fileName, label) => {
     setLabels(previous => new Map(previous).set(fileName, label));
-  }, []);
+    const key = submissionKey(fileName);
+    setSubmissions(previous => {
+      if (previous.get(key)?.status === 'pending') return previous;
+      const next = new Map(previous);
+      next.delete(key);
+      return next;
+    });
+  }, [submissionKey]);
+  const getSubmission = fileName => submissions.get(submissionKey(fileName));
+  const submitExample = useCallback(async (fileName, label) => {
+    const key = submissionKey(fileName);
+    if (pendingSubmissions.current.has(key)) return;
+    pendingSubmissions.current.add(key);
+    const update = state => setSubmissions(previous => new Map(previous).set(key, state));
+    update({ status: 'pending' });
+    try {
+      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName, label });
+      update({ status: result.success ? 'success' : 'error',
+        error: result.error || 'Could not submit this example. Please try again.' });
+    } catch (_error) {
+      update({ status: 'error', error: 'Could not submit this example. Check your connection and try again.' });
+    } finally {
+      pendingSubmissions.current.delete(key);
+    }
+  }, [folderPath, submissionKey]);
 
   // Cache discriminator: stable serialization of (sensitivity, categories)
   // Re-analysis runs when this changes between calls.
@@ -183,6 +210,8 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     isBeta,
     labels,
     setLabel,
+    getSubmission,
+    submitExample,
     blurResults,
     blurProgress,
     blurEta,

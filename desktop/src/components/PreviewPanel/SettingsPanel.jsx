@@ -14,6 +14,7 @@ import './PreviewPanel.css';
 // ... (props definition)
 
 function SettingsPanel({ 
+  isBeta = false,
   maxFilesPerBatch, 
   outputPrefix, 
   batchMode,
@@ -60,9 +61,22 @@ function SettingsPanel({
   const [betaKey, setBetaKey] = useState('');
   const [savingBetaKey, setSavingBetaKey] = useState(false);
   const [betaKeyError, setBetaKeyError] = useState('');
-  useEffect(() => {
-    window.electronAPI?.blurBetaKey?.().then(setBetaKeyStatus).catch(() => {});
+  const [betaStatusError, setBetaStatusError] = useState('');
+  const [checkingBetaKey, setCheckingBetaKey] = useState(false);
+  const loadBetaKeyStatus = useCallback(async () => {
+    setCheckingBetaKey(true);
+    setBetaStatusError('');
+    try {
+      setBetaKeyStatus(await window.electronAPI.blurBetaKey());
+    } catch (_error) {
+      setBetaStatusError('Could not check the beta key. Try again.');
+    } finally {
+      setCheckingBetaKey(false);
+    }
   }, []);
+  useEffect(() => {
+    if (isBeta) loadBetaKeyStatus();
+  }, [isBeta, loadBetaKeyStatus]);
 
   const saveBetaKey = async () => {
     if (!betaKey.trim() || savingBetaKey) return;
@@ -427,7 +441,15 @@ function SettingsPanel({
         />
       </div>
 
-      {betaKeyStatus?.enabled && (
+      {isBeta && (betaStatusError || checkingBetaKey) && (
+        <div className="blur-beta-key">
+          {betaStatusError && <p role="alert">{betaStatusError}</p>}
+          {checkingBetaKey && <p role="status">Checking beta key...</p>}
+          <button type="button" className="btn-small" disabled={checkingBetaKey}
+            onClick={loadBetaKeyStatus}>Retry key status</button>
+        </div>
+      )}
+      {isBeta && betaKeyStatus?.enabled && (
         <div className="blur-beta-key">
           {betaKeyStatus.configured ? <p role="status">Beta key saved on this device.</p> : (
             <>

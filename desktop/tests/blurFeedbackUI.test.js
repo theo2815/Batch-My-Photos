@@ -5,8 +5,9 @@ const hooks = vi.hoisted(() => ({ values: [], cursor: 0, effects: [], deps: [], 
 vi.mock('react', () => {
   const useState = initial => {
     const i = hooks.cursor++;
-    if (!(i in hooks.values)) hooks.values[i] = typeof initial === 'function' ? initial() : initial;
-    return [hooks.values[i], value => { hooks.values[i] = typeof value === 'function' ? value(hooks.values[i]) : value; }];
+    const values = hooks.values;
+    if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial;
+    return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }];
   };
   const useRef = initial => useState(() => ({ current: initial }))[0];
   const useEffect = (fn, deps) => {
@@ -27,6 +28,18 @@ import StatsGrid from '../src/components/PreviewPanel/StatsGrid.jsx';
 import { useBlurDetection } from '../src/hooks/useBlurDetection.js';
 
 function render(component, props) { hooks.cursor = 0; return component(props); }
+// The parent hook outlives each modal instance; resetting modal hooks truly discards its state.
+let feedbackHooks;
+function renderPreview(props) {
+  const modalHooks = { ...hooks };
+  Object.assign(hooks, feedbackHooks);
+  const feedback = render(useBlurDetection, { folderPath: props.folderPath, isBeta: props.isBeta });
+  Object.assign(feedbackHooks, hooks);
+  Object.assign(hooks, modalHooks);
+  return render(ImagePreviewModal, { ...props, getSubmission: feedback.getSubmission,
+    onSubmit: feedback.submitExample,
+    onLabel: (file, label) => { feedback.setLabel(file, label); props.onLabel?.(file, label); } });
+}
 async function effects() { const pending = hooks.effects.splice(0); pending.forEach(fn => fn()); await Promise.resolve(); await Promise.resolve(); }
 function nodes(node) { return !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)]; }
 function text(node) { return typeof node === 'string' ? node : Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : ''; }
@@ -37,6 +50,7 @@ const props = { isOpen: true, isBeta: true, folderPath: 'C:/fixture', fileName: 
 
 beforeEach(() => {
   hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
+  feedbackHooks = { values: [], cursor: 0, effects: [], deps: [], cleanups: [] };
   vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512 }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal('document', { activeElement: { focus: vi.fn() }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
@@ -45,13 +59,13 @@ describe('explicit beta feedback consent', () => {
   it('labels locally, survives close/reopen, then submits exactly the displayed analyzed file', async () => {
     const labels = new Map();
     const p = { ...props, labels, onLabel: (file, label) => labels.set(file, label) };
-    let tree = render(ImagePreviewModal, p);
-    await effects(); tree = render(ImagePreviewModal, p);
+    let tree = renderPreview(p);
+    await effects(); tree = renderPreview(p);
     expect(button(tree, 'Sharp')).toBeDefined();
     expect(button(tree, 'Submit this example').props.disabled).toBe(true);
     button(tree, 'Sharp').props.onClick();
-    render(ImagePreviewModal, { ...p, isOpen: false }); await effects();
-    tree = render(ImagePreviewModal, p); await effects(); tree = render(ImagePreviewModal, p);
+    renderPreview({ ...p, isOpen: false }); await effects();
+    tree = renderPreview(p); await effects(); tree = renderPreview(p);
     expect(button(tree, 'Sharp').props['aria-pressed']).toBe(true);
     expect(globalThis.window.electronAPI.submitBlurExample).not.toHaveBeenCalled();
     expect(text(tree)).toMatch(/private/i);
@@ -60,19 +74,19 @@ describe('explicit beta feedback consent', () => {
     expect(text(tree)).toContain('flagged.jpg');
     await button(tree, 'Submit this example').props.onClick();
     expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledWith({ folderPath: 'C:/fixture', fileName: 'flagged.jpg', label: 'sharp' });
-    expect(text(render(ImagePreviewModal, p))).toMatch(/submitted/i);
+    expect(text(renderPreview(p))).toMatch(/submitted/i);
   });
 
   it('allows a model-sharp miss, shows progress, and offers an explicit retry after failure', async () => {
     const p = { ...props, fileName: 'missed.jpg', labels: new Map([['missed.jpg', 'blurry']]), onLabel: vi.fn() };
     let finish;
     globalThis.window.electronAPI.submitBlurExample.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    let tree = render(ImagePreviewModal, p); await effects(); tree = render(ImagePreviewModal, p);
+    let tree = renderPreview(p); await effects(); tree = renderPreview(p);
     const request = button(tree, 'Submit this example').props.onClick();
-    tree = render(ImagePreviewModal, p);
+    tree = renderPreview(p);
     expect(text(tree)).toMatch(/submitting/i);
     finish({ success: false, error: 'Could not save this example. Please sign in and try again.' }); await request;
-    tree = render(ImagePreviewModal, p);
+    tree = renderPreview(p);
     expect(nodes(tree).find(n => n.props.role === 'alert')).toBeDefined();
     expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledTimes(1);
     await button(tree, 'Submit this example').props.onClick();
@@ -82,14 +96,62 @@ describe('explicit beta feedback consent', () => {
   it('keeps the local label after a rejected upload promise and permits retry', async () => {
     const p = { ...props, labels: new Map([['flagged.jpg', 'sharp']]), onLabel: vi.fn() };
     globalThis.window.electronAPI.submitBlurExample.mockRejectedValueOnce(new Error('offline'));
-    render(ImagePreviewModal, p); await effects();
-    await button(render(ImagePreviewModal, p), 'Submit this example').props.onClick();
-    const tree = render(ImagePreviewModal, p);
+    renderPreview(p); await effects();
+    await button(renderPreview(p), 'Submit this example').props.onClick();
+    const tree = renderPreview(p);
     expect(text(tree)).toContain('Check your connection');
     expect(button(tree, 'Sharp').props['aria-pressed']).toBe(true);
     expect(button(tree, 'Submit this example').props.disabled).toBe(false);
     await button(tree, 'Submit this example').props.onClick();
-    expect(text(render(ImagePreviewModal, p))).toContain('Example submitted');
+    expect(text(renderPreview(p))).toContain('Example submitted');
+  });
+
+  it('keeps a deferred submission across an actual modal unmount and reopen', async () => {
+    const p = { ...props, labels: new Map([['flagged.jpg', 'sharp']]), onLabel: vi.fn() };
+    let finish;
+    globalThis.window.electronAPI.submitBlurExample.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    renderPreview(p); await effects();
+    const submit = button(renderPreview(p), 'Submit this example');
+    const pending = submit.props.onClick();
+    await submit.props.onClick(); // Same-render rapid repeat must also be blocked synchronously.
+    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledTimes(1);
+    hooks.cleanups.forEach(cleanup => cleanup?.());
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    renderPreview(p); await effects();
+    let reopened = renderPreview(p);
+    expect(button(reopened, 'Submitting...')?.props.disabled).toBe(true);
+    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledTimes(1);
+    finish({ success: true }); await pending;
+    reopened = renderPreview(p);
+    expect(text(reopened)).toContain('Example submitted');
+    expect(button(reopened, 'Submit this example').props.disabled).toBe(true);
+  });
+
+  it('isolates submission status for identical filenames in different folders', async () => {
+    const p = { folderPath: 'C:/first', isBeta: true };
+    let finish;
+    globalThis.window.electronAPI.submitBlurExample.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = render(useBlurDetection, p).submitExample('same.jpg', 'sharp');
+    expect(render(useBlurDetection, { ...p, folderPath: 'C:/second' }).getSubmission('same.jpg')).toBeUndefined();
+    expect(render(useBlurDetection, p).getSubmission('same.jpg').status).toBe('pending');
+    finish({ success: false, error: 'Try again' }); await pending;
+    expect(render(useBlurDetection, { ...p, folderPath: 'C:/second' }).getSubmission('same.jpg')).toBeUndefined();
+    expect(render(useBlurDetection, p).getSubmission('same.jpg')).toEqual({ status: 'error', error: 'Try again' });
+  });
+
+  it('shows a recoverable beta key status error and retries without exposing a key', async () => {
+    globalThis.window.electronAPI.blurBetaKey.mockRejectedValueOnce(new Error('private implementation detail'));
+    render(SettingsPanel, { isBeta: true }); await effects();
+    const tree = render(SettingsPanel, { isBeta: true });
+    expect(text(tree)).toContain('Could not check the beta key');
+    expect(text(tree)).not.toContain('private implementation detail');
+    expect(nodes(tree).some(n => n.type === 'input' && n.props.type === 'password')).toBe(false);
+    await button(tree, 'Retry key status').props.onClick();
+    const retried = render(SettingsPanel, { isBeta: true });
+    expect(nodes(retried).some(n => n.type === 'input' && n.props.type === 'password')).toBe(true);
+    expect(text(retried)).not.toContain('Could not check the beta key');
+    expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenCalledTimes(2);
+    expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith();
   });
 
   it('hides key setup outside beta', async () => {
@@ -99,9 +161,9 @@ describe('explicit beta feedback consent', () => {
   });
 
   it('does not expose feedback controls for a RAW sibling or outside beta', () => {
-    expect(button(render(ImagePreviewModal, { ...props, isBeta: false }), 'Sharp')).toBeUndefined();
+    expect(button(renderPreview({ ...props, isBeta: false }), 'Sharp')).toBeUndefined();
     hooks.values = [];
-    expect(button(render(ImagePreviewModal, { ...props, fileName: 'flagged.CR3' }), 'Sharp')).toBeUndefined();
+    expect(button(renderPreview({ ...props, fileName: 'flagged.CR3' }), 'Sharp')).toBeUndefined();
   });
 
   it('maps exact analyzed files into ordinary batch previews, including sharp predictions', () => {
@@ -140,7 +202,7 @@ describe('explicit beta feedback consent', () => {
   });
 
   it('saves the beta key once and clears the password field', async () => {
-    const p = { maxFilesPerBatch: 10, outputPrefix: 'Batch', batchMode: 'copy' };
+    const p = { isBeta: true, maxFilesPerBatch: 10, outputPrefix: 'Batch', batchMode: 'copy' };
     render(SettingsPanel, p); await effects();
     let tree = render(SettingsPanel, p);
     const input = nodes(tree).find(n => n.type === 'input' && n.props.type === 'password');

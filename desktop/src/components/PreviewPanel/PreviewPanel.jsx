@@ -72,6 +72,7 @@ function PreviewPanel({
       
       {/* Settings Panel */}
       <SettingsPanel
+        isBeta={blurDetection?.isBeta}
         maxFilesPerBatch={maxFilesPerBatch}
         outputPrefix={outputPrefix}
         batchMode={batchMode}

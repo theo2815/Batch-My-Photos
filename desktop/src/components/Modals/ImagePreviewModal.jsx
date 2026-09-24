@@ -20,7 +20,7 @@ import './Modals.css';
  * @param {(baseName: string) => void} [props.onRestore] - Optional callback to restore a blurry photo
  * @param {() => void} props.onClose - Close callback
  */
-function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose, isBeta = false, labels, onLabel }) {
+function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose, isBeta = false, labels, onLabel, getSubmission, onSubmit }) {
   const [currentFile, setCurrentFile] = useState(fileName);
   const [previewData, setPreviewData] = useState(null); // { dataUrl, width, height }
   const [isLoading, setIsLoading] = useState(false);
@@ -29,27 +29,15 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   const prefetchRef = useRef({}); // Cache for prefetched images
   const modalRef = useRef(null);
 
-  const [submission, setSubmission] = useState(null);
-  const submittingRef = useRef(false);
   const label = labels?.get(currentFile);
   const currentResult = blurInfoMap?.[currentFile];
   const analyzedImage = isBeta && currentResult?.predictedClass && currentResult.score >= 0 ? currentResult : null;
-  const currentSubmission = submission?.fileName === currentFile ? submission : null;
-  const submitting = submission?.status === 'pending';
+  const currentSubmission = getSubmission?.(currentFile);
+  const submitting = currentSubmission?.status === 'pending';
 
-  const submitExample = async () => {
-    if (!analyzedImage || !label || submittingRef.current || isLoading || previewData?.fileName !== currentFile) return;
-    submittingRef.current = true;
-    setSubmission({ fileName: currentFile, status: 'pending' });
-    try {
-      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName: currentFile, label });
-      setSubmission({ fileName: currentFile, status: result.success ? 'success' : 'error',
-        error: result.error || 'Could not submit this example. Please try again.' });
-    } catch (_error) {
-      setSubmission({ fileName: currentFile, status: 'error', error: 'Could not submit this example. Check your connection and try again.' });
-    } finally {
-      submittingRef.current = false;
-    }
+  const submitExample = () => {
+    if (!analyzedImage || !label || submitting || isLoading || previewData?.fileName !== currentFile) return;
+    return onSubmit(currentFile, label);
   };
 
   // Sync currentFile when the prop changes (new image clicked)
@@ -308,7 +296,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
           <div className="blur-feedback-actions" role="group" aria-label="Your label">
             {['sharp', 'blurry'].map(value => (
               <button key={value} type="button" className="btn-small" aria-pressed={label === value}
-                disabled={submitting} onClick={() => { onLabel(currentFile, value); setSubmission(null); }}>
+                disabled={submitting} onClick={() => onLabel(currentFile, value)}>
                 {value === 'sharp' ? 'Sharp' : 'Blurry'}
               </button>
             ))}
