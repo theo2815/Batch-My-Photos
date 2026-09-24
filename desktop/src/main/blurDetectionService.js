@@ -49,11 +49,11 @@ sharp.concurrency(1);
 // ============================================================================
 
 /**
- * Cache entry: { cacheKey: string, blurMap: Object }
+ * Cache entry: { cacheKey, folderPath, mode, blurMap }
  * Only one folder is cached at a time (the current working folder).
  * Cleared automatically when the folder or file list changes.
  */
-let blurCache = { cacheKey: null, blurMap: null };
+let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 
 /**
  * Extensions that can be analyzed for blur (JPEG/PNG only — fast to decode).
@@ -189,7 +189,14 @@ async function computeBlurScore(filePath) {
  * Clear the blur cache (e.g. when switching folders).
  */
 function clearCache() {
-  blurCache = { cacheKey: null, blurMap: null };
+  blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
+}
+
+function getCachedBlurResult(folderPath, fileName) {
+  if (blurCache.folderPath !== folderPath || blurCache.mode !== 'ai') return null;
+  return Object.values(blurCache.blurMap || {}).find(
+    result => result.analyzedFile === fileName && result.score >= 0 && result.predictedClass
+  ) || null;
 }
 
 // ============================================================================
@@ -441,61 +448,93 @@ function streamLineToResult(obj, threshold, categoriesFilter, analyzedFile) {
  * @param {Function} onOne - (baseName, result) => void, called once per result
  * @returns {Promise<number[]>} indices (into `chunk`) the stream did NOT return
  * @throws {Error} `.code='STREAM_UNSUPPORTED'` on 404/405; "AI service ..." on
- *                 503 / auth / 5xx / timeout / connection failure (loud-fail)
+ *                 incomplete summary / auth / exhausted retry / connection failure
  */
 async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_STREAM_TIMEOUT_MS);
   try {
     const form = new FormData();
-    chunk.forEach((item, i) => {
-      // filename = local index → unambiguous result mapping (base names can
-      // collide across extensions; the index cannot).
-      form.append('files', new Blob([item.buffer]), String(i));
-    });
-
+    chunk.forEach((item, i) => form.append('files', new Blob([item.buffer]), String(i)));
     const headers = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
 
-    const response = await net.fetch(streamUrl, {
-      method: 'POST', headers, body: form, signal: controller.signal,
-    });
-
-    // Older server without the streaming endpoint → caller falls back per-image.
+    let response;
+    try {
+      response = await net.fetch(streamUrl, {
+        method: 'POST', headers, body: form, signal: controller.signal,
+      });
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
     if (response.status === 404 || response.status === 405) {
-      const e = new Error('AI service: /blur/classify/stream not available');
-      e.code = 'STREAM_UNSUPPORTED';
-      throw e;
+      const err = new Error('AI service: /blur/classify/stream not available');
+      err.code = 'STREAM_UNSUPPORTED';
+      throw err;
     }
-    // 503 (model) / 401-403 (auth) / 429 (rate) / 5xx — fail loud.
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`AI service returned ${response.status}: ${errText.slice(0, 200)}`);
+      const body = await response.text().catch(() => '');
+      const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
+      err.retryable = response.status === 503 || response.status === 429;
+      throw err;
     }
 
-    const seen = new Set();
-    for await (const line of ndjsonLines(response)) {
-      let obj;
-      try { obj = JSON.parse(line); } catch (_e) { continue; }
-      if (obj._summary) continue;
-      const idx = typeof obj.index === 'number' ? obj.index : parseInt(obj.filename, 10);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= chunk.length || seen.has(idx)) continue;
+    const pendingRows = new Map();
+    let summary;
+    let summaryCount = 0;
+    let invalidRows = false;
+    try {
+      for await (const line of ndjsonLines(response)) {
+        let obj;
+        try { obj = JSON.parse(line); } catch (_err) { invalidRows = true; continue; }
+        if (obj && Object.hasOwn(obj, '_summary')) {
+          summary = obj;
+          summaryCount++;
+          continue;
+        }
+        const idx = obj && (typeof obj.index === 'number' ? obj.index : Number(obj.filename));
+        if (!Number.isInteger(idx) || idx < 0 || idx >= chunk.length ||
+            obj.filename !== String(idx) || pendingRows.has(idx)) {
+          invalidRows = true;
+          continue;
+        }
+        pendingRows.set(idx, obj);
+      }
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
+
+    const rowErrors = [...pendingRows.values()].filter(row => Object.hasOwn(row, 'error')).length;
+    if (summaryCount !== 1 || summary._summary !== true || summary.complete !== true ||
+        !Number.isInteger(summary.total) || summary.total !== chunk.length ||
+        !Number.isInteger(summary.successful) || !Number.isInteger(summary.errors) ||
+        summary.successful < 0 || summary.errors < 0 ||
+        summary.successful + summary.errors !== chunk.length ||
+        rowErrors > summary.errors || pendingRows.size - rowErrors > summary.successful || invalidRows) {
+      const err = new Error('AI service incomplete stream');
+      err.code = 'STREAM_INVALID';
+      throw err;
+    }
+
+    for (const [idx, row] of pendingRows) {
       const item = chunk[idx];
-      onOne(item.baseName, streamLineToResult(obj, threshold, categoriesFilter, item.analyzableFile));
-      seen.add(idx);
+      onOne(item.baseName, streamLineToResult(row, threshold, categoriesFilter, item.analyzableFile));
     }
-
-    // Completeness: any index not returned (truncated/dropped stream) is reported
-    // so the caller can recover it via the per-image fallback.
     const missing = [];
-    for (let i = 0; i < chunk.length; i++) if (!seen.has(i)) missing.push(i);
+    for (let i = 0; i < chunk.length; i++) if (!pendingRows.has(i)) missing.push(i);
     return missing;
   } catch (err) {
-    if (err.code === 'STREAM_UNSUPPORTED') throw err;
+    if (err.code === 'STREAM_UNSUPPORTED' || err.code === 'STREAM_INVALID') throw err;
     if (err.name === 'AbortError') {
-      throw new Error(`AI service timed out after ${BLUR_AI_STREAM_TIMEOUT_MS}ms`);
+      const timeout = new Error('AI service timed out after ' + BLUR_AI_STREAM_TIMEOUT_MS + 'ms');
+      timeout.retryable = true;
+      throw timeout;
     }
-    throw new Error(err.message?.includes('AI service') ? err.message : `AI service error: ${err.message}`);
+    const failure = new Error(err.message?.includes('AI service') ? err.message : 'AI service error: ' + err.message);
+    failure.retryable = err.retryable === true;
+    throw failure;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -570,11 +609,19 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     // Phase 2 — STREAM the chunk (unless the server already proved it lacks it).
     if (!streamUnsupported) {
       try {
-        const missing = await classifyChunkStream(
+        const classifyStream = () => classifyChunkStream(
           streamUrl, apiKey, sendable, threshold, categoriesFilter,
           (baseName, result) => { blurMap[baseName] = result; tick(); },
         );
-        // Recover items a stream dropped (truncation) via per-image classify.
+        let missing;
+        try {
+          missing = await classifyStream();
+        } catch (err) {
+          if (!err.retryable) throw err;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          missing = await classifyStream();
+        }
+        // Recover omitted rows only after the server commits a valid summary.
         for (const idx of missing) {
           const item = sendable[idx];
           blurMap[item.baseName] = await classifyItemSingle(item);
@@ -708,6 +755,7 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
 
   logger.log(`🔍 [BLUR] Starting analysis — mode: ${mode}, groups: ${groupNames.length}`);
 
+  clearCache();
   let blurMap;
   if (mode === 'ai') {
     blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
@@ -716,7 +764,7 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
   }
 
   // Store in cache
-  blurCache = { cacheKey, blurMap };
+  blurCache = { cacheKey, folderPath, mode, blurMap };
 
   return blurMap;
 }
@@ -724,5 +772,6 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
 module.exports = {
   analyzeBlur,
   clearCache,
+  getCachedBlurResult,
   computeBlurScore,
 };

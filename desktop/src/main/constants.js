@@ -259,25 +259,23 @@ const BLUR_AI_RESIZE_CONCURRENCY = Math.max(2, os.cpus().length - 1);
 
 /**
  * Images per /blur/classify/stream request. Must be ≤ the server's
- * STREAM_CLASSIFY_MAX_SIZE (500). Kept at 200 to bound server memory (it buffers
+ * STREAM_CLASSIFY_MAX_SIZE (500). Kept at 100 to bound server memory (it buffers
  * the whole request before streaming) and to limit rework if a stream drops.
  */
-const BLUR_AI_STREAM_BATCH_SIZE = 200;
+const BLUR_AI_STREAM_BATCH_SIZE = 100;
 
 /**
- * Concurrent /blur/classify/stream requests in flight. Deliberately low: the
- * server owns inference parallelism via its own semaphore, so firing many
- * concurrent requests only oversubscribes its CPU. Decoupled from CPU core count
- * on purpose (unlike BLUR_CONCURRENCY, which drives local Sharp work).
+ * Concurrent /blur/classify/stream requests in flight. One for the staging beta
+ * to keep its 2 CPU / 2 GB worker from being oversubscribed.
  */
-const BLUR_AI_STREAM_CONCURRENCY = 2;
+const BLUR_AI_STREAM_CONCURRENCY = 1;
 
 /**
  * Timeout (ms) for one /blur/classify/stream request (a chunk of up to
  * BLUR_AI_STREAM_BATCH_SIZE images). Larger than the per-image BLUR_AI_TIMEOUT_MS
- * because a chunk does proportionally more work.
+ * because a chunk does proportionally more work. Exceeds staging's 180s request timeout.
  */
-const BLUR_AI_STREAM_TIMEOUT_MS = 120000;
+const BLUR_AI_STREAM_TIMEOUT_MS = 210000;
 
 module.exports = {
   UV_THREADPOOL_SIZE,

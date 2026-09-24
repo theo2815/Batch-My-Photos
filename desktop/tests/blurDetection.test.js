@@ -7,9 +7,6 @@
  *     gating, category filtering, score = 1 - P(sharp). This decides which
  *     photos get culled, so it's the logic the parity gate cares about.
  *   - streamLineToResult(): an NDJSON error line → un-analyzable marker.
- *   - routeStreamLines(): out-of-order results mapped by `index`, `_summary`
- *     skipped, duplicate/malformed lines ignored, and dropped indices reported
- *     as "missing" (so the caller can recover them per-image).
  *
  * Re-implements the pure logic from blurDetectionService.js to avoid the
  * Electron dependency (same pattern as subscriptionService.test.js and
@@ -58,26 +55,6 @@ function streamLineToResult(obj, threshold, categoriesFilter, analyzedFile) {
     return { score: -1, isBlurry: false, analyzedFile, confidence: 0 };
   }
   return mapClassification(obj, threshold, categoriesFilter, analyzedFile);
-}
-
-// Mirrors the result-routing loop inside classifyChunkStream(): map each NDJSON
-// line back to its chunk slot by `index`, skip the `_summary` line, ignore
-// duplicate/out-of-range/malformed lines, and report indices never returned.
-function routeStreamLines(lines, chunkLen) {
-  const seen = new Set();
-  const results = {};
-  for (const line of lines) {
-    let obj;
-    try { obj = JSON.parse(line); } catch (_e) { continue; }
-    if (obj._summary) continue;
-    const idx = typeof obj.index === 'number' ? obj.index : parseInt(obj.filename, 10);
-    if (!Number.isInteger(idx) || idx < 0 || idx >= chunkLen || seen.has(idx)) continue;
-    results[idx] = obj;
-    seen.add(idx);
-  }
-  const missing = [];
-  for (let i = 0; i < chunkLen; i++) if (!seen.has(i)) missing.push(i);
-  return { results, missing };
 }
 
 // Helper: build a probabilities object summing to ~1.
@@ -166,46 +143,5 @@ describe('streamLineToResult', () => {
     };
     expect(streamLineToResult(line, 0.45, null, 'a.jpg'))
       .toEqual(mapClassification(line, 0.45, null, 'a.jpg'));
-  });
-});
-
-// ============================================================================
-// routeStreamLines (NDJSON ordering + completeness)
-// ============================================================================
-
-describe('routeStreamLines', () => {
-  it('maps out-of-order results back to their index and skips the summary line', () => {
-    const lines = [
-      JSON.stringify({ index: 2, filename: '2', predicted_class: 'sharp' }),
-      JSON.stringify({ index: 0, filename: '0', predicted_class: 'motion_blurred' }),
-      JSON.stringify({ index: 1, filename: '1', predicted_class: 'sharp' }),
-      JSON.stringify({ _summary: true, total: 3, processing_time_ms: 12.3 }),
-    ];
-    const { results, missing } = routeStreamLines(lines, 3);
-    expect(missing).toEqual([]);
-    expect(results[0].predicted_class).toBe('motion_blurred');
-    expect(results[2].predicted_class).toBe('sharp');
-  });
-
-  it('reports indices a truncated stream never returned as missing', () => {
-    // 4-image chunk, server died after 2 lines (no summary)
-    const lines = [
-      JSON.stringify({ index: 0, filename: '0', predicted_class: 'sharp' }),
-      JSON.stringify({ index: 1, filename: '1', predicted_class: 'sharp' }),
-    ];
-    const { missing } = routeStreamLines(lines, 4);
-    expect(missing).toEqual([2, 3]);
-  });
-
-  it('ignores duplicate, out-of-range, and malformed lines', () => {
-    const lines = [
-      JSON.stringify({ index: 0, filename: '0', predicted_class: 'sharp' }),
-      JSON.stringify({ index: 0, filename: '0', predicted_class: 'motion_blurred' }), // dup → ignored
-      JSON.stringify({ index: 9, filename: '9', predicted_class: 'sharp' }),          // out of range
-      '{ not valid json',                                                              // malformed
-    ];
-    const { results, missing } = routeStreamLines(lines, 2);
-    expect(results[0].predicted_class).toBe('sharp'); // first wins, dup ignored
-    expect(missing).toEqual([1]);
   });
 });
