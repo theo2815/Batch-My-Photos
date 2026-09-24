@@ -253,9 +253,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Whether blur detection is available (feature-flagged off for release).
    * The settings toggle stays visible but is disabled when this is false.
-   * @returns {Promise<boolean>}
+   * @param {boolean} [includeBeta=false] - Request beta status alongside availability
+   * @returns {Promise<boolean|{ enabled: boolean, betaEnabled: boolean }>}
    */
-  getBlurDetectionEnabled: () => ipcRenderer.invoke('get-blur-detection-enabled'),
+  getBlurDetectionEnabled: (includeBeta = false) => ipcRenderer.invoke('get-blur-detection-enabled', includeBeta),
 
   /**
    * Listen for blur analysis progress updates

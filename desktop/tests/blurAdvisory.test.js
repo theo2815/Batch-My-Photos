@@ -31,6 +31,7 @@ const stubs = {
 
 process.env.BATCH_BLUR_BETA_ENABLED = 'true';
 process.env.BATCH_HWID_BINDING_ENABLED = 'false';
+process.env.BATCH_BLUR_DETECTION_ENABLED = 'false';
 Module._load = function (request, ...rest) {
   return Object.hasOwn(stubs, request) ? stubs[request] : originalLoad.call(this, request, ...rest);
 };
@@ -57,6 +58,7 @@ afterAll(() => {
   fs.rmSync(fixtureRoot, { recursive: true, force: true });
   delete process.env.BATCH_BLUR_BETA_ENABLED;
   delete process.env.BATCH_HWID_BINDING_ENABLED;
+  delete process.env.BATCH_BLUR_DETECTION_ENABLED;
 });
 
 describe('beta batch safety', () => {
@@ -81,5 +83,32 @@ describe('beta batch safety', () => {
     expect(result.blurryFileCount).toBe(0);
     expect(fs.existsSync(path.join(fixtureOutput, 'Beta_Blurry'))).toBe(false);
     expect(fs.existsSync(path.join(fixtureOutput, 'Beta_001', 'IMG.jpg'))).toBe(true);
+  });
+});
+
+describe('blur beta flag bridge', () => {
+  it('preserves the boolean availability call and reports beta details when requested', async () => {
+    const handlers = new Map();
+    registerIpcHandlers({ handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {
+      batchCancelled: false,
+      resetBatchCancellation: noop,
+    });
+    let api;
+    const electron = {
+      contextBridge: { exposeInMainWorld: (_name, exposed) => { api = exposed; } },
+      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args) },
+    };
+    const original = Module._load;
+    Module._load = function (request, ...rest) {
+      return request === 'electron' ? electron : original.call(this, request, ...rest);
+    };
+    try {
+      require('../preload.js');
+    } finally {
+      Module._load = original;
+    }
+
+    expect(await api.getBlurDetectionEnabled()).toBe(false);
+    expect(await api.getBlurDetectionEnabled(true)).toEqual({ enabled: false, betaEnabled: true });
   });
 });

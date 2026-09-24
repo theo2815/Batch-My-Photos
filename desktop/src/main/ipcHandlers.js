@@ -1108,7 +1108,9 @@ function registerPreferenceHandlers(ipcMain, store) {
   // Whether the blur-detection feature is available (disabled for release —
   // config.features.BLUR_DETECTION_ENABLED). The renderer uses this to disable
   // the "Detect Blurry Photos" toggle without hiding it.
-  handle(ipcMain, 'get-blur-detection-enabled', async () => config.features.BLUR_DETECTION_ENABLED);
+  handle(ipcMain, 'get-blur-detection-enabled', async (_event, includeBeta = false) => includeBeta
+    ? { enabled: config.features.BLUR_DETECTION_ENABLED, betaEnabled: config.features.BLUR_BETA_ENABLED }
+    : config.features.BLUR_DETECTION_ENABLED);
 
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'

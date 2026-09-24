@@ -99,6 +99,13 @@ function App() {
   const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
   const lastStartedAnalysisRef = useRef(0);
+  const [blurBetaEnabled, setBlurBetaEnabled] = useState(true);
+
+  useEffect(() => {
+    window.electronAPI.getBlurDetectionEnabled(true)
+      .then(flags => setBlurBetaEnabled(flags?.betaEnabled !== false))
+      .catch(() => setBlurBetaEnabled(true));
+  }, []);
 
   // Device manager modal state
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
@@ -726,6 +733,7 @@ function App() {
           isOpen
           currentCategories={blurCategories}
           currentSensitivity={blurSensitivity}
+          isBeta={blurBetaEnabled}
           onStart={handleConfirmBlurAnalysis}
           onCancel={handleDismissBlurModal}
         />

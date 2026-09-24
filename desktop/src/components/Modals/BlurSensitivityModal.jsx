@@ -46,10 +46,11 @@ const SENSITIVITY_OPTIONS = [
  * @param {boolean} props.isOpen - Whether the modal is visible
  * @param {string[]} props.currentCategories - The currently saved category set
  * @param {string} props.currentSensitivity - Current sensitivity preset
+ * @param {boolean} [props.isBeta=false] - Show the staging and advisory notice
  * @param {(payload: { categories: string[], sensitivity: string }) => void} props.onStart
  * @param {() => void} props.onCancel - Called when user dismisses without starting
  */
-function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, onStart, onCancel }) {
+function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, isBeta = false, onStart, onCancel }) {
   const initial = Array.isArray(currentCategories) && currentCategories.length > 0
     ? currentCategories
     : DEFAULT_SELECTION;
@@ -97,7 +98,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
           <ScanEye size={48} className="text-primary" />
         </div>
         <h3>Configure Blur Detection</h3>
-        <p>Choose which blur types to flag. Sharp photos are always kept.</p>
+        <p>{isBeta ? 'Choose which blur types to review.' : 'Choose which blur types to flag. Sharp photos are always kept.'}</p>
 
         <div className="sensitivity-options">
           {CATEGORY_OPTIONS.map((option) => {
@@ -202,6 +203,12 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, o
             {SENSITIVITY_OPTIONS.find(o => o.value === sensitivity)?.hint}
           </div>
         </div>
+
+        {isBeta && (
+          <p className="confirmation-details">
+            Resized photos are sent to the staging blur service when you start. Suggestions never move or exclude photos from batches.
+          </p>
+        )}
 
         <div className="modal-buttons">
           <button className="btn secondary" onClick={onCancel}>
