@@ -244,6 +244,55 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(2);
     expect(render(useBlurDetection, p).blurResults).toEqual({ NEW: { predictedClass: 'sharp' } });
   });
+  it('runs later queued Start Analysis choices after an obsolete request settles', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld, finishStrict;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishStrict = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { LENIENT: { predictedClass: 'sharp' } } });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    const strict = render(useBlurDetection, { ...p, blurSensitivity: 'strict' }).runBlurAnalysis();
+    const lenient = render(useBlurDetection, { ...p, blurSensitivity: 'lenient' }).runBlurAnalysis();
+    finishOld({ success: true, blurResults: { OLD: { predictedClass: 'sharp' } } });
+    await old;
+    await Promise.resolve();
+    expect(globalThis.window.electronAPI.analyzeBlur.mock.calls.map(([, sensitivity]) => sensitivity))
+      .toEqual(['moderate', 'strict']);
+    finishStrict({ success: true, blurResults: { STRICT: { predictedClass: 'sharp' } } });
+    await Promise.all([strict, lenient]);
+    expect(globalThis.window.electronAPI.analyzeBlur.mock.calls.map(([, sensitivity]) => sensitivity))
+      .toEqual(['moderate', 'strict', 'lenient']);
+    expect(render(useBlurDetection, { ...p, blurSensitivity: 'lenient' }).blurResults)
+      .toEqual({ LENIENT: { predictedClass: 'sharp' } });
+  });
+  it.each(['disabled', 'folder changed'])(
+    'cancels a later queued start when blur is %s after the first queued start begins', async change => {
+      const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+      let finishOld, finishStrict;
+      globalThis.window.electronAPI.analyzeBlur = vi.fn()
+        .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+        .mockImplementationOnce(() => new Promise(resolve => { finishStrict = resolve; }))
+        .mockResolvedValueOnce({ success: true, blurResults: { STALE: { predictedClass: 'sharp' } } });
+      const old = render(useBlurDetection, p).runBlurAnalysis();
+      render(useBlurDetection, p).resetBlurState();
+      const strict = render(useBlurDetection, { ...p, blurSensitivity: 'strict' }).runBlurAnalysis();
+      const lenient = render(useBlurDetection, { ...p, blurSensitivity: 'lenient' }).runBlurAnalysis();
+      finishOld({ success: true, blurResults: { OLD: { predictedClass: 'sharp' } } });
+      await old;
+      await Promise.resolve();
+      const current = change === 'disabled'
+        ? { ...p, blurDetectionEnabled: false }
+        : { ...p, folderPath: 'C:/next' };
+      render(useBlurDetection, current).resetBlurState();
+      finishStrict({ success: true, blurResults: { STRICT: { predictedClass: 'sharp' } } });
+      await Promise.all([strict, lenient]);
+      expect(globalThis.window.electronAPI.analyzeBlur.mock.calls.map(([, sensitivity]) => sensitivity))
+        .toEqual(['moderate', 'strict']);
+      expect(render(useBlurDetection, current).blurResults).toBeNull();
+    },
+  );
   it('drops a queued restart when blur is switched off again', async () => {
     const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
     let finishOld;

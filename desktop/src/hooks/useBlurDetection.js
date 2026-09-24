@@ -79,6 +79,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   const analysisInFlightRef = useRef(false);
   const analysisSettledRef = useRef(null);
   const analysisRunRef = useRef(0);
+  const analysisResetRef = useRef(0);
 
   // Subscribe to blur progress updates from main process
   useEffect(() => {
@@ -124,9 +125,9 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     // Prevent concurrent analysis runs — ref check is synchronous and
     // immune to React batching race conditions (unlike state).
     if (analysisInFlightRef.current) {
-      const queuedRun = analysisRunRef.current;
+      const queuedReset = analysisResetRef.current;
       await analysisSettledRef.current;
-      if (queuedRun !== analysisRunRef.current) return;
+      if (queuedReset !== analysisResetRef.current) return;
       if (blurDetectionEnabled) return runBlurAnalysis();
       return;
     }
@@ -200,6 +201,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
    */
   const resetBlurState = useCallback(() => {
     analysisRunRef.current++;
+    analysisResetRef.current++;
     setLabels(new Map());
     setBlurResults(null);
     setBlurProgress(null);
