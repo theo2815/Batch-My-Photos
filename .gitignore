@@ -52,3 +52,7 @@ backend/migrations/
 skills-lock.json
 .vercel
 .env*
+
+# Local agent workspaces
+.worktrees/
+.superpowers/
