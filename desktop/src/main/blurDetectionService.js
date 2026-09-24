@@ -256,6 +256,8 @@ const SENSITIVITY_TO_THRESHOLD = { strict: 0.30, moderate: 0.45, lenient: 0.65 }
 
 // The non-blur class in the trained 4-class model.
 const SHARP_CLASS = 'sharp';
+const CLASS_NAMES = ['sharp', 'defocused_blurred', 'defocused_object_portrait', 'motion_blurred'];
+const validProbability = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 
 /**
  * Map an ai-api /blur/classify `data` payload into BatchMyPhotos' blurMap shape.
@@ -498,6 +500,21 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
             obj.filename !== String(idx) || pendingRows.has(idx)) {
           invalidRows = true;
           continue;
+        }
+        if (Object.hasOwn(obj, 'error')) {
+          if (typeof obj.error !== 'string' || !obj.error.trim()) {
+            invalidRows = true;
+            continue;
+          }
+        } else {
+          const probs = obj.probabilities;
+          if (!CLASS_NAMES.includes(obj.predicted_class) || !validProbability(obj.confidence) ||
+              !probs || typeof probs !== 'object' || Array.isArray(probs) ||
+              Object.keys(probs).length !== CLASS_NAMES.length ||
+              !CLASS_NAMES.every(name => Object.hasOwn(probs, name) && validProbability(probs[name]))) {
+            invalidRows = true;
+            continue;
+          }
         }
         pendingRows.set(idx, obj);
       }

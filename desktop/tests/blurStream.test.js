@@ -19,12 +19,12 @@ Module._load = originalLoad;
 const SHARP = {
   predicted_class: 'sharp',
   confidence: 0.9,
-  probabilities: { sharp: 0.9, motion_blurred: 0.1 },
+  probabilities: { sharp: 0.9, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0.1 },
 };
 const MOTION = {
   predicted_class: 'motion_blurred',
   confidence: 0.8,
-  probabilities: { sharp: 0.2, motion_blurred: 0.8 },
+  probabilities: { sharp: 0.2, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0.8 },
 };
 const summary = (total, successful = total, errors = 0) =>
   ({ _summary: true, total, successful, errors, complete: true });
@@ -71,6 +71,34 @@ describe('real blur stream client', () => {
     await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress))
       .rejects.toThrow(/AI service.*incomplete/i);
     expect(progress).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing prediction', { index: 0, filename: '0' }, summary(1)],
+    ['unknown class', row(0, { ...SHARP, predicted_class: 'unknown' }), summary(1)],
+    ['invalid confidence', row(0, { ...SHARP, confidence: 2 }), summary(1)],
+    ['missing probabilities', row(0, { predicted_class: 'sharp', confidence: 0.9 }), summary(1)],
+    ['invalid probability', row(0, { ...SHARP, probabilities: { ...SHARP.probabilities, sharp: 1.2 } }), summary(1)],
+    ['invalid error marker', { index: 0, filename: '0', error: null }, summary(1, 0, 1)],
+  ])('rejects a %s row without publishing progress', async (_kind, badRow, tail) => {
+    const progress = vi.fn();
+    fetchMock.mockResolvedValue(ndjsonResponse([badRow, tail]));
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress))
+      .rejects.toThrow(/AI service.*incomplete/i);
+    expect(progress).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a valid per-image error marker as un-analyzable', async () => {
+    const progress = vi.fn();
+    fetchMock.mockResolvedValue(ndjsonResponse([
+      { index: 0, filename: '0', error: 'Failed to decode image' },
+      summary(1, 0, 1),
+    ]));
+    const results = await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress);
+    expect(results.FIRST).toMatchObject({ score: -1, isBlurry: false, analyzedFile: 'FIRST.jpg' });
+    expect(progress).toHaveBeenCalledTimes(1);
+    expect(blur.getCachedBlurResult(folder, 'FIRST.jpg')).toBeNull();
   });
 
   it('commits out-of-order rows against their exact image once the summary is valid', async () => {
