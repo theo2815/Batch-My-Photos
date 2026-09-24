@@ -123,6 +123,7 @@ function PreviewPanel({
       
       {/* Confirmation Box */}
       <div className="confirmation-box">
+        {blurDetection?.isBeta && <p className="note">Blur suggestions are advisory. Every photo stays in the ordinary batches.</p>}
         <p>
           This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
           named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.

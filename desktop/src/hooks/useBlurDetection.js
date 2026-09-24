@@ -42,15 +42,19 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
       return next;
     });
   }, [submissionKey]);
-  const getSubmission = fileName => submissions.get(submissionKey(fileName));
-  const submitExample = useCallback(async (fileName, label) => {
+  const getSubmission = (fileName, displayedHash) => {
+    const state = submissions.get(submissionKey(fileName));
+    return state?.displayedHash === displayedHash ? state : undefined;
+  };
+  const submitExample = useCallback(async (fileName, label, displayedHash) => {
     const key = submissionKey(fileName);
     if (pendingSubmissions.current.has(key)) return;
     pendingSubmissions.current.add(key);
-    const update = state => setSubmissions(previous => new Map(previous).set(key, state));
+    const update = state => setSubmissions(previous => new Map(previous).set(key,
+      displayedHash ? { ...state, displayedHash } : state));
     update({ status: 'pending' });
     try {
-      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName, label });
+      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName, label, displayedHash });
       update({ status: result.success ? 'success' : 'error',
         error: result.error || 'Could not submit this example. Please try again.' });
     } catch (_error) {
@@ -73,13 +77,14 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   // Guard against concurrent analysis runs (refs are synchronous, unlike state)
   const analysisInFlightRef = useRef(false);
+  const analysisSettledRef = useRef(null);
   const analysisRunRef = useRef(0);
 
   // Subscribe to blur progress updates from main process
   useEffect(() => {
     if (!window.electronAPI?.onBlurProgress) return;
     const cleanup = window.electronAPI.onBlurProgress((data) => {
-      setBlurProgress(data);
+      if (data?.requestId === analysisRunRef.current && analysisInFlightRef.current) setBlurProgress(data);
     });
     return cleanup;
   }, []);
@@ -118,7 +123,11 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
     // Prevent concurrent analysis runs — ref check is synchronous and
     // immune to React batching race conditions (unlike state).
-    if (analysisInFlightRef.current) return;
+    if (analysisInFlightRef.current) {
+      await analysisSettledRef.current;
+      if (blurDetectionEnabled) return runBlurAnalysis();
+      return;
+    }
 
     // Skip if we already analyzed this folder with the same sensitivity + categories
     if (
@@ -129,6 +138,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     }
 
     analysisInFlightRef.current = true;
+    analysisSettledRef.current = new Promise(resolve => { analysisSettledRef.currentResolve = resolve; });
     const runId = ++analysisRunRef.current;
     setIsAnalyzing(true);
     setBlurResults(null);
@@ -139,7 +149,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     analysisStartTimeRef.current = Date.now();
 
     try {
-      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories);
+      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories, runId);
       if (runId !== analysisRunRef.current) return;
 
       if (result.success) {
@@ -158,8 +168,9 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
       console.error('[BLUR] Analysis error:', err);
       setBlurResults(null);
     } finally {
+      analysisInFlightRef.current = false;
+      analysisSettledRef.currentResolve?.();
       if (runId === analysisRunRef.current) {
-        analysisInFlightRef.current = false;
         setIsAnalyzing(false);
         setBlurProgress(null);
         analysisStartTimeRef.current = null;
@@ -194,7 +205,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     setUnflaggedGroups(new Set());
     setAiUnavailable(false);
     lastAnalysisRef.current = { folderPath: null, key: null };
-    analysisInFlightRef.current = false;
+    // Keep the guard until main settles; a toggle must not start another stream.
   }, []);
 
   /**

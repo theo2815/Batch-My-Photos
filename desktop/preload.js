@@ -247,8 +247,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [threshold='moderate'] - Sensitivity: 'strict' | 'moderate' | 'lenient'
    * @returns {Promise<Object>} { success, blurResults, totalAnalyzed, blurryCount, totalGroups }
    */
-  analyzeBlur: (folderPath, threshold = 'moderate', categories = null) =>
-    ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories }),
+  analyzeBlur: (folderPath, threshold = 'moderate', categories = null, requestId = null) =>
+    ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories, requestId }),
 
   /**
    * Whether blur detection is available (feature-flagged off for release).
@@ -531,8 +531,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
 
   // Explicitly share one analyzed image and its human label.
-  submitBlurExample: ({ folderPath, fileName, label }) =>
-    ipcRenderer.invoke('submit-blur-example', { folderPath, fileName, label }),
+  submitBlurExample: ({ folderPath, fileName, label, displayedHash }) =>
+    ipcRenderer.invoke('submit-blur-example', { folderPath, fileName, label, displayedHash }),
   // Write-only beta key setup; queries expose status, never the secret.
   blurBetaKey: (key) => ipcRenderer.invoke('blur-beta-key', { key }),
 

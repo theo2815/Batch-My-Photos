@@ -25,6 +25,7 @@ import ImagePreviewModal from '../src/components/Modals/ImagePreviewModal.jsx';
 import BatchPreview from '../src/components/PreviewPanel/BatchPreview.jsx';
 import SettingsPanel from '../src/components/PreviewPanel/SettingsPanel.jsx';
 import StatsGrid from '../src/components/PreviewPanel/StatsGrid.jsx';
+import PreviewPanel from '../src/components/PreviewPanel/PreviewPanel.jsx';
 import { useBlurDetection } from '../src/hooks/useBlurDetection.js';
 
 function render(component, props) { hooks.cursor = 0; return component(props); }
@@ -51,7 +52,7 @@ const props = { isOpen: true, isBeta: true, folderPath: 'C:/fixture', fileName: 
 beforeEach(() => {
   hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
   feedbackHooks = { values: [], cursor: 0, effects: [], deps: [], cleanups: [] };
-  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512 }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512, contentHash: 'a'.repeat(64) }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal('document', { activeElement: { focus: vi.fn() }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
 
@@ -73,7 +74,7 @@ describe('explicit beta feedback consent', () => {
     expect(text(tree)).toMatch(/improve blur detection/i);
     expect(text(tree)).toContain('flagged.jpg');
     await button(tree, 'Submit this example').props.onClick();
-    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledWith({ folderPath: 'C:/fixture', fileName: 'flagged.jpg', label: 'sharp' });
+    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledWith({ folderPath: 'C:/fixture', fileName: 'flagged.jpg', label: 'sharp', displayedHash: 'a'.repeat(64) });
     expect(text(renderPreview(p))).toMatch(/submitted/i);
   });
 
@@ -90,7 +91,7 @@ describe('explicit beta feedback consent', () => {
     expect(nodes(tree).find(n => n.props.role === 'alert')).toBeDefined();
     expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenCalledTimes(1);
     await button(tree, 'Submit this example').props.onClick();
-    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenLastCalledWith({ folderPath: 'C:/fixture', fileName: 'missed.jpg', label: 'blurry' });
+    expect(globalThis.window.electronAPI.submitBlurExample).toHaveBeenLastCalledWith({ folderPath: 'C:/fixture', fileName: 'missed.jpg', label: 'blurry', displayedHash: 'a'.repeat(64) });
   });
 
   it('keeps the local label after a rejected upload promise and permits retry', async () => {
@@ -213,9 +214,77 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith('test-beta-key');
     expect(nodes(render(SettingsPanel, p)).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
   });
+  it('reloads the selected beta preview when a new analysis replaces results', async () => {
+    const firstVersion = {};
+    renderPreview({ ...props, previewVersion: firstVersion }); await effects();
+    expect(globalThis.window.electronAPI.getImagePreview).toHaveBeenCalledTimes(1);
+    renderPreview({ ...props, previewVersion: {} }); await effects();
+    expect(globalThis.window.electronAPI.getImagePreview).toHaveBeenCalledTimes(2);
+  });
+  it('does not treat a replacement image as already submitted at the same filename', async () => {
+    const p = { folderPath: 'C:/fixture', isBeta: true };
+    await render(useBlurDetection, p).submitExample('same.jpg', 'sharp', 'a'.repeat(64));
+    expect(render(useBlurDetection, p).getSubmission('same.jpg', 'a'.repeat(64)).status).toBe('success');
+    expect(render(useBlurDetection, p).getSubmission('same.jpg', 'b'.repeat(64))).toBeUndefined();
+  });
+
+  it('queues a restart after toggle reset until the old main request settles', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { NEW: { predictedClass: 'sharp' } } });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    const restarted = render(useBlurDetection, p).runBlurAnalysis();
+    expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(1);
+    finishOld({ success: true, blurResults: { OLD: { predictedClass: 'sharp' } } });
+    await old;
+    await restarted;
+    expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(2);
+    expect(render(useBlurDetection, p).blurResults).toEqual({ NEW: { predictedClass: 'sharp' } });
+  });
+  it('ignores progress from an obsolete run after the blur toggle resets', async () => {
+    let emit, finish;
+    globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };
+    globalThis.window.electronAPI.analyzeBlur = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    render(useBlurDetection, p); await effects();
+    const pending = render(useBlurDetection, p).runBlurAnalysis();
+    emit({ requestId: 1, current: 1, total: 2 });
+    expect(render(useBlurDetection, p).blurProgress.current).toBe(1);
+    render(useBlurDetection, p).resetBlurState();
+    emit({ requestId: 1, current: 2, total: 2 });
+    expect(render(useBlurDetection, p).blurProgress).toBeNull();
+    finish({ success: true, blurResults: {} }); await pending;
+  });
+
+  it('can replace a stored beta key without reading or prefilling the old key', async () => {
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    const p = { isBeta: true };
+    render(SettingsPanel, p); await effects();
+    let tree = render(SettingsPanel, p);
+    expect(button(tree, 'Replace beta key')).toBeDefined();
+    expect(nodes(tree).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
+    button(tree, 'Replace beta key').props.onClick();
+    tree = render(SettingsPanel, p);
+    const field = nodes(tree).find(n => n.type === 'input' && n.props.type === 'password');
+    expect(field.props.value).toBe('');
+    field.props.onChange({ target: { value: 'new-beta-key' } });
+    await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
+    expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith('new-beta-key');
+    expect(nodes(render(SettingsPanel, p)).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
+  });
 
   it('uses advisory beta stats while preserving release wording', () => {
     expect(text(StatsGrid({ blurDetectionEnabled: true, isBeta: true }))).toContain('Blur suggestions');
     expect(text(StatsGrid({ blurDetectionEnabled: true, isBeta: false }))).toContain('Blurry Photos');
+  });
+  it('shows advisory status at beta batch confirmation only', () => {
+    const settings = { outputPrefix: 'Batch', batchMode: 'copy' };
+    const beta = render(PreviewPanel, { settings, blurDetection: { isBeta: true } });
+    expect(text(beta)).toContain('Every photo stays in the ordinary batches');
+    expect(text(render(PreviewPanel, { settings, blurDetection: { isBeta: false } })))
+      .not.toContain('Every photo stays in the ordinary batches');
   });
 });

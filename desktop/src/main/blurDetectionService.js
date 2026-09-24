@@ -56,6 +56,8 @@ sharp.concurrency(1);
 // Keep content fingerprints in main only; blurMap crosses the renderer boundary.
 let analyzedImageHashes = new WeakMap();
 let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
+let cacheGeneration = 0;
+let aiAnalysisInFlight = false;
 
 /**
  * Extensions that can be analyzed for blur (JPEG/PNG only — fast to decode).
@@ -191,6 +193,7 @@ async function computeBlurScore(filePath) {
  * Clear the blur cache (e.g. when switching folders).
  */
 function clearCache() {
+  cacheGeneration++;
   analyzedImageHashes = new WeakMap();
   blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 }
@@ -266,6 +269,13 @@ const SENSITIVITY_TO_THRESHOLD = { strict: 0.30, moderate: 0.45, lenient: 0.65 }
 const SHARP_CLASS = 'sharp';
 const CLASS_NAMES = ['sharp', 'defocused_blurred', 'defocused_object_portrait', 'motion_blurred'];
 const validProbability = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+function validClassification(obj) {
+  const probs = obj?.probabilities;
+  return CLASS_NAMES.includes(obj?.predicted_class) && validProbability(obj.confidence) &&
+    probs && typeof probs === 'object' && !Array.isArray(probs) &&
+    Object.keys(probs).length === CLASS_NAMES.length &&
+    CLASS_NAMES.every(name => Object.hasOwn(probs, name) && validProbability(probs[name]));
+}
 
 /**
  * Map an ai-api /blur/classify `data` payload into BatchMyPhotos' blurMap shape.
@@ -345,6 +355,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
       if (!envelope || envelope.success !== true || !envelope.data) {
         throw new Error(`AI service error: ${envelope?.error?.message || 'unexpected response shape'}`);
       }
+      if (!validClassification(envelope.data)) throw new Error('AI service returned invalid classification');
       return mapClassification(envelope.data, threshold, categoriesFilter, analyzedFile);
     }
 
@@ -516,11 +527,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
             continue;
           }
         } else {
-          const probs = obj.probabilities;
-          if (!CLASS_NAMES.includes(obj.predicted_class) || !validProbability(obj.confidence) ||
-              !probs || typeof probs !== 'object' || Array.isArray(probs) ||
-              Object.keys(probs).length !== CLASS_NAMES.length ||
-              !CLASS_NAMES.every(name => Object.hasOwn(probs, name) && validProbability(probs[name]))) {
+          if (!validClassification(obj)) {
             invalidRows = true;
             continue;
           }
@@ -773,7 +780,7 @@ async function analyzeBlurLegacy(fileGroups, folderPath, threshold = 'moderate',
  * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
  */
-async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null) {
+async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false) {
   const groupNames = Object.keys(fileGroups);
   const mode = config.features.BLUR_AI_ENABLED ? 'ai' : 'legacy';
 
@@ -782,23 +789,31 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
     ? `ai:${threshold}:${(categories || []).slice().sort().join(',')}`
     : threshold;
   const cacheKey = buildCacheKey(folderPath, groupNames, cacheDiscriminator);
-  if (blurCache.cacheKey === cacheKey && blurCache.blurMap) {
+  if (force) clearCache();
+  if (mode === 'ai' && aiAnalysisInFlight) throw new Error('AI service analysis already in progress. Try again.');
+  if (!force && blurCache.cacheKey === cacheKey && blurCache.blurMap) {
     logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results (${mode})`);
     return blurCache.blurMap;
   }
 
   logger.log(`🔍 [BLUR] Starting analysis — mode: ${mode}, groups: ${groupNames.length}`);
 
-  clearCache();
+  if (!force) clearCache();
+  const generation = cacheGeneration;
   let blurMap;
-  if (mode === 'ai') {
-    blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
-  } else {
-    blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
+  if (mode === 'ai') aiAnalysisInFlight = true;
+  try {
+    if (mode === 'ai') {
+      blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
+    } else {
+      blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
+    }
+  } finally {
+    if (mode === 'ai') aiAnalysisInFlight = false;
   }
 
   // Store in cache
-  blurCache = { cacheKey, folderPath, mode, blurMap };
+  if (generation === cacheGeneration) blurCache = { cacheKey, folderPath, mode, blurMap };
 
   return blurMap;
 }

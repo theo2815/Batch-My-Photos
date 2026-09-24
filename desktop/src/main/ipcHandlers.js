@@ -12,6 +12,7 @@
 
 const { dialog, shell } = require('electron');
 const path = require('path');
+const crypto = require('crypto');
 const fsPromises = require('fs').promises;
 
 // Import logic modules
@@ -861,7 +862,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * When AI mode is enabled, sends images to the Python FastAPI server.
    * If the AI service is unavailable, returns an error (no fallback).
    */
-  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null }) => {
+  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null, requestId = null }) => {
     try {
       // Feature gate (config.features.BLUR_DETECTION_ENABLED, default false): blur
       // detection is disabled for release. Backstop for the disabled UI toggle —
@@ -899,8 +900,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         safeThreshold,
         safeCategories,
         (progress) => {
-          event.sender.send('blur-progress', progress);
-        }
+          event.sender.send('blur-progress', { ...progress, requestId });
+        },
+        config.features.BLUR_BETA_ENABLED
       );
 
       // Count blurry groups
@@ -1602,7 +1604,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
 
   /**
    * Simple LRU cache for preview images.
-   * Maps filePath -> { dataUrl, width, height }
+   * Maps filePath -> { contentHash, dataUrl, width, height }
    * Evicts oldest entry when size exceeds PREVIEW_CACHE_SIZE.
    */
   const previewCache = new Map();
@@ -1632,17 +1634,20 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
 
     const filePath = path.join(folderPath, fileName);
 
-    // Check LRU cache
-    if (previewCache.has(filePath)) {
-      const cached = previewCache.get(filePath);
-      // Move to end (most recently used)
-      previewCache.delete(filePath);
-      previewCache.set(filePath, cached);
-      return { success: true, ...cached };
-    }
-
     try {
-      const { data, info } = await sharp(filePath)
+      // Beta previews use the exact JPEG prepared for inference and feedback.
+      const source = config.features.BLUR_BETA_ENABLED
+        ? await blurDetectionService.prepareImageForUpload(filePath)
+        : await fsPromises.readFile(filePath);
+      if (!source) throw new Error('Image preparation failed');
+      const contentHash = crypto.createHash('sha256').update(source).digest('hex');
+      const cached = previewCache.get(filePath);
+      if (cached?.contentHash === contentHash) {
+        previewCache.delete(filePath);
+        previewCache.set(filePath, cached);
+        return { success: true, ...cached };
+      }
+      const { data, info } = await sharp(source)
         .rotate() // Auto-rotate based on EXIF
         .resize(PREVIEW_MAX_DIMENSION, PREVIEW_MAX_DIMENSION, {
           fit: 'inside',
@@ -1655,6 +1660,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         dataUrl: `data:image/jpeg;base64,${data.toString('base64')}`,
         width: info.width,
         height: info.height,
+        contentHash,
       };
 
       // Add to LRU cache, evict oldest if full

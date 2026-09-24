@@ -59,6 +59,7 @@ function SettingsPanel({
 
   const [betaKeyStatus, setBetaKeyStatus] = useState(null);
   const [betaKey, setBetaKey] = useState('');
+  const [replacingBetaKey, setReplacingBetaKey] = useState(false);
   const [savingBetaKey, setSavingBetaKey] = useState(false);
   const [betaKeyError, setBetaKeyError] = useState('');
   const [betaStatusError, setBetaStatusError] = useState('');
@@ -87,6 +88,7 @@ function SettingsPanel({
       if (!status.configured) throw new Error('Key was not saved');
       setBetaKeyStatus(status);
       setBetaKey('');
+      setReplacingBetaKey(false);
     } catch (_error) {
       setBetaKeyError('Could not save the beta key. Try again.');
     } finally {
@@ -451,7 +453,10 @@ function SettingsPanel({
       )}
       {isBeta && betaKeyStatus?.enabled && (
         <div className="blur-beta-key">
-          {betaKeyStatus.configured ? <p role="status">Beta key saved on this device.</p> : (
+          {betaKeyStatus.configured && !replacingBetaKey ? <>
+            <p role="status">Beta key saved on this device.</p>
+            <button type="button" className="btn-small" onClick={() => setReplacingBetaKey(true)}>Replace beta key</button>
+          </> : (
             <>
               <label htmlFor="blur-beta-key">Blur beta key</label>
               <p>Enter the key provided for this beta before starting analysis.</p>

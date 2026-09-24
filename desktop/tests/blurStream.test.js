@@ -191,4 +191,44 @@ describe('real blur stream client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(progress).not.toHaveBeenCalled();
   });
+
+  it('re-reads a replaced image when beta analysis is explicitly restarted', async () => {
+    fetchMock.mockImplementation(async () => ndjsonResponse([row(0), summary(1)]));
+    await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);
+    const changed = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'black' } }).jpeg().toBuffer();
+    fs.writeFileSync(path.join(folder, 'FIRST.jpg'), changed);
+    try {
+      await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      const original = await sharp({ create: { width: 8, height: 8, channels: 3, background: { r: 120, g: 130, b: 140 } } }).jpeg().toBuffer();
+      fs.writeFileSync(path.join(folder, 'FIRST.jpg'), original);
+    }
+  });
+
+  it('serializes beta requests and discards a superseded result from the feedback cache', async () => {
+    let finishFirst;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
+      .mockImplementationOnce(async () => ndjsonResponse([row(0, MOTION), summary(1)]));
+    const first = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true))
+      .rejects.toThrow(/already in progress/i);
+    finishFirst(ndjsonResponse([row(0), summary(1)]));
+    await first;
+    expect(blur.getCachedBlurResult(folder, 'FIRST.jpg')).toBeNull();
+    const latest = await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);
+    expect(latest.FIRST.predictedClass).toBe('motion_blurred');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects malformed classification from the single-image fallback', async () => {
+    fetchMock.mockImplementation(async url => url.endsWith('/stream')
+      ? new Response('', { status: 404 })
+      : new Response(JSON.stringify({ success: true, data: { predicted_class: 'sharp', confidence: 0.9 } }),
+        { headers: { 'Content-Type': 'application/json' } }));
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate'))
+      .rejects.toThrow(/invalid classification/i);
+    expect(blur.getCachedBlurResult(folder, 'FIRST.jpg')).toBeNull();
+  });
 });

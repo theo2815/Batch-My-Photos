@@ -16,7 +16,7 @@ function sessionOwner(token) {
   throw new Error('Sign in before submitting an example.');
 }
 
-async function submitBlurExample({ folderPath, fileName, label } = {}) {
+async function submitBlurExample({ folderPath, fileName, label, displayedHash } = {}) {
   if (!config.features.BLUR_BETA_ENABLED) throw new Error('Blur beta feedback is unavailable.');
   if (!['sharp', 'blurry'].includes(label)) throw new Error('Choose a sharp or blurry label.');
   if (typeof folderPath !== 'string' || !path.isAbsolute(folderPath) ||
@@ -39,13 +39,18 @@ async function submitBlurExample({ folderPath, fileName, label } = {}) {
   if (!blurDetectionService.getCachedBlurResult(folderPath, fileName)) {
     throw new Error('Select an analyzed image.');
   }
+  if (typeof displayedHash !== 'string' || !/^[a-f0-9]{64}$/.test(displayedHash)) {
+    throw new Error('Choose a selected image preview.');
+  }
   let token = authService.getStoredSession();
   const owner = sessionOwner(token);
   const jpeg = await blurDetectionService.prepareImageForUpload(realFile);
   if (!jpeg) throw new Error('The selected image could not be prepared.');
   if (jpeg.length > 2097152) throw new Error('The prepared image exceeds 2 MB.');
   const result = blurDetectionService.getCachedBlurResult(folderPath, fileName, jpeg);
-  if (!result) throw new Error('Select an analyzed image. Run analysis again if it changed.');
+  if (!result || crypto.createHash('sha256').update(jpeg).digest('hex') !== displayedHash) {
+    throw new Error('Select an analyzed image. Run analysis again if it changed.');
+  }
 
   // The parsed sub only names the object; Supabase verifies the JWT and enforces ownership via RLS.
   const objectName = `${owner}/${crypto.randomUUID()}.jpg`;

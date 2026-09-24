@@ -225,6 +225,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
         imageInfo={previewImage?.imageInfo}
         blurInfoMap={blurInfoMap}
         isBeta={blurDetection?.isBeta}
+        previewVersion={blurDetection?.blurResults}
         labels={blurDetection?.labels}
         onLabel={blurDetection?.setLabel}
         getSubmission={blurDetection?.getSubmission}

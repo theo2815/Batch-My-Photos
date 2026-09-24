@@ -20,7 +20,7 @@ import './Modals.css';
  * @param {(baseName: string) => void} [props.onRestore] - Optional callback to restore a blurry photo
  * @param {() => void} props.onClose - Close callback
  */
-function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose, isBeta = false, labels, onLabel, getSubmission, onSubmit }) {
+function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose, isBeta = false, previewVersion, labels, onLabel, getSubmission, onSubmit }) {
   const [currentFile, setCurrentFile] = useState(fileName);
   const [previewData, setPreviewData] = useState(null); // { dataUrl, width, height }
   const [isLoading, setIsLoading] = useState(false);
@@ -29,15 +29,18 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   const prefetchRef = useRef({}); // Cache for prefetched images
   const modalRef = useRef(null);
 
+  useEffect(() => { prefetchRef.current = {}; }, [folderPath, previewVersion]);
+
   const label = labels?.get(currentFile);
   const currentResult = blurInfoMap?.[currentFile];
   const analyzedImage = isBeta && currentResult?.predictedClass && currentResult.score >= 0 ? currentResult : null;
-  const currentSubmission = getSubmission?.(currentFile);
+  const currentSubmission = getSubmission?.(currentFile, previewData?.contentHash);
   const submitting = currentSubmission?.status === 'pending';
 
   const submitExample = () => {
     if (!analyzedImage || !label || submitting || isLoading || previewData?.fileName !== currentFile) return;
-    return onSubmit(currentFile, label);
+    if (!previewData?.contentHash) return;
+    return onSubmit(currentFile, label, previewData.contentHash);
   };
 
   // Sync currentFile when the prop changes (new image clicked)
@@ -55,7 +58,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
 
     const loadPreview = async () => {
       // Check prefetch cache first
-      if (prefetchRef.current[currentFile]) {
+      if (!isBeta && prefetchRef.current[currentFile]) {
         setPreviewData(prefetchRef.current[currentFile]);
         setError(null);
         setIsLoading(false);
@@ -75,7 +78,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         if (cancelled) return;
 
         if (result.success) {
-          setPreviewData({ fileName: currentFile, dataUrl: result.dataUrl, width: result.width, height: result.height });
+          setPreviewData({ fileName: currentFile, dataUrl: result.dataUrl, width: result.width, height: result.height, contentHash: result.contentHash });
           setError(null);
         } else {
           setPreviewData(null);
@@ -97,11 +100,11 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
     loadPreview();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, currentFile, folderPath]);
+  }, [isOpen, currentFile, folderPath, previewVersion]);
 
   // Prefetch next image in the list
   useEffect(() => {
-    if (!isOpen || !currentFile || !folderPath || !fileList?.length) return;
+    if (!isOpen || isBeta || !currentFile || !folderPath || !fileList?.length) return;
 
     const currentIndex = fileList.indexOf(currentFile);
     if (currentIndex < 0) return;
@@ -120,6 +123,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
             dataUrl: result.dataUrl,
             width: result.width,
             height: result.height,
+            contentHash: result.contentHash,
           };
         }
       } catch (_) {
@@ -129,7 +133,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
 
     prefetch();
     return () => { cancelled = true; };
-  }, [isOpen, currentFile, folderPath, fileList]);
+  }, [isOpen, isBeta, currentFile, folderPath, fileList]);
 
   // Clear prefetch cache and state when modal closes
   useEffect(() => {
@@ -303,9 +307,9 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
             <span>Labels stay local until you submit.</span>
           </div>
           <p id="blur-feedback-consent">Submit a resized copy of <strong>{currentFile}</strong> and your label to help improve blur detection.
-            {' '}Examples are private, accessible only to the research team, and deleted after 30 days.</p>
+            {' '}Examples are private, accessible only to the research team, and deleted by the beta coordinator within 30 days or sooner on request.</p>
           <button type="button" className="btn-small primary" aria-describedby="blur-feedback-consent"
-            disabled={!label || submitting || isLoading || previewData?.fileName !== currentFile || currentSubmission?.status === 'success'}
+            disabled={!label || submitting || isLoading || previewData?.fileName !== currentFile || !previewData?.contentHash || currentSubmission?.status === 'success'}
             onClick={submitExample}>{submitting ? 'Submitting...' : 'Submit this example'}</button>
           {currentSubmission?.status === 'pending' && <p role="status">Submitting {currentFile}...</p>}
           {currentSubmission?.status === 'success' && <p role="status">Example submitted. Thank you.</p>}

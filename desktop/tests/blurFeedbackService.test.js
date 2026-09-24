@@ -4,6 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import sharp from 'sharp';
+import crypto from 'node:crypto';
 
 const root = path.resolve(import.meta.dirname, '..');
 const logger = { log() {}, warn() {}, error() {} };
@@ -21,8 +22,9 @@ function load(file, mocks = {}) {
 }
 const userId = '11111111-1111-4111-8111-111111111111';
 const token = version => `stub.${Buffer.from(JSON.stringify({ sub: userId, version })).toString('base64url')}.signature`;
-let folder, photoFolder, config, blur, security, auth, fetchMock, submit;
-const input = () => ({ folderPath: photoFolder, fileName: 'photo.jpg', label: 'sharp' });
+let folder, photoFolder, config, blur, security, auth, fetchMock, submit, analysisHash;
+const input = () => ({ folderPath: photoFolder, fileName: 'photo.jpg', label: 'sharp',
+  displayedHash: analysisHash });
 async function writePhoto(color = 'white') {
   const bytes = await sharp({ create: { width: 32, height: 24, channels: 3, background: color } })
     .withExif({ IFD0: { Artist: 'PRIVATE CAMERA OWNER', ImageDescription: photoFolder } })
@@ -59,6 +61,7 @@ beforeEach(async () => {
     ].map(row => JSON.stringify(row)).join('\n') + '\n') } },
   });
   await blur.analyzeBlur({ photo: ['photo.jpg', 'photo.CR3'] }, photoFolder);
+  analysisHash = crypto.createHash('sha256').update(await blur.prepareImageForUpload(path.join(photoFolder, 'photo.jpg'))).digest('hex');
   fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
   submit = service();
 });
@@ -97,6 +100,7 @@ describe('explicit single-image feedback', () => {
     await expect(submit(input())).rejects.toThrow(/analyzed image/i);
     expect(fetchMock).not.toHaveBeenCalled();
     await blur.analyzeBlur({ photo: ['photo.jpg', 'photo.CR3'] }, photoFolder);
+    analysisHash = crypto.createHash('sha256').update(await blur.prepareImageForUpload(path.join(photoFolder, 'photo.jpg'))).digest('hex');
     expect(await submit(input())).toEqual({ success: true });
   });
   it.each(['motion_blurred', '', null, 1])('rejects invalid human label %j', async label => {
@@ -117,6 +121,41 @@ describe('explicit single-image feedback', () => {
     expect(warning).toHaveBeenCalled();
     expect(JSON.stringify(warning.mock.calls)).not.toContain(photoFolder.replaceAll('\\', '\\\\'));
     expect(JSON.stringify(warning.mock.calls)).toContain('ENOENT');
+  });
+  it('rejects feedback when the displayed preview and current analyzed bytes differ', async () => {
+    const displayedHash = analysisHash;
+    expect(displayedHash).toMatch(/^[a-f0-9]{64}$/);
+    await writePhoto('black');
+    await expect(submit({ ...input(), displayedHash })).rejects.toThrow(/analyzed image/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('requires the displayed preview content token', async () => {
+    await expect(submit({ ...input(), displayedHash: undefined })).rejects.toThrow(/selected image/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('does not upload replacement B while the preview still displays analyzed A', async () => {
+    const handlers = new Map();
+    const mocks = {
+      electron: { dialog: {}, shell: {} }, './config': config, '../utils/logger': logger,
+      './blurDetectionService': blur, './securityManager': security,
+      './ipcRateLimiter': { rateLimitedHandle: (ipc, name, fn) => ipc.handle(name, fn) },
+      './rollbackManager': { init() {} },
+      '../utils/errorSanitizer': load('src/utils/errorSanitizer.js', { './logger': logger }),
+    };
+    for (const name of ['progressManager', 'authService', 'subscriptionService', 'deviceService',
+      'batchEngine', 'exifService', 'batchExecutor', 'fileUtils']) mocks['./' + name] = {};
+    load('src/main/ipcHandlers.js', mocks).registerIpcHandlers(
+      { handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {});
+    const preview = await handlers.get('get-image-preview')({}, input());
+    expect(preview.success).toBe(true);
+    expect(preview.contentHash).toBe(analysisHash);
+    expect((await sharp(Buffer.from(preview.dataUrl.split(',')[1], 'base64')).stats()).channels[0].mean).toBeGreaterThan(200);
+    await writePhoto('black');
+    const replacement = await handlers.get('get-image-preview')({}, input());
+    expect(replacement.contentHash).not.toBe(preview.contentHash);
+    expect((await sharp(Buffer.from(replacement.dataUrl.split(',')[1], 'base64')).stats()).channels[0].mean).toBeLessThan(50);
+    await expect(submit({ ...input(), displayedHash: preview.contentHash })).rejects.toThrow(/analyzed image/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it('bounds the encoded upload before networking', async () => {
     vi.spyOn(blur, 'prepareImageForUpload').mockResolvedValue(Buffer.alloc(2097153));
