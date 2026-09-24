@@ -19,7 +19,7 @@ import './PreviewPanel.css';
  * @param {boolean} [props.isAnalyzingBlur] - Whether blur analysis is in progress
  * @param {number} [props.blurryCount] - Number of blurry groups detected
  */
-function StatsGrid({ totalFiles, totalGroups, batchCount, isLoading, blurDetectionEnabled, isAnalyzingBlur, blurryCount }) {
+function StatsGrid({ totalFiles, totalGroups, batchCount, isLoading, blurDetectionEnabled, isAnalyzingBlur, blurryCount, isBeta = false }) {
   return (
     <div className="stats-grid">
       <div className="stat-card">
@@ -52,7 +52,7 @@ function StatsGrid({ totalFiles, totalGroups, batchCount, isLoading, blurDetecti
               </>
             )}
           </div>
-          <div className="stat-label">Blurry Photos</div>
+          <div className="stat-label">{isBeta ? 'Blur suggestions' : 'Blurry Photos'}</div>
         </div>
       )}
     </div>

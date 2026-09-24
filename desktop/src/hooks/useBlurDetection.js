@@ -21,12 +21,17 @@ function formatEta(seconds) {
  * @param {boolean} params.blurDetectionEnabled - Whether blur detection is toggled on
  * @param {string} params.blurSensitivity - Sensitivity preset: 'strict' | 'moderate' | 'lenient'
  */
-export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity, blurCategories }) {
+export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, isBeta = false }) {
   const [blurResults, setBlurResults] = useState(null);     // Full results map: { baseName: { score, isBlurry, analyzedFile, predictedClass } }
   const [blurProgress, setBlurProgress] = useState(null);   // { current, total }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [unflaggedGroups, setUnflaggedGroups] = useState(new Set()); // User-unflagged base names
   const [aiUnavailable, setAiUnavailable] = useState(false); // AI service down
+
+  const [labels, setLabels] = useState(new Map());
+  const setLabel = useCallback((fileName, label) => {
+    setLabels(previous => new Map(previous).set(fileName, label));
+  }, []);
 
   // Cache discriminator: stable serialization of (sensitivity, categories)
   // Re-analysis runs when this changes between calls.
@@ -100,6 +105,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     const runId = ++analysisRunRef.current;
     setIsAnalyzing(true);
     setBlurResults(null);
+    setLabels(new Map());
     setUnflaggedGroups(new Set());
     setBlurProgress(null);
     setAiUnavailable(false);
@@ -154,6 +160,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
    */
   const resetBlurState = useCallback(() => {
     analysisRunRef.current++;
+    setLabels(new Map());
     setBlurResults(null);
     setBlurProgress(null);
     setIsAnalyzing(false);
@@ -173,6 +180,9 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   }, []);
 
   return {
+    isBeta,
+    labels,
+    setLabel,
     blurResults,
     blurProgress,
     blurEta,

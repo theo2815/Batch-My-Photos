@@ -37,6 +37,13 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
   // Image preview modal state
   const [previewImage, setPreviewImage] = useState(null); // { fileName, fileList, imageInfo, blurInfoMap, onRestore }
 
+  const blurInfoMap = {};
+  for (const [baseName, result] of Object.entries(blurDetection?.blurResults || {})) {
+    if (result.analyzedFile) {
+      blurInfoMap[result.analyzedFile] = { ...result, baseName };
+    }
+  }
+
   // Track which filenames have already been requested to avoid duplicate fetches.
   // Using a ref instead of depending on `thumbnails` state prevents the
   // effect → setState → effect re-trigger loop.
@@ -49,6 +56,10 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
     requestedFilesRef.current = new Set();
     setVisibleBatchesCount(10);
   }, [batchDetails]);
+
+  useEffect(() => {
+    setPreviewImage(null);
+  }, [folderPath, blurDetection?.blurResults]);
 
   // Fetch thumbnails when a batch is expanded or more files are loaded
   useEffect(() => {
@@ -139,18 +150,20 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
                 <div className="batch-files">
                   {filesToShow.map((file) => (
                     <div key={file} className="file-item">
+                      <button type="button" className="thumbnail-button" aria-label={`Preview ${file}`}
+                        onClick={() => setPreviewImage({ fileName: file, fileList: allFiles })}>
                       {thumbnails[file] ? (
                         <img 
                           src={thumbnails[file]} 
                           alt="" 
                           className="file-thumbnail file-thumbnail-clickable"
-                          onClick={() => setPreviewImage({ fileName: file, fileList: allFiles, imageInfo: null })}
                         />
                       ) : (
                         <span className="thumbnail-placeholder">
                           <Image size={16} />
                         </span>
                       )}
+                      </button>
                       <span className="file-name">{file}</span>
                     </div>
                   ))}
@@ -204,16 +217,19 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
       )}
 
       {/* Image Preview Modal */}
-      <ImagePreviewModal
+      {previewImage && <ImagePreviewModal
         isOpen={!!previewImage}
         folderPath={folderPath}
         fileName={previewImage?.fileName}
         fileList={previewImage?.fileList || []}
         imageInfo={previewImage?.imageInfo}
-        blurInfoMap={previewImage?.blurInfoMap}
+        blurInfoMap={blurInfoMap}
+        isBeta={blurDetection?.isBeta}
+        labels={blurDetection?.labels}
+        onLabel={blurDetection?.setLabel}
         onRestore={previewImage?.onRestore}
         onClose={() => setPreviewImage(null)}
-      />
+      />}
     </div>
   );
 }
@@ -301,6 +317,10 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
     );
   }
 
+  if (blurDetection.aiUnavailable) {
+    return <p className="blurry-restored-note" role="status">Blur analysis is unavailable. You can still batch your photos. Use Categories to start analysis again when the service is available.</p>;
+  }
+
   if (!blurResults) return null;
 
   const allThumbs = { ...parentThumbnails, ...blurThumbnails };
@@ -328,14 +348,6 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
           .map(bn => blurResults[bn]?.analyzedFile)
           .filter(Boolean);
 
-        // Build blur info map so the modal can show scores during navigation
-        const blurInfoMap = {};
-        for (const bn of blurryGroups) {
-          const r = blurResults[bn];
-          const af = r?.analyzedFile;
-          if (af) blurInfoMap[af] = { baseName: bn, score: r?.score, edgeDensity: r?.edgeDensity };
-        }
-
         const visibleGroups = blurryGroups.slice(0, visibleCount);
         const hasMore = blurryGroups.length > visibleCount;
         const remainingCount = blurryGroups.length - visibleCount;
@@ -349,18 +361,21 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
 
             return (
               <div key={baseName} className="blurry-item">
+                <button type="button" className="thumbnail-button" aria-label={`Preview ${thumbFile || baseName}`}
+                  disabled={!thumbFile}
+                  onClick={() => onImageClick?.(thumbFile, blurryFileList)}>
                 {thumbSrc ? (
                   <img
                     src={thumbSrc}
                     alt=""
                     className="file-thumbnail blurry-thumb file-thumbnail-clickable"
-                    onClick={() => onImageClick?.(thumbFile, blurryFileList, { blurScore: result?.score }, blurInfoMap)}
                   />
                 ) : (
                   <span className="thumbnail-placeholder">
                     <Image size={16} />
                   </span>
                 )}
+                </button>
                 <span className="blurry-name">{baseName}</span>
                 {(() => {
                   const badgeClass = result?.bestBlurClass || result?.predictedClass;

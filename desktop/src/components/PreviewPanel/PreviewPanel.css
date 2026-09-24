@@ -1023,3 +1023,11 @@
   background: var(--warning);
   transition: width 0.4s ease;
 }
+
+.blur-beta-key { padding: var(--space-md); margin-block: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
+.blur-beta-key p, .blur-beta-key span { font-size: 0.8rem; color: var(--text-secondary); }
+.blur-beta-key-controls { display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.blur-beta-key-controls input { min-width: 0; flex: 1; }
+.blur-beta-key [role="alert"] { color: var(--error); }
+.thumbnail-button { display: inline-flex; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer; flex-shrink: 0; }
+.thumbnail-button:focus-visible, .blur-beta-key button:focus-visible, .blur-beta-key input:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; }

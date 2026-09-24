@@ -84,7 +84,9 @@ function App() {
     blurDetectionEnabled, blurSensitivity, blurCategories,
   } = settings;
 
+  const [blurBetaEnabled, setBlurBetaEnabled] = useState(true);
   const blurDetection = useBlurDetection({
+    isBeta: blurBetaEnabled,
     folderPath,
     blurDetectionEnabled,
     blurSensitivity,
@@ -99,7 +101,6 @@ function App() {
   const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
   const lastStartedAnalysisRef = useRef(0);
-  const [blurBetaEnabled, setBlurBetaEnabled] = useState(true);
 
   useEffect(() => {
     window.electronAPI.getBlurDetectionEnabled(true)

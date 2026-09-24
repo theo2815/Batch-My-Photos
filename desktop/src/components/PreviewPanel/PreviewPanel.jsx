@@ -60,6 +60,7 @@ function PreviewPanel({
       
       {/* Stats Grid */}
       <StatsGrid
+        isBeta={blurDetection?.isBeta}
         totalFiles={scanResults?.totalFiles || 0}
         totalGroups={scanResults?.totalGroups || 0}
         batchCount={previewResults?.batchCount || 0}

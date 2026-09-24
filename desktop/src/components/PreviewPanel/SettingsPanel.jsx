@@ -56,6 +56,30 @@ function SettingsPanel({
       .catch(() => setBlurFeatureAvailable(false));
   }, []);
 
+  const [betaKeyStatus, setBetaKeyStatus] = useState(null);
+  const [betaKey, setBetaKey] = useState('');
+  const [savingBetaKey, setSavingBetaKey] = useState(false);
+  const [betaKeyError, setBetaKeyError] = useState('');
+  useEffect(() => {
+    window.electronAPI?.blurBetaKey?.().then(setBetaKeyStatus).catch(() => {});
+  }, []);
+
+  const saveBetaKey = async () => {
+    if (!betaKey.trim() || savingBetaKey) return;
+    setSavingBetaKey(true);
+    setBetaKeyError('');
+    try {
+      const status = await window.electronAPI.blurBetaKey(betaKey.trim());
+      if (!status.configured) throw new Error('Key was not saved');
+      setBetaKeyStatus(status);
+      setBetaKey('');
+    } catch (_error) {
+      setBetaKeyError('Could not save the beta key. Try again.');
+    } finally {
+      setSavingBetaKey(false);
+    }
+  };
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -402,6 +426,26 @@ function SettingsPanel({
           className="setting-input-fixed"
         />
       </div>
+
+      {betaKeyStatus?.enabled && (
+        <div className="blur-beta-key">
+          {betaKeyStatus.configured ? <p role="status">Beta key saved on this device.</p> : (
+            <>
+              <label htmlFor="blur-beta-key">Blur beta key</label>
+              <p>Enter the key provided for this beta before starting analysis.</p>
+              <div className="blur-beta-key-controls">
+                <input id="blur-beta-key" type="password" autoComplete="off"
+                  value={betaKey} onChange={e => setBetaKey(e.target.value)}
+                  disabled={savingBetaKey} aria-describedby="blur-beta-key-help" />
+                <button type="button" className="btn-small" disabled={!betaKey.trim() || savingBetaKey}
+                  onClick={saveBetaKey}>{savingBetaKey ? 'Saving...' : 'Save beta key'}</button>
+              </div>
+              <span id="blur-beta-key-help">Stored securely on this device.</span>
+              {betaKeyError && <p role="alert">{betaKeyError}</p>}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Blur Detection — feature-flagged off for release; toggle stays visible but disabled */}
       <div className="setting-row blur-detection-row">

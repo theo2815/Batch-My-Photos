@@ -20,7 +20,7 @@ import './Modals.css';
  * @param {(baseName: string) => void} [props.onRestore] - Optional callback to restore a blurry photo
  * @param {() => void} props.onClose - Close callback
  */
-function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose }) {
+function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, blurInfoMap, onRestore, onClose, isBeta = false, labels, onLabel }) {
   const [currentFile, setCurrentFile] = useState(fileName);
   const [previewData, setPreviewData] = useState(null); // { dataUrl, width, height }
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +28,29 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   const [prevDataUrl, setPrevDataUrl] = useState(null); // For fade transition
   const prefetchRef = useRef({}); // Cache for prefetched images
   const modalRef = useRef(null);
+
+  const [submission, setSubmission] = useState(null);
+  const submittingRef = useRef(false);
+  const label = labels?.get(currentFile);
+  const currentResult = blurInfoMap?.[currentFile];
+  const analyzedImage = isBeta && currentResult?.predictedClass && currentResult.score >= 0 ? currentResult : null;
+  const currentSubmission = submission?.fileName === currentFile ? submission : null;
+  const submitting = submission?.status === 'pending';
+
+  const submitExample = async () => {
+    if (!analyzedImage || !label || submittingRef.current || isLoading || previewData?.fileName !== currentFile) return;
+    submittingRef.current = true;
+    setSubmission({ fileName: currentFile, status: 'pending' });
+    try {
+      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName: currentFile, label });
+      setSubmission({ fileName: currentFile, status: result.success ? 'success' : 'error',
+        error: result.error || 'Could not submit this example. Please try again.' });
+    } catch (_error) {
+      setSubmission({ fileName: currentFile, status: 'error', error: 'Could not submit this example. Check your connection and try again.' });
+    } finally {
+      submittingRef.current = false;
+    }
+  };
 
   // Sync currentFile when the prop changes (new image clicked)
   useEffect(() => {
@@ -64,7 +87,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         if (cancelled) return;
 
         if (result.success) {
-          setPreviewData({ dataUrl: result.dataUrl, width: result.width, height: result.height });
+          setPreviewData({ fileName: currentFile, dataUrl: result.dataUrl, width: result.width, height: result.height });
           setError(null);
         } else {
           setPreviewData(null);
@@ -105,6 +128,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         const result = await window.electronAPI.getImagePreview(folderPath, nextFile);
         if (!cancelled && result.success) {
           prefetchRef.current[nextFile] = {
+            fileName: nextFile,
             dataUrl: result.dataUrl,
             width: result.width,
             height: result.height,
@@ -136,22 +160,34 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   const canGoNext = currentIndex >= 0 && currentIndex < (fileList?.length ?? 0) - 1;
 
   const goToPrev = useCallback(() => {
-    if (canGoPrev) {
+    if (canGoPrev && !submitting) {
       setCurrentFile(fileList[currentIndex - 1]);
     }
-  }, [canGoPrev, fileList, currentIndex]);
+  }, [canGoPrev, fileList, currentIndex, submitting]);
 
   const goToNext = useCallback(() => {
-    if (canGoNext) {
+    if (canGoNext && !submitting) {
       setCurrentFile(fileList[currentIndex + 1]);
     }
-  }, [canGoNext, fileList, currentIndex]);
+  }, [canGoNext, fileList, currentIndex, submitting]);
 
   // Keyboard handler
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e) => {
+      if (e.key === 'Tab') {
+        const controls = modalRef.current?.querySelectorAll('button:not(:disabled), [tabindex="0"]');
+        const first = controls?.[0];
+        const last = controls?.[controls.length - 1];
+        const focusOutside = !modalRef.current?.contains(document.activeElement);
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === modalRef.current || focusOutside)) {
+          e.preventDefault(); last?.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || focusOutside)) {
+          e.preventDefault(); first?.focus();
+        }
+        return;
+      }
       switch (e.key) {
         case 'Escape':
           e.preventDefault();
@@ -177,7 +213,9 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   // Focus the modal when it opens
   useEffect(() => {
     if (isOpen && modalRef.current) {
+      const opener = document.activeElement;
       modalRef.current.focus();
+      return () => opener?.focus();
     }
   }, [isOpen]);
 
@@ -189,7 +227,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
 
   return (
     <div
-      className="image-preview-overlay"
+      className={`image-preview-overlay ${analyzedImage ? 'image-preview-beta' : ''}`}
       onClick={onClose}
       ref={modalRef}
       tabIndex={-1}
@@ -208,6 +246,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
           className="image-preview-nav image-preview-nav-left"
           onClick={(e) => { e.stopPropagation(); goToPrev(); }}
           aria-label="Previous image"
+          disabled={submitting}
         >
           <ChevronLeft size={32} />
         </button>
@@ -232,7 +271,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         )}
 
         {/* Current image */}
-        {!isLoading && previewData?.dataUrl && (
+        {!isLoading && previewData?.fileName === currentFile && previewData?.dataUrl && (
           <img
             src={previewData.dataUrl}
             alt={currentFile}
@@ -256,9 +295,34 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
           className="image-preview-nav image-preview-nav-right"
           onClick={(e) => { e.stopPropagation(); goToNext(); }}
           aria-label="Next image"
+          disabled={submitting}
         >
           <ChevronRight size={32} />
         </button>
+      )}
+
+      {analyzedImage && (
+        <section className="blur-feedback" onClick={e => e.stopPropagation()} aria-label="Review blur suggestion" aria-busy={submitting}>
+          <p className="blur-feedback-file">{currentFile}</p>
+          <p>Model suggestion: {analyzedImage.isBlurry ? 'possible blur' : 'no blur flagged'}. Your judgment comes first; photos stay in normal batches.</p>
+          <div className="blur-feedback-actions" role="group" aria-label="Your label">
+            {['sharp', 'blurry'].map(value => (
+              <button key={value} type="button" className="btn-small" aria-pressed={label === value}
+                disabled={submitting} onClick={() => { onLabel(currentFile, value); setSubmission(null); }}>
+                {value === 'sharp' ? 'Sharp' : 'Blurry'}
+              </button>
+            ))}
+            <span>Labels stay local until you submit.</span>
+          </div>
+          <p id="blur-feedback-consent">Submit a resized copy of <strong>{currentFile}</strong> and your label to help improve blur detection.
+            {' '}Examples are private, accessible only to the research team, and deleted after 30 days.</p>
+          <button type="button" className="btn-small primary" aria-describedby="blur-feedback-consent"
+            disabled={!label || submitting || isLoading || previewData?.fileName !== currentFile || currentSubmission?.status === 'success'}
+            onClick={submitExample}>{submitting ? 'Submitting...' : 'Submit this example'}</button>
+          {currentSubmission?.status === 'pending' && <p role="status">Submitting {currentFile}...</p>}
+          {currentSubmission?.status === 'success' && <p role="status">Example submitted. Thank you.</p>}
+          {currentSubmission?.status === 'error' && <p role="alert">{currentSubmission.error} Your label is saved locally; use Submit this example to retry.</p>}
+        </section>
       )}
 
       {/* Bottom info bar */}
