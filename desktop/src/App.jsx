@@ -91,13 +91,14 @@ function App() {
     blurCategories,
   });
   const {
-    blurryGroups, isAnalyzing: isAnalyzingBlur,
+    isAnalyzing: isAnalyzingBlur,
     runBlurAnalysis, resetBlurState, clearAnalysisCache,
   } = blurDetection;
 
   // Blur sensitivity modal state
   const [showBlurSensitivityModal, setShowBlurSensitivityModal] = useState(false);
   const [analysisRequestId, setAnalysisRequestId] = useState(0);
+  const lastStartedAnalysisRef = useRef(0);
 
   // Device manager modal state
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false);
@@ -244,11 +245,8 @@ function App() {
     previewCancelledRef.current = false;
     setIsRefreshingPreview(true);
 
-    // Pass blurry groups as excludeGroups if blur detection is enabled
-    const excludeGroups = blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null;
-
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, excludeGroups);
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, null);
       if (!previewCancelledRef.current) {
         if (preview.success) {
           setPreviewResults(preview);
@@ -264,7 +262,7 @@ function App() {
         setRefreshingField(null);
       }
     }
-  }, [folderPath, maxFilesPerBatch, sortBy, blurDetectionEnabled, blurryGroups, setRefreshingField]);
+  }, [folderPath, maxFilesPerBatch, sortBy, setRefreshingField]);
 
   useEffect(() => {
     if (appStateRef.current !== STATES.READY) return;
@@ -286,13 +284,13 @@ function App() {
   // Track when blur toggle just turned on (to show modal instead of auto-analyzing)
   const prevBlurEnabledRef = useRef(blurDetectionEnabled);
 
-  // Trigger blur analysis when sensitivity or folder changes (but NOT on initial toggle-on)
+  // Only Start Analysis may trigger inference; folder and sensitivity changes do not.
   useEffect(() => {
     const justEnabled = !prevBlurEnabledRef.current && blurDetectionEnabled;
     prevBlurEnabledRef.current = blurDetectionEnabled;
 
     if (!blurDetectionEnabled) {
-      // When toggled off, reset blur state so groups return to normal batches
+      // Clear suggestions when the feature is toggled off.
       resetBlurState();
       return;
     }
@@ -304,7 +302,8 @@ function App() {
       return;
     }
 
-    // Re-analyze on sensitivity change, folder change, or explicit request (analysisRequestId)
+    if (analysisRequestId === lastStartedAnalysisRef.current) return;
+    lastStartedAnalysisRef.current = analysisRequestId;
     runBlurAnalysis();
   }, [blurDetectionEnabled, blurSensitivity, blurCategories, folderPath, analysisRequestId, runBlurAnalysis, resetBlurState]);
 
@@ -327,24 +326,6 @@ function App() {
   const handleOpenBlurModal = useCallback(() => {
     setShowBlurSensitivityModal(true);
   }, []);
-
-  // Refresh preview when blurry groups change (after analysis completes or user un-flags)
-  useEffect(() => {
-    if (appStateRef.current !== STATES.READY) return;
-    if (!blurDetectionEnabled) return;
-
-    // Debounce to avoid rapid re-renders when multiple groups are un-flagged
-    const timer = setTimeout(() => {
-      if (appStateRef.current === STATES.READY) {
-        refreshPreview();
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-    // We intentionally exclude refreshPreview from deps to avoid infinite loops.
-    // This effect should only fire when blurryGroups changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blurryGroups, blurDetectionEnabled]);
 
   // ============================================================================
   // VALIDATION & EXECUTION WRAPPERS
@@ -397,7 +378,7 @@ function App() {
       sortBy,
       selectedPresetName,
       previewBatchCount: previewResults?.batchCount || 0,
-      blurryGroups: blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null,
+      blurryGroups: null,
     });
   };
 

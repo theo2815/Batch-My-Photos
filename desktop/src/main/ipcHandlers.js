@@ -558,7 +558,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // Group files and separate blurry groups if provided
       const fileGroups = await groupFilesByBaseName(files);
       const MAX_BLURRY_GROUPS = 10000;
-      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
+      const blurryGroupSet = new Set(config.features.BLUR_BETA_ENABLED
+        ? [] : Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
       const blurryFiles = [];
       
       if (blurryGroupSet.size > 0) {

@@ -41,6 +41,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   // Guard against concurrent analysis runs (refs are synchronous, unlike state)
   const analysisInFlightRef = useRef(false);
+  const analysisRunRef = useRef(0);
 
   // Subscribe to blur progress updates from main process
   useEffect(() => {
@@ -78,7 +79,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   /**
    * Run blur analysis on the current folder.
-   * Called when blur detection is enabled or sensitivity changes.
+   * Called only after the user chooses Start Analysis.
    */
   const runBlurAnalysis = useCallback(async () => {
     if (!folderPath || !blurDetectionEnabled) return;
@@ -96,13 +97,17 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     }
 
     analysisInFlightRef.current = true;
+    const runId = ++analysisRunRef.current;
     setIsAnalyzing(true);
+    setBlurResults(null);
+    setUnflaggedGroups(new Set());
     setBlurProgress(null);
     setAiUnavailable(false);
     analysisStartTimeRef.current = Date.now();
 
     try {
       const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories);
+      if (runId !== analysisRunRef.current) return;
 
       if (result.success) {
         setBlurResults(result.blurResults);
@@ -116,19 +121,21 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
         setBlurResults(null);
       }
     } catch (err) {
+      if (runId !== analysisRunRef.current) return;
       console.error('[BLUR] Analysis error:', err);
       setBlurResults(null);
     } finally {
-      analysisInFlightRef.current = false;
-      setIsAnalyzing(false);
-      setBlurProgress(null);
-      analysisStartTimeRef.current = null;
+      if (runId === analysisRunRef.current) {
+        analysisInFlightRef.current = false;
+        setIsAnalyzing(false);
+        setBlurProgress(null);
+        analysisStartTimeRef.current = null;
+      }
     }
   }, [folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, analysisKey]);
 
   /**
-   * Toggle a group's blur flag (un-flag or re-flag).
-   * Un-flagged groups are placed back into normal batches.
+   * Dismiss or restore a blur suggestion without changing batch routing.
    */
   const toggleBlurFlag = useCallback((baseName) => {
     setUnflaggedGroups(prev => {
@@ -146,6 +153,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
    * Reset all blur state (called when folder changes or feature is toggled off).
    */
   const resetBlurState = useCallback(() => {
+    analysisRunRef.current++;
     setBlurResults(null);
     setBlurProgress(null);
     setIsAnalyzing(false);

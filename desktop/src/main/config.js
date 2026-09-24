@@ -123,6 +123,9 @@ const features = {
    */
   BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', false),
 
+  /** Source-run beta keeps blur suggestions out of batch routing. */
+  BLUR_BETA_ENABLED: !isProduction && envBool('BATCH_BLUR_BETA_ENABLED', false),
+
   /**
    * Enable the AI-powered blur detection backend.
    * When enabled, blur analysis is sent to the ai-api blur classifier
