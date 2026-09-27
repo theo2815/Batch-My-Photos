@@ -43,6 +43,14 @@ function ndjsonResponse(objects) {
   }), { status: 200 });
 }
 
+function jpegOnlySingle({ body }, classification = SHARP) {
+  const file = body.get('file');
+  if (file?.type !== 'image/jpeg' || file.name !== 'image.jpg') return new Response('expected JPEG', { status: 400 });
+  return new Response(JSON.stringify({ success: true, data: classification }), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 beforeAll(async () => {
   folder = fs.mkdtempSync(path.join(os.tmpdir(), 'blur-stream-'));
   const jpeg = await sharp({ create: {
@@ -63,6 +71,7 @@ describe('real blur stream client', () => {
     ['missing', [row(0)]],
     ['incomplete', [row(0), { ...summary(1), complete: false }]],
     ['duplicate', [row(0), summary(1), summary(1)]],
+    ['trailing row', [summary(1), row(0)]],
     ['wrong total', [row(0), summary(2)]],
     ['wrong counts', [row(0), summary(1, 0, 0)]],
   ])('rejects a %s summary without publishing rows', async (_kind, lines) => {
@@ -71,6 +80,7 @@ describe('real blur stream client', () => {
     await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress))
       .rejects.toThrow(/AI service.*incomplete/i);
     expect(progress).not.toHaveBeenCalled();
+    expect(blur.getCachedBlurResult(folder, 'FIRST.jpg')).toBeNull();
   });
 
   it.each([
@@ -103,7 +113,12 @@ describe('real blur stream client', () => {
 
   it('commits out-of-order rows against their exact image once the summary is valid', async () => {
     const progress = vi.fn();
-    fetchMock.mockResolvedValue(ndjsonResponse([row(1, MOTION), row(0), summary(2)]));
+    fetchMock.mockImplementation(async (_url, { body }) => {
+      expect(body.getAll('files').map(file => [file.name, file.type])).toEqual([
+        ['0', 'image/jpeg'], ['1', 'image/jpeg'],
+      ]);
+      return ndjsonResponse([row(1, MOTION), row(0), summary(2)]);
+    });
     const results = await blur.analyzeBlur(groups, folder, 'moderate', null, progress);
     expect(results.FIRST).toMatchObject({ analyzedFile: 'FIRST.jpg', predictedClass: 'sharp', isBlurry: false });
     expect(results.SECOND).toMatchObject({ analyzedFile: 'SECOND.jpg', predictedClass: 'motion_blurred', isBlurry: true });
@@ -115,17 +130,24 @@ describe('real blur stream client', () => {
 
   it('recovers only a missing index after a valid complete summary', async () => {
     const progress = vi.fn();
-    fetchMock.mockImplementation(async (url) => {
+    fetchMock.mockImplementation(async (url, options) => {
       if (url.endsWith('/stream')) return ndjsonResponse([row(0), summary(2)]);
       expect(progress).toHaveBeenCalledTimes(1);
-      return new Response(JSON.stringify({ success: true, data: MOTION }), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      });
+      return jpegOnlySingle(options, MOTION);
     });
     const results = await blur.analyzeBlur(groups, folder, 'moderate', null, progress);
     expect(results.SECOND.predictedClass).toBe('motion_blurred');
     expect(progress).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls.map(([url]) => url.endsWith('/stream'))).toEqual([true, false]);
+  });
+
+  it('recovers valid JPEGs through the single endpoint when streaming is unavailable', async () => {
+    fetchMock.mockImplementation(async (url, options) => url.endsWith('/stream')
+      ? new Response('', { status: 404 })
+      : jpegOnlySingle(options));
+    const results = await blur.analyzeBlur(groups, folder, 'moderate');
+    expect(results.FIRST).toMatchObject({ analyzedFile: 'FIRST.jpg', predictedClass: 'sharp', score: 0.1 });
+    expect(results.SECOND).toMatchObject({ analyzedFile: 'SECOND.jpg', predictedClass: 'sharp', score: 0.1 });
   });
 
   it.each(['503', '429', 'network'])('retries one uncommitted chunk after %s and ticks once', async (failure) => {

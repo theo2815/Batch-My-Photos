@@ -338,7 +338,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_TIMEOUT_MS);
   try {
     const form = new FormData();
-    form.append('file', new Blob([buffer]), analyzedFile);
+    form.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
 
     const headers = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
@@ -477,7 +477,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_STREAM_TIMEOUT_MS);
   try {
     const form = new FormData();
-    chunk.forEach((item, i) => form.append('files', new Blob([item.buffer]), String(i)));
+    chunk.forEach((item, i) => form.append('files', new Blob([item.buffer], { type: 'image/jpeg' }), String(i)));
     const headers = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
 
@@ -508,6 +508,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
     let invalidRows = false;
     try {
       for await (const line of ndjsonLines(response)) {
+        if (summaryCount) { invalidRows = true; continue; }
         let obj;
         try { obj = JSON.parse(line); } catch (_err) { invalidRows = true; continue; }
         if (obj && Object.hasOwn(obj, '_summary')) {
