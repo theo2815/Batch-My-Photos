@@ -11,6 +11,47 @@ const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'blur-policy-'));
 afterAll(() => fs.rmSync(folder, { recursive: true, force: true }));
 
 describe('desktop blur policy evaluator', () => {
+  it('rejects an empty labeled set', async () => {
+    await expect(evaluate([])).rejects.toThrow('Expected labeled image records');
+  });
+
+  it('treats a failed 200 response envelope as unknown', async () => {
+    const image = path.join(folder, 'envelope.jpg');
+    fs.writeFileSync(image, await sharp({ create: {
+      width: 8, height: 6, channels: 3, background: '#777777',
+    } }).jpeg().toBuffer());
+    const previousUrl = process.env.BATCH_BLUR_AI_URL;
+    process.env.BATCH_BLUR_AI_URL = 'http://127.0.0.1:9';
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false, data: {
+      predicted_class: 'sharp', confidence: 1, probabilities: {
+        sharp: 1, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0,
+      },
+    } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const report = await evaluate([{ file: image, label: 'sharp' }]);
+      expect(report).toMatchObject({ total: 1, unknown: 1, complete: false });
+      expect(report.server.correct).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousUrl === undefined) delete process.env.BATCH_BLUR_AI_URL;
+      else process.env.BATCH_BLUR_AI_URL = previousUrl;
+    }
+  });
+
+  it('does not count another blur category as a false blurry sharp photo', async () => {
+    const image = path.join(folder, 'cross-class.jpg');
+    fs.writeFileSync(image, await sharp({ create: {
+      width: 8, height: 6, channels: 3, background: '#777777',
+    } }).jpeg().toBuffer());
+    const report = await evaluate([{ file: image, label: 'defocused_blurred' }], async () => ({
+      predicted_class: 'motion_blurred', confidence: 0.8, probabilities: {
+        sharp: 0.2, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0.8,
+      },
+    }));
+    expect(report.policies['moderate:motion_blurred']).toMatchObject({ correct: 0, falseBlurry: 0 });
+  });
+
   it('counts preparation failures as unknown without calling the classifier', async () => {
     const broken = path.join(folder, 'broken.jpg');
     fs.writeFileSync(broken, 'not an image');

@@ -33,11 +33,12 @@ async function classify(jpeg) {
   });
   if (!response.ok) throw new Error('classification failed');
   const envelope = await response.json();
+  if (envelope?.success !== true) throw new Error('classification failed');
   return envelope.data;
 }
 
 async function evaluate(records, classifyImage = classify, customCategories = []) {
-  if (!Array.isArray(records) || records.some(row => !row || !blur.CLASS_NAMES.includes(row.label) ||
+  if (!Array.isArray(records) || records.length === 0 || records.some(row => !row || !blur.CLASS_NAMES.includes(row.label) ||
       typeof row.file !== 'string')) throw new Error('Expected labeled image records');
   if (customCategories.some(name => !classes.includes(name))) throw new Error('Invalid custom category');
 
@@ -79,7 +80,7 @@ async function evaluate(records, classifyImage = classify, customCategories = []
           item.decisions[key] = flagged;
           policies[key].correct += Number(flagged === expected);
           policies[key].dangerousFlips += Number(expected && !flagged);
-          policies[key].falseBlurry += Number(!expected && flagged);
+          policies[key].falseBlurry += Number(!actualBlur && flagged);
         }
       }
       item.status = 'classified';
