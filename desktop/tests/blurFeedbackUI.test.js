@@ -204,7 +204,9 @@ describe('explicit beta feedback consent', () => {
     hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
     const advisory = render(section.type, section.props);
     expect(text(advisory)).toContain(heading);
-    expect(nodes(advisory).find(n => n.props.role === 'status' && text(n).includes(coverage))).toBeDefined();
+    const status = nodes(advisory).find(n => n.props.role === 'status' && text(n).includes(coverage));
+    expect(status).toBeDefined();
+    expect(status.props.className).toBe('blurry-coverage-note');
     expect(text(tree)).toContain(`${allFiles.length} files`);
     const batchButton = nodes(tree).find(n => n.type === 'button' && n.props.className?.includes('batch-header'));
     expect(batchButton).toBeDefined();
@@ -232,6 +234,8 @@ describe('explicit beta feedback consent', () => {
     advisory = render(section.type, section.props);
     expect(text(advisory)).toContain('No blur suggestions for this analysis.');
     expect(nodes(advisory).filter(n => n.type === CheckCircle)).toHaveLength(0);
+    expect(nodes(advisory).find(n => n.props.className?.includes('blurry-empty'))?.props.className)
+      .toBe('blurry-empty blurry-empty-unknown');
     expect(text(tree)).toContain('3 files');
   });
 

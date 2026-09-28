@@ -344,7 +344,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
       </button>
-      <p className="blurry-restored-note" role="status">
+      <p className="blurry-coverage-note" role="status">
         {analyzedCount} group{analyzedCount === 1 ? '' : 's'} analyzed · {unanalyzedCount} could not be analyzed.
       </p>
 
@@ -439,7 +439,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       })()}
 
       {expanded && blurryCount === 0 && (
-        <div className="blurry-empty">
+        <div className={unanalyzedCount > 0 ? 'blurry-empty blurry-empty-unknown' : 'blurry-empty'}>
           {analyzedCount > 0 && unanalyzedCount === 0 && <CheckCircle size={20} />}
           <p>{analyzedCount > 0 ? 'No blur suggestions for this analysis.' : 'No blur results available for this analysis.'}</p>
         </div>

@@ -983,6 +983,18 @@
   font-size: 0.9rem;
 }
 
+.blurry-empty-unknown {
+  color: var(--text-secondary);
+}
+
+.blurry-coverage-note {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
 .blurry-restored-note {
   padding: 6px 14px;
   font-size: 0.75rem;
