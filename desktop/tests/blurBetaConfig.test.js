@@ -83,7 +83,7 @@ afterEach(() => {
 
 describe('packaged beta configuration', () => {
   it('keeps beta data in a durable isolated profile before cache moves to Temp', () => {
-    function startupPaths(manifest) {
+    function startupPaths(manifest, packaged = true, env = {}) {
       const home = temporaryFolder();
       const appData = path.join(home, 'AppData', 'Roaming');
       const temp = path.join(home, 'Temp');
@@ -111,7 +111,7 @@ describe('packaged beta configuration', () => {
       const mocks = {
         electron: { app, ipcMain: {} }, os: { tmpdir: () => temp },
         './src/main/constants': { UV_THREADPOOL_SIZE: 4 },
-        './src/main/config': configFor(manifest),
+        './src/main/config': configFor(manifest, packaged, env),
         './src/main/secureStore': class {},
         './src/main/windowManager': {}, './src/main/ipcHandlers': {},
         './src/main/deviceService': {},
@@ -133,6 +133,9 @@ describe('packaged beta configuration', () => {
 
     const publicApp = startupPaths(undefined);
     expect(publicApp.userData).toBe(path.join(publicApp.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
+
+    const sourceBeta = startupPaths(validManifest, false, { BATCH_BLUR_BETA_ENABLED: 'true' });
+    expect(sourceBeta.userData).toBe(path.join(sourceBeta.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
   });
 
   it.each([undefined, '{broken', 'null', '{}',
