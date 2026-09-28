@@ -338,7 +338,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
         <span className="blurry-title">
           {analyzedCount === 0 ? 'No blur results available' : blurryCount > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
         </span>
-        {analyzedCount > 0 && blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
+        {analyzedCount > 0 && unanalyzedCount === 0 && blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
         <span className="blurry-folder-hint">Analysis does not move or exclude photos</span>
         <span className="expand-icon">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -440,7 +440,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
 
       {expanded && blurryCount === 0 && (
         <div className="blurry-empty">
-          {analyzedCount > 0 && <CheckCircle size={20} />}
+          {analyzedCount > 0 && unanalyzedCount === 0 && <CheckCircle size={20} />}
           <p>{analyzedCount > 0 ? 'No blur suggestions for this analysis.' : 'No blur results available for this analysis.'}</p>
         </div>
       )}

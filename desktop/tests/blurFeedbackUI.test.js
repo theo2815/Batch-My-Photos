@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CheckCircle } from 'lucide-react';
 
 // Same Node-only element approach as blurAdvisoryModal; retain hook state across interactions.
 const hooks = vi.hoisted(() => ({ values: [], cursor: 0, effects: [], deps: [], cleanups: [] }));
@@ -209,6 +210,29 @@ describe('explicit beta feedback consent', () => {
     expect(batchButton).toBeDefined();
     expect(batchButton.props.onClick).toBeTypeOf('function');
     if (_case === 'RAW-only') expect(text(advisory)).not.toContain('No blur suggestions');
+  });
+
+  it('does not show success icons when one analyzed group has no suggestions and one group is unknown', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate' };
+    globalThis.window.electronAPI.analyzeBlur = vi.fn().mockResolvedValue({ success: true, blurResults: {
+      A: { score: 0.1, isBlurry: false, analyzedFile: 'A.jpg' },
+      RAW: { score: -1, isBlurry: false },
+    } });
+    await render(useBlurDetection, p).runBlurAnalysis();
+    const blurDetection = render(useBlurDetection, p);
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 3, allFiles: ['A.jpg', 'A.CR3', 'RAW.CR3'] }], outputPrefix: 'Batch', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection });
+    const section = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    let advisory = render(section.type, section.props);
+    expect(text(advisory)).toContain('1 group analyzed · 1 could not be analyzed');
+    expect(text(advisory)).toContain('No blur suggestions');
+    expect(nodes(advisory).filter(n => n.type === CheckCircle)).toHaveLength(0);
+    nodes(advisory).find(n => n.type === 'button').props.onClick();
+    advisory = render(section.type, section.props);
+    expect(text(advisory)).toContain('No blur suggestions for this analysis.');
+    expect(nodes(advisory).filter(n => n.type === CheckCircle)).toHaveLength(0);
+    expect(text(tree)).toContain('3 files');
   });
 
   it('keeps service failure distinct from per-group unknown results', async () => {
