@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, afterEach, afterAll, describe, expect, it, vi } from 'vitest';
-import Module from 'node:module';
+import Module, { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,6 +33,24 @@ const row = (index, classification = SHARP) =>
 const groups = { FIRST: ['FIRST.jpg'], SECOND: ['SECOND.jpg', 'SECOND.CR3'] };
 let folder;
 
+function blurWithByteBudget(bytes) {
+  const require = createRequire(import.meta.url);
+  const servicePath = require.resolve('../src/main/blurDetectionService.js');
+  const constants = require('../src/main/constants.js');
+  const cached = require.cache[servicePath];
+  delete require.cache[servicePath];
+  Module._load = function (request, ...rest) {
+    if (request === 'electron') return { net: { fetch: (...args) => fetchMock(...args) } };
+    if (request === './constants') return { ...constants, BLUR_AI_STREAM_MAX_BYTES: bytes };
+    return originalLoad.call(this, request, ...rest);
+  };
+  try { return require(servicePath); } finally {
+    Module._load = originalLoad;
+    if (cached) require.cache[servicePath] = cached;
+    else delete require.cache[servicePath];
+  }
+}
+
 function ndjsonResponse(objects) {
   const encoder = new TextEncoder();
   return new Response(new ReadableStream({
@@ -58,6 +76,8 @@ beforeAll(async () => {
   } }).jpeg().toBuffer();
   fs.writeFileSync(path.join(folder, 'FIRST.jpg'), jpeg);
   fs.writeFileSync(path.join(folder, 'SECOND.jpg'), jpeg);
+  for (const name of ['THIRD', 'FOURTH', 'FIFTH']) fs.writeFileSync(path.join(folder, name + '.jpg'), jpeg);
+  fs.writeFileSync(path.join(folder, 'BROKEN.jpg'), 'not an image');
 });
 beforeEach(() => {
   blur.clearCache();
@@ -67,6 +87,70 @@ afterEach(() => vi.useRealTimers());
 afterAll(() => fs.rmSync(folder, { recursive: true, force: true }));
 
 describe('real blur stream client', () => {
+  it('splits prepared JPEGs by bytes, keeps request-local indices, and ticks once per analyzable group', async () => {
+    const smallBlur = blurWithByteBudget(600);
+    const progress = vi.fn();
+    const sizes = [];
+    const names = ['FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH'];
+    fetchMock.mockImplementation(async (_url, { body }) => {
+      const files = body.getAll('files');
+      sizes.push(files.map(file => file.size));
+      expect(files.map(file => file.name)).toEqual(files.map((_file, i) => String(i)));
+      const start = sizes.slice(0, -1).reduce((sum, request) => sum + request.length, 0);
+      return ndjsonResponse([
+        ...files.map((_file, i) => row(i, (start + i) % 2 ? MOTION : SHARP)),
+        summary(files.length),
+      ]);
+    });
+    const input = Object.fromEntries([...names, 'BROKEN'].map(name => [name, [name + '.jpg']]));
+    const results = await smallBlur.analyzeBlur(input, folder, 'moderate', null, progress);
+    expect(sizes.map(request => request.length)).toEqual([2, 2, 1]);
+    expect(sizes.every(request => request.reduce((sum, size) => sum + size, 0) <= 600)).toBe(true);
+    expect(names.map(name => results[name].predictedClass)).toEqual([
+      'sharp', 'motion_blurred', 'sharp', 'motion_blurred', 'sharp',
+    ]);
+    expect(results.BROKEN.score).toBe(-1);
+    expect(progress.mock.calls.map(([value]) => value.current)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('caps each request at 100 images even when the byte budget fits more', async () => {
+    const smallBlur = blurWithByteBudget(60000);
+    const counts = [];
+    fetchMock.mockImplementation(async (_url, { body }) => {
+      const files = body.getAll('files');
+      counts.push(files.length);
+      return ndjsonResponse([...files.map((_file, i) => row(i)), summary(files.length)]);
+    });
+    const input = Object.fromEntries(Array.from({ length: 101 }, (_unused, i) => ['GROUP' + i, ['FIRST.jpg']]));
+    const results = await smallBlur.analyzeBlur(input, folder);
+    expect(counts).toEqual([100, 1]);
+    expect(Object.keys(results)).toHaveLength(101);
+  });
+
+  it('continues every byte-split group through sequential single-image fallback', async () => {
+    const smallBlur = blurWithByteBudget(600);
+    let active = 0;
+    let peak = 0;
+    const urls = [];
+    fetchMock.mockImplementation(async (url, options) => {
+      urls.push(url);
+      if (url.endsWith('/stream')) return new Response('', { status: 404 });
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      active--;
+      return jpegOnlySingle(options);
+    });
+    const input = Object.fromEntries(['FIRST', 'SECOND', 'THIRD', 'FOURTH'].map(name => [name, [name + '.jpg']]));
+    const progress = vi.fn();
+    const results = await smallBlur.analyzeBlur(input, folder, 'moderate', null, progress);
+    expect(urls.filter(url => url.endsWith('/stream'))).toHaveLength(1);
+    expect(urls.filter(url => !url.endsWith('/stream'))).toHaveLength(4);
+    expect(peak).toBe(1);
+    expect(Object.values(results).map(result => result.predictedClass)).toEqual(Array(4).fill('sharp'));
+    expect(progress.mock.calls.map(([value]) => value.current)).toEqual([1, 2, 3, 4]);
+  });
+
   it.each([
     ['missing', [row(0)]],
     ['incomplete', [row(0), { ...summary(1), complete: false }]],
@@ -164,6 +248,42 @@ describe('real blur stream client', () => {
     expect(result.FIRST.predictedClass).toBe('sharp');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(progress).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for a valid 10-second Retry-After before one stream retry', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(new Response('busy', { status: 429, headers: { 'Retry-After': '10' } }));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), summary(1)]));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await pending;
+  });
+
+  it.each([undefined, 'later'])('uses two seconds when Retry-After is %s', async (header) => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(new Response('busy', {
+      status: 503, headers: header === undefined ? {} : { 'Retry-After': header },
+    }));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), summary(1)]));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a server wait beyond 30 seconds without retrying early', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(new Response('busy', { status: 503, headers: { 'Retry-After': '31' } }));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    const rejected = expect(pending).rejects.toThrow(/temporarily unavailable/i);
+    await rejected;
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('retries an aborted stream request after the 210-second deadline', async () => {

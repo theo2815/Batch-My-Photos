@@ -35,7 +35,8 @@ const {
   BLUR_CONCURRENCY, BLUR_RESIZE_WIDTH, BLUR_THRESHOLDS, BLUR_EDGE_THRESHOLDS,
   BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_TIMEOUT_MS,
   BLUR_AI_MAX_DIMENSION, BLUR_AI_JPEG_QUALITY, BLUR_AI_RESIZE_CONCURRENCY,
-  BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_CONCURRENCY, BLUR_AI_STREAM_TIMEOUT_MS,
+  BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_MAX_BYTES, BLUR_AI_STREAM_CONCURRENCY,
+  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
@@ -499,6 +500,11 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
       const body = await response.text().catch(() => '');
       const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
       err.retryable = response.status === 503 || response.status === 429;
+      if (err.retryable) {
+        const retryAfter = response.headers.get('Retry-After')?.trim();
+        const seconds = Number(retryAfter);
+        if (/^\d+(?:\.\d+)?$/.test(retryAfter) && Number.isFinite(seconds)) err.retryDelayMs = seconds * 1000;
+      }
       throw err;
     }
 
@@ -568,6 +574,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
     }
     const failure = new Error(err.message?.includes('AI service') ? err.message : 'AI service error: ' + err.message);
     failure.retryable = err.retryable === true;
+    failure.retryDelayMs = err.retryDelayMs;
     throw failure;
   } finally {
     clearTimeout(timeoutId);
@@ -645,49 +652,72 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     }
     if (sendable.length === 0) return;
 
-    // Phase 2 — STREAM the chunk (unless the server already proved it lacks it).
-    if (!streamUnsupported) {
-      try {
-        const classifyStream = () => classifyChunkStream(
-          streamUrl, apiKey, sendable, threshold, categoriesFilter,
-          (baseName, result) => { blurMap[baseName] = result; tick(); },
-        );
-        let missing;
+    const requests = [];
+    let request = [];
+    let bytes = 0;
+    for (const item of sendable) {
+      if (item.buffer.length > BLUR_AI_STREAM_MAX_BYTES) {
+        throw new Error('AI service prepared JPEG exceeds request byte budget');
+      }
+      if (bytes + item.buffer.length > BLUR_AI_STREAM_MAX_BYTES) {
+        requests.push(request);
+        request = [];
+        bytes = 0;
+      }
+      request.push(item);
+      bytes += item.buffer.length;
+    }
+    if (request.length) requests.push(request);
+
+    for (const group of requests) {
+      // Phase 2 — STREAM the request (unless the server already proved it lacks it).
+      if (!streamUnsupported) {
         try {
-          missing = await classifyStream();
+          const classifyStream = () => classifyChunkStream(
+            streamUrl, apiKey, group, threshold, categoriesFilter,
+            (baseName, result) => { blurMap[baseName] = result; tick(); },
+          );
+          let missing;
+          try {
+            missing = await classifyStream();
+          } catch (err) {
+            if (!err.retryable) throw err;
+            const delay = err.retryDelayMs ?? 2000;
+            if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) {
+              throw new Error('AI service temporarily unavailable; retry manually after server backoff');
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            missing = await classifyStream();
+          }
+          // Recover omitted rows only after the server commits a valid summary.
+          for (const idx of missing) {
+            const item = group[idx];
+            blurMap[item.baseName] = await classifyItemSingle(item);
+            tick();
+          }
+          for (const item of group) {
+            rememberImage(item, blurMap[item.baseName]);
+            item.buffer = null;   // release memory
+          }
+          continue;
         } catch (err) {
-          if (!err.retryable) throw err;
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          missing = await classifyStream();
-        }
-        // Recover omitted rows only after the server commits a valid summary.
-        for (const idx of missing) {
-          const item = sendable[idx];
-          blurMap[item.baseName] = await classifyItemSingle(item);
-          tick();
-        }
-        for (const item of sendable) {
-          rememberImage(item, blurMap[item.baseName]);
-          item.buffer = null;   // release memory
-        }
-        return;
-      } catch (err) {
-        if (err.code === 'STREAM_UNSUPPORTED') {
-          logger.warn('⚠️ [BLUR-AI] /blur/classify/stream unavailable — falling back to per-image /classify');
-          streamUnsupported = true;
-          // fall through to the per-image path below
-        } else {
-          throw err;   // loud-fail (503 / auth / 5xx / timeout / connection)
+          if (err.code === 'STREAM_UNSUPPORTED') {
+            logger.warn('⚠️ [BLUR-AI] /blur/classify/stream unavailable — falling back to per-image /classify');
+            streamUnsupported = true;
+            // fall through to the per-image path below
+          } else {
+            throw err;   // loud-fail (503 / auth / 5xx / timeout / connection)
+          }
         }
       }
-    }
 
-    // Per-image fallback path (server lacks the streaming endpoint).
-    await runPool(sendable, BLUR_CONCURRENCY, async (item) => {
-      blurMap[item.baseName] = await classifyItemSingle(item);
-      item.buffer = null;
-      tick();
-    });
+      // Per-image fallback path (server lacks the streaming endpoint).
+      for (const item of group) {
+        blurMap[item.baseName] = await classifyItemSingle(item);
+        item.buffer = null;
+        tick();
+      }
+    }
   };
 
   await runPool(chunks, BLUR_AI_STREAM_CONCURRENCY, processChunk);

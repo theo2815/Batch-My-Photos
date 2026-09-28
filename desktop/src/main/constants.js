@@ -264,6 +264,9 @@ const BLUR_AI_RESIZE_CONCURRENCY = Math.max(2, os.cpus().length - 1);
  */
 const BLUR_AI_STREAM_BATCH_SIZE = 100;
 
+/** Prepared JPEGs stay below staging's 128 MiB body ceiling with 8 MiB for multipart framing. */
+const BLUR_AI_STREAM_MAX_BYTES = 120 * 1024 * 1024;
+
 /**
  * Concurrent /blur/classify/stream requests in flight. One for the staging beta
  * to keep its 2 CPU / 2 GB worker from being oversubscribed.
@@ -276,6 +279,9 @@ const BLUR_AI_STREAM_CONCURRENCY = 1;
  * because a chunk does proportionally more work. Exceeds staging's 180s request timeout.
  */
 const BLUR_AI_STREAM_TIMEOUT_MS = 210000;
+
+/** Longer server backoffs require a manual retry instead of holding the scan open. */
+const BLUR_AI_MAX_RETRY_WAIT_MS = 30000;
 
 module.exports = {
   UV_THREADPOOL_SIZE,
@@ -302,8 +308,10 @@ module.exports = {
   BLUR_AI_JPEG_QUALITY,
   BLUR_AI_RESIZE_CONCURRENCY,
   BLUR_AI_STREAM_BATCH_SIZE,
+  BLUR_AI_STREAM_MAX_BYTES,
   BLUR_AI_STREAM_CONCURRENCY,
   BLUR_AI_STREAM_TIMEOUT_MS,
+  BLUR_AI_MAX_RETRY_WAIT_MS,
   DEVICE_LIMIT_PRO,
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,
