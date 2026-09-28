@@ -7,7 +7,7 @@ Blur suggestions are experimental. The private tester beta is **advisory only**:
 Build from `desktop/` using the existing private scripts:
 
 ```powershell
-$env:BATCH_BLUR_AI_URL = 'https://your-authorized-staging-host.example'
+$env:BATCH_BLUR_AI_URL = 'https://ai-api-blur-staging.up.railway.app'
 $env:BATCH_BETA_VERSION = '1.0.6-beta.1'
 npm run dist:blur-beta
 ```
@@ -78,6 +78,6 @@ Run `npm test`, `npm run lint`, and `npm run build` in `desktop/`. From the repo
 
 A packaged candidate still uses production Supabase for sign-in and feedback; packaged environment overrides cannot redirect it. Until the feedback migration is separately authorized and applied there, verify feedback only through a development app/service configured for local Supabase. Do not claim packaged feedback works from local evidence.
 
-Before distribution, test the candidate on a clean Windows VM and a dedicated existing **direct-installer** profile: sign-in, settings and rollback history, disabled updates, staging analysis with a test-only key entered after install, key/path redaction, ordinary offline batching under existing subscription rules, and reinstalling the current public installer without data loss. Never use an unapproved candidate on a Store-installed client.
+Before distribution, test the candidate on a clean Windows VM or separate clean Windows account on the test laptop, and on a dedicated existing **direct-installer** profile: sign-in, settings and rollback history, disabled updates, staging analysis with a test-only key entered after install, key/path redaction, and ordinary offline batching under existing subscription rules. The NSIS beta retains the public app/protocol identity; never install it over the current Store user's profile. Verify rollback and data preservation only when a matching current public direct installer is available; until then, leave rollback open.
 
 Applying the production migration, issuing real tester keys, and distributing the installer require separate final authorization. Beta examples alone do not complete the held-out model evaluation task.
