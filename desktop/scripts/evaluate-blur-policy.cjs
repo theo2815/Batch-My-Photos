@@ -25,16 +25,20 @@ const classes = blur.CLASS_NAMES.filter(name => name !== 'sharp');
 
 async function classify(jpeg) {
   const form = new FormData();
-  form.append('file', new Blob([jpeg], { type: 'image/jpeg' }), 'image.jpg');
+  form.append('files', new Blob([jpeg], { type: 'image/jpeg' }), '0');
   const headers = {};
   if (process.env.BATCH_BLUR_AI_API_KEY) headers['X-API-Key'] = process.env.BATCH_BLUR_AI_API_KEY;
-  const response = await fetch(`${process.env.BATCH_BLUR_AI_URL.replace(/\/+$/, '')}/api/v1/blur/classify`, {
+  const response = await fetch(`${process.env.BATCH_BLUR_AI_URL.replace(/\/+$/, '')}/api/v1/blur/classify/stream`, {
     method: 'POST', headers, body: form,
   });
   if (!response.ok) throw new Error('classification failed');
-  const envelope = await response.json();
-  if (envelope?.success !== true) throw new Error('classification failed');
-  return envelope.data;
+  const lines = (await response.text()).trim().split(/\r?\n/);
+  if (lines.length !== 2) throw new Error('incomplete classification stream');
+  const [row, summary] = lines.map(line => JSON.parse(line));
+  if (row?.index !== 0 || row.filename !== '0' || !blur.validClassification(row) ||
+      summary?._summary !== true || summary.complete !== true || summary.total !== 1 ||
+      summary.successful !== 1 || summary.errors !== 0) throw new Error('incomplete classification stream');
+  return row;
 }
 
 async function evaluate(records, classifyImage = classify, customCategories = []) {
