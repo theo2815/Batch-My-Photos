@@ -84,6 +84,55 @@ describe('beta batch safety', () => {
     expect(fs.existsSync(path.join(fixtureOutput, 'Beta_Blurry'))).toBe(false);
     expect(fs.existsSync(path.join(fixtureOutput, 'Beta_001', 'IMG.jpg'))).toBe(true);
   });
+
+  it('makes a completed move visible in History before returning its result', async () => {
+    const source = path.join(fixtureRoot, 'history-source');
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, 'HISTORY.jpg'), 'photo');
+    registerAllowedPath(source);
+
+    const history = [];
+    let saveStarted;
+    let finishSave;
+    const started = new Promise(resolve => { saveStarted = resolve; });
+    const save = new Promise(resolve => { finishSave = resolve; });
+    stubs['./rollbackManager'].saveRollbackManifest = async () => {
+      saveStarted();
+      await save;
+      history.push({ operationId: 'saved-move' });
+    };
+    stubs['./rollbackManager'].getOperationHistory = () => history;
+
+    try {
+      const handlers = new Map();
+      registerIpcHandlers({ handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {
+        batchCancelled: false,
+        resetBatchCancellation: noop,
+      });
+      const event = { sender: { send: noop } };
+      const pending = handlers.get('execute-batch')(event, {
+        folderPath: source,
+        maxFilesPerBatch: 10,
+        outputPrefix: 'History',
+        mode: 'move',
+      });
+
+      await started;
+      const first = await Promise.race([
+        pending.then(() => 'completed'),
+        new Promise(resolve => setImmediate(() => resolve('waiting'))),
+      ]);
+      expect(first).toBe('waiting');
+
+      finishSave();
+      expect((await pending).success).toBe(true);
+      expect(await handlers.get('get-operation-history')()).toEqual([{ operationId: 'saved-move' }]);
+    } finally {
+      finishSave();
+      delete stubs['./rollbackManager'].saveRollbackManifest;
+      delete stubs['./rollbackManager'].getOperationHistory;
+    }
+  });
 });
 
 describe('blur beta flag bridge', () => {

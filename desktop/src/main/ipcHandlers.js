@@ -735,10 +735,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         completedAt: new Date().toISOString(),
       };
       
-      // Save rollback manifest for successful move operations (non-blocking)
-      // Fire-and-forget: don't delay returning results to the user
+      // Save rollback manifest before the renderer refreshes History on completion.
       if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
-        rollbackManager.saveRollbackManifest({
+        await rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
