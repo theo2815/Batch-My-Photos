@@ -82,6 +82,59 @@ afterEach(() => {
 });
 
 describe('packaged beta configuration', () => {
+  it('keeps beta data in a durable isolated profile before cache moves to Temp', () => {
+    function startupPaths(manifest) {
+      const home = temporaryFolder();
+      const appData = path.join(home, 'AppData', 'Roaming');
+      const temp = path.join(home, 'Temp');
+      fs.mkdirSync(appData, { recursive: true });
+      let currentAppData = appData;
+      let explicitUserData;
+      let userDataAtServiceImport;
+      const app = {
+        setAsDefaultProtocolClient() {},
+        getPath(name) {
+          if (name === 'appData') return currentAppData;
+          if (name === 'userData') return explicitUserData || path.join(currentAppData, 'batchmyphotos');
+          throw new Error(`Unexpected path: ${name}`);
+        },
+        setPath(name, value) {
+          if (!fs.existsSync(value)) throw new Error('Path must exist before setPath');
+          if (name === 'userData') explicitUserData = value;
+          if (name === 'cache') currentAppData = value;
+        },
+      };
+      const reachedCache = new Error('reached cache setup');
+      const startupLogger = { ...logger, log(message) {
+        if (String(message).includes('[CACHE]')) throw reachedCache;
+      } };
+      const mocks = {
+        electron: { app, ipcMain: {} }, os: { tmpdir: () => temp },
+        './src/main/constants': { UV_THREADPOOL_SIZE: 4 },
+        './src/main/config': configFor(manifest),
+        './src/main/secureStore': class {},
+        './src/main/windowManager': {}, './src/main/ipcHandlers': {},
+        './src/main/deviceService': {},
+        './src/utils/logger': startupLogger,
+      };
+      Object.defineProperty(mocks, './src/main/authService', {
+        get() { userDataAtServiceImport = app.getPath('userData'); return {}; },
+      });
+      expect(() => load('main.js', mocks, { process: {
+        defaultApp: false, env: {}, argv: [], resourcesPath: temporaryFolder(),
+      } })).toThrow(reachedCache);
+      return { appData, temp, userData: app.getPath('userData'), userDataAtServiceImport };
+    }
+
+    const beta = startupPaths(validManifest);
+    expect(beta.userData).toBe(path.join(beta.appData, 'batchmyphotos-blur-beta'));
+    expect(beta.userData).not.toContain(beta.temp);
+    expect(beta.userDataAtServiceImport).toBe(beta.userData);
+
+    const publicApp = startupPaths(undefined);
+    expect(publicApp.userData).toBe(path.join(publicApp.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
+  });
+
   it.each([undefined, '{broken', 'null', '{}',
     JSON.stringify({ environment: 'production', blurApiUrl: 'https://blur.example.test' }),
     ...['http://staging.test', 'https://user:secret@staging.test', 'https://staging.test/api',

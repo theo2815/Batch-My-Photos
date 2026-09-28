@@ -34,6 +34,13 @@ if (process.defaultApp) {
 
 const fs = require('fs');
 const os = require('os');
+const config = require('./src/main/config');
+if (config.features.BLUR_BETA_ENABLED) {
+  const betaDataPath = path.join(app.getPath('appData'), 'batchmyphotos-blur-beta');
+  fs.mkdirSync(betaDataPath, { recursive: true });
+  app.setPath('userData', betaDataPath);
+}
+
 const SecureStore = require('./src/main/secureStore');
 const { createWindow, getMainWindow } = require('./src/main/windowManager');
 const { registerIpcHandlers } = require('./src/main/ipcHandlers');
