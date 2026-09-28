@@ -241,7 +241,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
  * Blur suggestions section - shows flagged groups for optional review
  */
 function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThumbnails, onImageClick }) {
-  const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, isAnalyzing, unflaggedGroups, toggleBlurFlag } = blurDetection;
+  const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag } = blurDetection;
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [blurThumbnails, setBlurThumbnails] = useState({});
@@ -336,14 +336,17 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       >
         <ScanEye size={18} className="icon-inline" />
         <span className="blurry-title">
-          {blurryCount > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
+          {analyzedCount === 0 ? 'No blur results available' : blurryCount > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
         </span>
-        {blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
+        {analyzedCount > 0 && blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
         <span className="blurry-folder-hint">Analysis does not move or exclude photos</span>
         <span className="expand-icon">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
       </button>
+      <p className="blurry-restored-note" role="status">
+        {analyzedCount} group{analyzedCount === 1 ? '' : 's'} analyzed · {unanalyzedCount} could not be analyzed.
+      </p>
 
       {expanded && blurryCount > 0 && (() => {
         // Build navigable file list once, outside the per-item loop
@@ -437,8 +440,8 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
 
       {expanded && blurryCount === 0 && (
         <div className="blurry-empty">
-          <CheckCircle size={20} />
-          <p>No blur suggestions for this analysis.</p>
+          {analyzedCount > 0 && <CheckCircle size={20} />}
+          <p>{analyzedCount > 0 ? 'No blur suggestions for this analysis.' : 'No blur results available for this analysis.'}</p>
         </div>
       )}
 

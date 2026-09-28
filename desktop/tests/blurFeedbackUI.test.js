@@ -43,7 +43,7 @@ function renderPreview(props) {
 }
 async function effects() { const pending = hooks.effects.splice(0); pending.forEach(fn => fn()); await Promise.resolve(); await Promise.resolve(); }
 function nodes(node) { return !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)]; }
-function text(node) { return typeof node === 'string' ? node : Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : ''; }
+function text(node) { return typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : ''; }
 function button(tree, label) { return nodes(tree).find(n => n.type === 'button' && text(n) === label); }
 
 const info = { 'flagged.jpg': { baseName: 'flagged', score: 0.8, predictedClass: 'motion_blurred', isBlurry: true }, 'missed.jpg': { baseName: 'missed', score: 0.1, predictedClass: 'sharp', isBlurry: false } };
@@ -186,6 +186,45 @@ describe('explicit beta feedback consent', () => {
     const notice = render(section.type, section.props);
     expect(notice.props.role).toBe('status');
     expect(text(notice)).toContain('You can still batch your photos');
+  });
+
+  it.each([
+    ['RAW-only', { RAW1: { score: -1, isBlurry: false }, RAW2: { score: -1, isBlurry: false } }, ['RAW1.CR3', 'RAW2.CR3'], 'No blur results available', '0 groups analyzed · 2 could not be analyzed'],
+    ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 groups)', '2 groups analyzed · 1 could not be analyzed'],
+    ['analyzed without suggestions', { A: { score: 0.1, isBlurry: false, analyzedFile: 'A.jpg' } }, ['A.jpg', 'A.CR3'], 'No blur suggestions', '1 group analyzed · 0 could not be analyzed'],
+  ])('shows %s coverage while preserving ordinary batch controls', async (_case, blurResults, allFiles, heading, coverage) => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate' };
+    globalThis.window.electronAPI.analyzeBlur = vi.fn().mockResolvedValue({ success: true, blurResults, totalAnalyzed: 999 });
+    await render(useBlurDetection, p).runBlurAnalysis();
+    const blurDetection = render(useBlurDetection, p);
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: allFiles.length, allFiles }], outputPrefix: 'Batch', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection });
+    const section = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const advisory = render(section.type, section.props);
+    expect(text(advisory)).toContain(heading);
+    expect(nodes(advisory).find(n => n.props.role === 'status' && text(n).includes(coverage))).toBeDefined();
+    expect(text(tree)).toContain(`${allFiles.length} files`);
+    const batchButton = nodes(tree).find(n => n.type === 'button' && n.props.className?.includes('batch-header'));
+    expect(batchButton).toBeDefined();
+    expect(batchButton.props.onClick).toBeTypeOf('function');
+    if (_case === 'RAW-only') expect(text(advisory)).not.toContain('No blur suggestions');
+  });
+
+  it('keeps service failure distinct from per-group unknown results', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate' };
+    globalThis.window.electronAPI.analyzeBlur = vi.fn().mockResolvedValue({ success: false, aiUnavailable: true });
+    await render(useBlurDetection, p).runBlurAnalysis();
+    const blurDetection = render(useBlurDetection, p);
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.CR3'] }], outputPrefix: 'Batch', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection });
+    const section = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = []; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const advisory = render(section.type, section.props);
+    expect(text(advisory)).toContain('Blur analysis is unavailable');
+    expect(text(advisory)).not.toContain('could not be analyzed');
+    expect(text(advisory)).toContain('You can still batch your photos');
+    expect(text(tree)).toContain('1 files');
   });
 
   it('clears labels at reanalysis and folder reset, including an unavailable AI response', async () => {

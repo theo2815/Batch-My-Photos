@@ -100,6 +100,12 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   const blurryCount = blurryGroups.length;
 
+  const { analyzedCount, unanalyzedCount } = useMemo(() => {
+    const results = Object.values(blurResults || {});
+    const analyzedCount = results.filter(result => result.score >= 0).length;
+    return { analyzedCount, unanalyzedCount: results.length - analyzedCount };
+  }, [blurResults]);
+
   // Derived: ETA for blur analysis based on progress and elapsed time
   const blurEta = useMemo(() => {
     if (!blurProgress || !analysisStartTimeRef.current) return null;
@@ -233,6 +239,8 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     isAnalyzing,
     blurryGroups,
     blurryCount,
+    analyzedCount,
+    unanalyzedCount,
     unflaggedGroups,
     aiUnavailable,
     runBlurAnalysis,
