@@ -855,4 +855,8 @@ module.exports = {
   getCachedBlurResult,
   prepareImageForUpload,
   computeBlurScore,
+  mapClassification,
+  validClassification,
+  SENSITIVITY_TO_THRESHOLD,
+  CLASS_NAMES,
 };
