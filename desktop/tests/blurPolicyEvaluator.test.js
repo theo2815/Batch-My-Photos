@@ -39,6 +39,67 @@ describe('desktop blur policy evaluator', () => {
     }
   });
 
+  it('classifies prepared JPEG through the desktop stream route', async () => {
+    const image = path.join(folder, 'stream.jpg');
+    fs.writeFileSync(image, await sharp({ create: {
+      width: 8, height: 6, channels: 3, background: '#777777',
+    } }).jpeg().toBuffer());
+    const previousUrl = process.env.BATCH_BLUR_AI_URL;
+    process.env.BATCH_BLUR_AI_URL = 'http://127.0.0.1:9/';
+    const fetch = vi.fn(async (url, { method, body }) => {
+      expect(url).toBe('http://127.0.0.1:9/api/v1/blur/classify/stream');
+      expect(method).toBe('POST');
+      expect(body.getAll('files')).toHaveLength(1);
+      expect(body.get('files').name).toBe('0');
+      expect(body.get('files').type).toBe('image/jpeg');
+      return new Response([
+        JSON.stringify({ index: 0, filename: '0', predicted_class: 'sharp', confidence: 1,
+          probabilities: { sharp: 1, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0 } }),
+        JSON.stringify({ _summary: true, total: 1, successful: 1, errors: 0, complete: true }),
+      ].join('\n') + '\n', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const report = await evaluate([{ file: image, label: 'sharp' }]);
+      expect(report).toMatchObject({ total: 1, unknown: 0, complete: true });
+      expect(report.server.correct).toBe(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousUrl === undefined) delete process.env.BATCH_BLUR_AI_URL;
+      else process.env.BATCH_BLUR_AI_URL = previousUrl;
+    }
+  });
+
+  it.each([
+    ['missing summary', [{ index: 0, filename: '0', predicted_class: 'sharp', confidence: 1,
+      probabilities: { sharp: 1, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0 } }]],
+    ['incomplete summary', [{ index: 0, filename: '0', predicted_class: 'sharp', confidence: 1,
+      probabilities: { sharp: 1, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0 } },
+    { _summary: true, total: 1, successful: 1, errors: 0, complete: false }]],
+    ['malformed row', [{ index: 1, filename: '1', predicted_class: 'sharp', confidence: 1,
+      probabilities: { sharp: 1, defocused_blurred: 0, defocused_object_portrait: 0, motion_blurred: 0 } },
+    { _summary: true, total: 1, successful: 1, errors: 0, complete: true }]],
+  ])('keeps %s unknown in the denominator', async (_name, lines) => {
+    const image = path.join(folder, 'incomplete.jpg');
+    fs.writeFileSync(image, await sharp({ create: {
+      width: 8, height: 6, channels: 3, background: '#777777',
+    } }).jpeg().toBuffer());
+    const previousUrl = process.env.BATCH_BLUR_AI_URL;
+    process.env.BATCH_BLUR_AI_URL = 'http://127.0.0.1:9';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(lines.map(line => JSON.stringify(line)).join('\n') + '\n',
+      { status: 200 })));
+    try {
+      const report = await evaluate([{ file: image, label: 'sharp' }]);
+      expect(report).toMatchObject({ total: 1, unknown: 1, complete: false });
+      expect(report.server.correct).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousUrl === undefined) delete process.env.BATCH_BLUR_AI_URL;
+      else process.env.BATCH_BLUR_AI_URL = previousUrl;
+    }
+  });
+
   it('does not count another blur category as a false blurry sharp photo', async () => {
     const image = path.join(folder, 'cross-class.jpg');
     fs.writeFileSync(image, await sharp({ create: {
