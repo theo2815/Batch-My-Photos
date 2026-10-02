@@ -130,8 +130,8 @@ describe('desktop blur policy evaluator', () => {
       width: 8, height: 6, channels: 3, background: '#777777',
     } }).png().toBuffer());
     const classify = vi.fn()
-      .mockResolvedValueOnce({ predicted_class: 'sharp', confidence: 0.6, probabilities: {
-        sharp: 0.6, defocused_blurred: 0.4, defocused_object_portrait: 0, motion_blurred: 0,
+      .mockResolvedValueOnce({ predicted_class: 'sharp', confidence: 0.85, probabilities: {
+        sharp: 0.85, defocused_blurred: 0.15, defocused_object_portrait: 0, motion_blurred: 0,
       } })
       .mockRejectedValueOnce(new Error('secret local path'));
     const report = await evaluate([

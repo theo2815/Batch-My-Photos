@@ -14,12 +14,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
 
 // ============================================================================
 // RE-IMPLEMENT PURE LOGIC (must match blurDetectionService.js)
 // ============================================================================
 
-const SENSITIVITY_TO_THRESHOLD = { strict: 0.30, moderate: 0.45, lenient: 0.65 };
+const SENSITIVITY_TO_THRESHOLD = { strict: 0.10, moderate: 0.20, lenient: 0.45 };
 const SHARP_CLASS = 'sharp';
 
 function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
@@ -67,7 +68,13 @@ function probs({ sharp = 0, defocused_blurred = 0, defocused_object_portrait = 0
 // ============================================================================
 
 describe('mapClassification', () => {
-  const MODERATE = SENSITIVITY_TO_THRESHOLD.moderate; // 0.45
+  it('mirrors the service thresholds', () => {
+    const src = fs.readFileSync(new URL('../src/main/blurDetectionService.js', import.meta.url), 'utf8');
+    const m = src.match(/SENSITIVITY_TO_THRESHOLD = \{ strict: ([\d.]+), moderate: ([\d.]+), lenient: ([\d.]+) \}/);
+    expect(m && m.slice(1).map(Number)).toEqual(Object.values(SENSITIVITY_TO_THRESHOLD));
+  });
+
+  const MODERATE = SENSITIVITY_TO_THRESHOLD.moderate; // 0.20
 
   it('flags a clearly sharp image as not blurry', () => {
     const data = {
@@ -101,9 +108,9 @@ describe('mapClassification', () => {
       confidence: 0.6,
       probabilities: probs({ sharp: 0.6, defocused_blurred: 0.4 }),
     };
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.moderate, null, 'f').isBlurry).toBe(false); // 0.40 < 0.45
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.strict, null, 'f').isBlurry).toBe(true);    // 0.40 >= 0.30
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.lenient, null, 'f').isBlurry).toBe(false);  // 0.40 < 0.65
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.moderate, null, 'f').isBlurry).toBe(true);  // 0.40 >= 0.20
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.strict, null, 'f').isBlurry).toBe(true);    // 0.40 >= 0.10
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.lenient, null, 'f').isBlurry).toBe(false);  // 0.40 < 0.45
   });
 
   it('respects the category filter — passing threshold but wrong class is not flagged', () => {
