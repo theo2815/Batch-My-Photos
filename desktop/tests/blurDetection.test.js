@@ -20,7 +20,7 @@ import fs from 'node:fs';
 // RE-IMPLEMENT PURE LOGIC (must match blurDetectionService.js)
 // ============================================================================
 
-const SENSITIVITY_TO_THRESHOLD = { strict: 0.10, moderate: 0.20, lenient: 0.45 };
+const SENSITIVITY_TO_THRESHOLD = { strict: 0.60, moderate: 0.70, lenient: 0.90 };
 const SHARP_CLASS = 'sharp';
 
 function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
@@ -102,15 +102,15 @@ describe('mapClassification', () => {
   });
 
   it('gates on the sensitivity threshold (same image, different sensitivity)', () => {
-    // best non-sharp probability = 0.40
+    // best non-sharp probability = 0.80
     const data = {
       predicted_class: 'sharp',
-      confidence: 0.6,
-      probabilities: probs({ sharp: 0.6, defocused_blurred: 0.4 }),
+      confidence: 0.8,
+      probabilities: probs({ sharp: 0.2, defocused_blurred: 0.8 }),
     };
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.moderate, null, 'f').isBlurry).toBe(true);  // 0.40 >= 0.20
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.strict, null, 'f').isBlurry).toBe(true);    // 0.40 >= 0.10
-    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.lenient, null, 'f').isBlurry).toBe(false);  // 0.40 < 0.45
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.moderate, null, 'f').isBlurry).toBe(true);  // 0.80 >= 0.70
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.strict, null, 'f').isBlurry).toBe(true);    // 0.80 >= 0.60
+    expect(mapClassification(data, SENSITIVITY_TO_THRESHOLD.lenient, null, 'f').isBlurry).toBe(false);  // 0.80 < 0.90
   });
 
   it('respects the category filter — passing threshold but wrong class is not flagged', () => {

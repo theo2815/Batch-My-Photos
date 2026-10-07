@@ -264,7 +264,7 @@ async function runPool(items, concurrency, fn) {
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile, confidence, predictedClass, bestBlurClass, bestBlurProbability }
  * @throws {Error} If the ai-api classifier is unavailable or returns an error
  */
-const SENSITIVITY_TO_THRESHOLD = { strict: 0.10, moderate: 0.20, lenient: 0.45 };
+const SENSITIVITY_TO_THRESHOLD = { strict: 0.60, moderate: 0.70, lenient: 0.90 };
 
 // The non-blur class in the trained 4-class model.
 const SHARP_CLASS = 'sharp';
