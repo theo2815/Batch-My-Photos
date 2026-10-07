@@ -74,7 +74,7 @@ describe('mapClassification', () => {
     expect(m && m.slice(1).map(Number)).toEqual(Object.values(SENSITIVITY_TO_THRESHOLD));
   });
 
-  const MODERATE = SENSITIVITY_TO_THRESHOLD.moderate; // 0.20
+  const MODERATE = SENSITIVITY_TO_THRESHOLD.moderate; // 0.70
 
   it('flags a clearly sharp image as not blurry', () => {
     const data = {
