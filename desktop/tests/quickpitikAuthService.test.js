@@ -143,9 +143,24 @@ describe('connect', () => {
     expect(win.focus).toHaveBeenCalled();
     expect(qp.getStatus()).toEqual({ connected: true, email: 'p@test.local', name: 'P' });
 
+    // The same link again: refused without a server call, and without a
+    // failure message on top of the success the photographer already saw.
     await qp.completeConnect(CODE, state);
-    expect(sent().at(-1).success).toBe(false);
+    expect(sent()).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('the same link delivered twice at once sends one exchange and one result', async () => {
+    const { state } = await connect();
+    let resolveFetch;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveFetch = resolve; }));
+    const first = qp.completeConnect(CODE, state);
+    const second = qp.completeConnect(CODE, state);
+    resolveFetch(pair('a1', 'r1'));
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent()).toEqual([{ success: true, email: 'p@test.local', name: 'P' }]);
   });
 
   it('a 401 from the exchange shows the expired-link message and stores nothing', async () => {

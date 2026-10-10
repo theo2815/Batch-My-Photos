@@ -31,6 +31,9 @@ const BASE64URL_43 = /^[A-Za-z0-9_-]{43}$/
 // The one Connect the browser has not answered yet: { state, verifier, createdAt }
 let _pending = null
 
+// True while a connect code is being exchanged for tokens
+let _exchanging = false
+
 // Prevent concurrent refresh attempts from racing
 let _refreshPromise = null
 
@@ -125,7 +128,15 @@ function sendConnectResult(result) {
  * @param {string|null} state - Must be the state of the newest Connect
  */
 async function completeConnect(code, state) {
+  // The browser can deliver one link twice. The exchange already running
+  // answers for both; a second one would fail and overwrite its success.
+  if (_exchanging) return
   const pending = _pending
+  if (!pending && getStatus().connected) {
+    // A repeat of a link that already connected: no failure on top of the success
+    logger.warn('⚠️ [QP-AUTH] Connect callback ignored: already connected')
+    return
+  }
   if (!pending
     || Date.now() - pending.createdAt > QP_CONNECT_PENDING_TTL_MS
     || state !== pending.state
@@ -137,6 +148,7 @@ async function completeConnect(code, state) {
   }
 
   let data
+  _exchanging = true
   try {
     ({ data } = await request(`${API_URL}/auth/desktop/exchange`, {
       method: 'POST',
@@ -150,6 +162,8 @@ async function completeConnect(code, state) {
     }
     sendConnectResult({ success: false, error })
     return
+  } finally {
+    _exchanging = false
   }
 
   const { id, email, name, role } = data.user
