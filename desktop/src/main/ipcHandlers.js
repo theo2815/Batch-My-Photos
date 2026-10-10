@@ -2034,7 +2034,6 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   };
-  void send; // used by the upload channels added in Task 15
 
   /** Opens quickpitik.com/connect/desktop in the browser; the result arrives as a qp-connect-result event. */
   handle(ipcMain, 'qp-connect-start', async () => {
@@ -2088,6 +2087,18 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
       return { success: false, error: error instanceof qpAuth().QpApiError ? error.message : sanitizeError(error, 'qp-list-events') };
     }
   });
+
+  /** Starts the background upload; results arrive as qp-upload-progress events. */
+  handle(ipcMain, 'qp-upload-start', async (_event, request) => {
+    try {
+      return await qpUpload().startUpload(request, (payload) => send('qp-upload-progress', payload));
+    } catch (error) {
+      logger.error('❌ [IPC] qp-upload-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-upload-start') };
+    }
+  });
+
+  handle(ipcMain, 'qp-upload-cancel', async () => qpUpload().cancelUpload());
 }
 
 /**

@@ -164,4 +164,20 @@ describe('QuickPitik upload channels', () => {
     expect(answer).toEqual({ success: false, error: expect.any(String) });
     expect(answer.error).not.toContain('ENOTFOUND');
   });
+
+  it('qp-upload-start forwards progress to the window and qp-upload-cancel reaches the engine', async () => {
+    const upload = uploadMock();
+    const { handlers, win } = ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload });
+    const { api, listeners } = preloadFor(handlers);
+    expect(await api.qpUploadStart({ rootPath: 'C:/shoot', eventId: 'e1', folders: ['', 'Race A'] })).toEqual({ success: true, total: 0 });
+    expect(upload.startUpload.mock.calls[0][0]).toEqual({ rootPath: 'C:/shoot', eventId: 'e1', folders: ['', 'Race A'] });
+    expect(win.webContents.send).toHaveBeenCalledWith('qp-upload-progress', expect.objectContaining({ phase: 'done' }));
+    const received = [];
+    const stop = api.onQpUploadProgress((payload) => received.push(payload));
+    listeners.get('qp-upload-progress')({}, { phase: 'hashing' });
+    expect(received).toEqual([{ phase: 'hashing' }]);
+    stop();
+    expect(await api.qpUploadCancel()).toEqual({ success: true });
+    expect(upload.cancelUpload).toHaveBeenCalledTimes(1);
+  });
 });

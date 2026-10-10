@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Module, { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Writable } from 'node:stream';
+import EventEmitter from 'node:events';
 
 // ── Stubs (injected through Module._load so no Electron starts) ───────────────
 process.env.BATCH_QUICKPITIK_UPLOAD_ORIGIN = 'https://uploads.test'; // read by config.js at require time
@@ -213,5 +215,263 @@ describe('listEvents', () => {
     const { canUploadPublic } = service._internals;
     expect(canUploadPublic('2026-10-10', new Date('2026-10-09T15:59:59Z'))).toBe(false); // 23:59 on the 9th in Manila
     expect(canUploadPublic('2026-10-10', new Date('2026-10-09T16:00:00Z'))).toBe(true); // midnight in Manila
+  });
+});
+
+// ── Upload engine helpers ─────────────────────────────────────────────────────
+function fakeHttps(statusFor = () => 200) {
+  const puts = [];
+  httpsMock.request.mockImplementation((url, options, onResponse) => {
+    const chunks = [];
+    const request = new Writable({ write(chunk, _encoding, callback) { chunks.push(chunk); callback(); } });
+    request.on('finish', () => {
+      puts.push({ url: String(url), options, body: Buffer.concat(chunks) });
+      const response = new EventEmitter();
+      response.statusCode = statusFor(puts.length);
+      response.resume = () => setImmediate(() => response.emit('end'));
+      onResponse(response);
+    });
+    return request;
+  });
+  return puts;
+}
+function routes(table) {
+  authStub.authorizedFetch.mockImplementation(async (p, init = {}) => {
+    const key = p.endsWith('/photos/exists') ? 'exists' : p.endsWith('/direct/commit') ? 'commit' : p.endsWith('/direct') ? 'begin' : 'multipart';
+    if (!table[key]) throw new Error(`unexpected ${key} call`);
+    return { data: await table[key](init.body, p, init) };
+  });
+}
+function calls(key) {
+  const suffix = { exists: '/photos/exists', commit: '/direct/commit', begin: '/direct', multipart: '/photos' }[key];
+  return authStub.authorizedFetch.mock.calls.filter(([p]) => p.endsWith(suffix));
+}
+const future = () => new Date(Date.now() + 600000).toISOString();
+function directTable(overrides = {}) {
+  return {
+    exists: async ({ hashes }) => ({ results: hashes.map(hash => ({ hash, status: 'new', eventName: null })) }),
+    begin: async (body) => ({ mode: 'direct', photoId: `photo-${body.contentHash.slice(0, 8)}`, key: `k/${body.contentHash}`,
+      uploadUrl: `https://uploads.test/${body.contentHash}`, expiresAt: future(), uploadHeaders: { 'Content-Type': body.contentType } }),
+    commit: async (body) => ({ id: body.photoId }),
+    ...overrides,
+  };
+}
+async function untilSettled(events) {
+  for (let i = 0; i < 400 && !['done', 'cancelled', 'error'].includes(events.at(-1)?.phase); i++) await new Promise(r => setTimeout(r, 5));
+  return events.at(-1);
+}
+async function run(root, folders, eventId = 'event-1') {
+  const events = [];
+  const started = await service.startUpload({ rootPath: root, eventId, folders }, (payload) => events.push(payload));
+  return { started, events, finished: () => untilSettled(events) };
+}
+const netError = (code) => Object.assign(new Error(code), { code });
+
+describe('upload engine', () => {
+  beforeEach(() => { service._internals.sleep = async () => {}; });
+
+  it('sha256File matches a known digest', async () => {
+    const file = write(tempRoot('qp-hash-'), 'hello.jpg', 'hello');
+    expect(await service.sha256File(file)).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+  });
+
+  it('refuses an empty selection, an unregistered folder and a path that escapes the root', async () => { // Review Focus 4
+    const root = tempRoot('qp-empty-'); write(root, 'Race/IMG_1.CR2'); registerAllowedPath(root);
+    expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: [] }, () => {})).toEqual({ success: false, error: 'Nothing to upload.' });
+    expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: ['Race'] }, () => {})).toEqual({ success: false, error: 'Nothing to upload.' });
+    expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: ['../x'] }, () => {})).toEqual({ success: false, error: 'Invalid upload request.' });
+    const other = tempRoot('qp-unregistered-upload-'); write(other, 'a.jpg');
+    expect(await service.startUpload({ rootPath: other, eventId: 'e', folders: [''] }, () => {})).toEqual({ success: false, error: 'Access denied: folder not selected through dialog' });
+  });
+
+  it('sends the original file name unchanged through begin, PUT and commit', async () => { // Review Focus 2
+    const root = tempRoot('qp-one-'); const name = 'Race (1) #2 café.jpg'; write(root, name, 'photo-bytes'); registerAllowedPath(root);
+    routes(directTable()); const puts = fakeHttps();
+    const { started, finished } = await run(root, ['']);
+    expect(started).toEqual({ success: true, total: 1 });
+    const last = await finished();
+    expect(last.phase).toBe('done');
+    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, failed: 0, total: 1 });
+    expect(last.bytes).toEqual({ sent: 11, total: 11 });
+    expect(last.failures).toEqual([]);
+    const hash = await service.sha256File(path.join(root, name));
+    expect(calls('exists')[0][1].body).toEqual({ hashes: [hash] });
+    const beginBody = calls('begin')[0][1].body;
+    expect(beginBody).toEqual({ contentHash: hash, contentType: 'image/jpeg', sizeBytes: 11, originalFilename: name, requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+    expect(beginBody).not.toHaveProperty('client');
+    expect(puts).toHaveLength(1);
+    expect(puts[0].url).toBe(`https://uploads.test/${hash}`);
+    expect(puts[0].options).toEqual({ method: 'PUT', headers: { 'Content-Type': 'image/jpeg', 'Content-Length': 11 } });
+    expect(puts[0].body.toString()).toBe('photo-bytes');
+    expect(calls('commit')[0][1]).toMatchObject({ timeoutMs: 120000, body: { photoId: `photo-${hash.slice(0, 8)}`, key: `k/${hash}`, contentHash: hash, sizeBytes: 11, contentType: 'image/jpeg' } });
+  });
+
+  it('counts a repeat of the same bytes as already there instead of failing', async () => { // Review Focus 3
+    const root = tempRoot('qp-dup-'); write(root, 'A/same.jpg', 'same-bytes'); write(root, 'B/same.jpg', 'same-bytes'); write(root, 'B/other.jpg', 'other'); registerAllowedPath(root);
+    const stored = new Set();
+    routes(directTable({
+      exists: async ({ hashes }) => ({ results: hashes.map(hash => ({ hash, status: stored.has(hash) ? 'same_event' : 'new', eventName: null })) }),
+      commit: async (body) => { stored.add(body.contentHash); return { id: body.photoId }; },
+    }));
+    const puts = fakeHttps();
+    const last = await (await run(root, ['A', 'B'])).finished();
+    expect(last.phase).toBe('done');
+    expect(last.counts).toEqual({ uploaded: 2, alreadyThere: 1, failed: 0, total: 3 });
+    expect(puts).toHaveLength(2);
+    expect(last.bytes.sent).toBe(last.bytes.total);
+  });
+
+  it('a begin that answers existing counts as already there', async () => {
+    const root = tempRoot('qp-existing-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable({ begin: async () => ({ mode: 'existing', existing: { id: 'p1' } }) }));
+    const puts = fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(0);
+    expect(last.counts).toEqual({ uploaded: 0, alreadyThere: 1, failed: 0, total: 1 });
+  });
+
+  it('rejects an upload link on another origin without sending bytes', async () => {
+    const root = tempRoot('qp-origin-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable({ begin: async () => ({ mode: 'direct', photoId: 'p', key: 'k', uploadUrl: 'https://elsewhere.test/k', expiresAt: future(), uploadHeaders: {} }) }));
+    const puts = fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(0);
+    expect(last.phase).toBe('done');
+    expect(last.failures).toEqual([{ relPath: '', name: 'a.jpg', code: 'UPLOAD_LINK_REJECTED', message: expect.any(String), retryable: false }]);
+  });
+
+  it('treats UPLOAD_IN_PROGRESS on commit as a wait, not a failure', async () => {
+    const root = tempRoot('qp-busy-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let commits = 0;
+    routes(directTable({ commit: async (body) => { if (++commits < 3) throw new QpApiError({ status: 409, code: 'UPLOAD_IN_PROGRESS', message: 'verifying' }); return { id: body.photoId }; } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(commits).toBe(3);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+  });
+
+  it('retries a server error with backoff and gives up after three retries per phase', async () => {
+    const root = tempRoot('qp-5xx-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    const waits = []; service._internals.sleep = async (ms) => { waits.push(ms); };
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'down', retryAfterSeconds: 2 }); } }));
+    const last = await (await run(root, [''])).finished();
+    expect(calls('begin')).toHaveLength(4);
+    expect(waits).toHaveLength(3);
+    expect(waits.every(ms => ms >= 2000)).toBe(true);
+    expect(last.failures[0]).toMatchObject({ code: 'SERVICE_UNAVAILABLE', retryable: true });
+  });
+
+  it('a lost PUT reply is reconciled by commit before bytes are sent again', async () => {
+    const root = tempRoot('qp-lost-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable());
+    const puts = fakeHttps((n) => (n === 1 ? 502 : 200));
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(1);
+    expect(calls('commit')).toHaveLength(1);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+  });
+
+  it('PUTs again when storage has nothing after a failed PUT', async () => {
+    const root = tempRoot('qp-missing-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let commits = 0;
+    routes(directTable({ commit: async (body) => { if (++commits === 1) throw new QpApiError({ status: 409, code: 'UPLOAD_OBJECT_MISSING', message: 'nothing stored' }); return { id: body.photoId }; } }));
+    const puts = fakeHttps((n) => (n === 1 ? 502 : 200));
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(2);
+    expect(commits).toBe(2);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+    expect(last.bytes.sent).toBe(1);
+  });
+
+  it('a terminal event error stops the whole upload', async () => {
+    const root = tempRoot('qp-event-'); for (let i = 0; i < 6; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'Upload window for this event has closed.' }); } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('error');
+    expect(last.error).toEqual({ code: 'EVENT_NOT_UPLOADABLE', message: 'Upload window for this event has closed.' });
+    expect(calls('begin').length).toBeLessThanOrEqual(4); // the four in flight; a fifth file never started
+    expect(calls('commit')).toHaveLength(0);
+  });
+
+  it('a per-file terminal error records the failure and continues', async () => {
+    const root = tempRoot('qp-perfile-'); write(root, 'bad.jpg', 'bad'); write(root, 'good.jpg', 'good'); registerAllowedPath(root);
+    const table = directTable(); const begin = table.begin;
+    routes({ ...table, begin: async (body) => { if (body.originalFilename === 'bad.jpg') throw new QpApiError({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.' }); return begin(body); } });
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('done');
+    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, failed: 1, total: 2 });
+    expect(last.failures).toEqual([{ relPath: '', name: 'bad.jpg', code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.', retryable: false }]);
+  });
+
+  it('cancel stops after the files in flight and reports what finished', async () => {
+    const root = tempRoot('qp-cancel-'); for (let i = 0; i < 8; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    let commits = 0;
+    routes(directTable({ commit: async (body) => { if (++commits === 1) service.cancelUpload(); return { id: body.photoId }; } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('cancelled');
+    expect(last.counts.uploaded).toBeGreaterThanOrEqual(1);
+    expect(last.counts.uploaded + last.counts.failed).toBeLessThan(8);
+  });
+
+  it('falls back to multipart when begin says so', async () => {
+    const root = tempRoot('qp-multipart-'); write(root, 'a.jpg', 'multipart-bytes'); registerAllowedPath(root);
+    let form;
+    routes(directTable({ begin: async () => ({ mode: 'multipart' }), multipart: async (_body, _p, init) => { form = init.body; return { id: 'm' }; } }));
+    const puts = fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(0);
+    expect(calls('multipart')).toHaveLength(1);
+    expect(form).toBeInstanceOf(FormData);
+    expect(form.get('file')).toBeInstanceOf(Blob);
+    expect(form.get('file').name).toBe('a.jpg');
+    expect(await form.get('file').text()).toBe('multipart-bytes');
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+  });
+
+  it('a session that cannot be refreshed pauses the upload with SESSION_EXPIRED', async () => {
+    const root = tempRoot('qp-session-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable({ begin: async () => { throw new QpAuthError('Session expired'); } }));
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('error');
+    expect(last.error.code).toBe('SESSION_EXPIRED');
+  });
+
+  it('a pre-flight that keeps failing treats every file as new', async () => {
+    const root = tempRoot('qp-exists-'); write(root, 'a.jpg', 'a'); write(root, 'b.jpg', 'b'); registerAllowedPath(root);
+    routes(directTable({ exists: async () => { throw netError('ECONNRESET'); } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(calls('exists')).toHaveLength(4);
+    expect(calls('begin')).toHaveLength(2);
+    expect(last.counts).toMatchObject({ uploaded: 2, failed: 0 });
+  });
+
+  it('waits for the connection to come back instead of counting a retry', async () => {
+    const root = tempRoot('qp-offline-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let attempts = 0;
+    const table = directTable(); const begin = table.begin;
+    routes({ ...table, begin: async (body) => { if (++attempts <= 5) { online = false; throw netError('ENOTFOUND'); } return begin(body); } });
+    service._internals.sleep = async () => { online = true; };
+    fakeHttps();
+    const { events, finished } = await run(root, ['']);
+    const last = await finished();
+    expect(events.some(event => event.phase === 'waiting')).toBe(true);
+    expect(attempts).toBe(6);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+  });
+
+  it('refuses to start while another upload is running', async () => {
+    const root = tempRoot('qp-twice-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let release;
+    routes(directTable({ begin: () => new Promise(resolve => { release = () => resolve({ mode: 'multipart' }); }), multipart: async () => ({ id: 'm' }) }));
+    const first = await run(root, ['']);
+    expect(first.started.success).toBe(true);
+    expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: [''] }, () => {})).toEqual({ success: false, error: 'An upload is already running.' });
+    await vi.waitFor(() => expect(release).toBeTypeOf('function')); // begin is reached after hashing and the pre-flight
+    release();
+    expect((await first.finished()).phase).toBe('done');
   });
 });

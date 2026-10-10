@@ -49,6 +49,7 @@ const CHANNEL_TIERS = {
   'export-batch-report':    'STRICT',
   'export-history-report':  'STRICT',
   'analyze-blur':           'STRICT',
+  'qp-upload-start':         'STRICT',
   'qp-connect-start':       'STRICT',
 
   // RELAXED — lightweight reads / preference getters
@@ -72,6 +73,7 @@ const CHANNEL_TIERS = {
   'clear-rollback-manifest':'RELAXED',
   'get-quickpitik-upload-enabled': 'RELAXED',
   'qp-session-status':      'RELAXED',
+  'qp-upload-cancel':       'RELAXED',
 };
 
 // ============================================================================

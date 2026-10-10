@@ -311,6 +311,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Events the connected photographer can upload to. @returns {Promise<{ success: boolean, events?: Array, error?: string, authRejected?: boolean }>} */
   qpListEvents: () => ipcRenderer.invoke('qp-list-events'),
 
+  /**
+   * Start uploading the ticked subfolders (relPaths from qpScanFolder) to one event.
+   * Resolves at once with { success, total } or { success: false, error }; progress
+   * arrives through onQpUploadProgress.
+   */
+  qpUploadStart: ({ rootPath, eventId, folders }) => ipcRenderer.invoke('qp-upload-start', { rootPath, eventId, folders }),
+
+  /** Stop after the files in flight. @returns {Promise<{ success: boolean }>} */
+  qpUploadCancel: () => ipcRenderer.invoke('qp-upload-cancel'),
+
+  /**
+   * Listen for upload progress ({ phase, folder, file?, counts, bytes, failures?, error? }).
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onQpUploadProgress: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('qp-upload-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('qp-upload-progress', listener);
+    };
+  },
+
   // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
   // ============================================================================
