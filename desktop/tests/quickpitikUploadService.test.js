@@ -73,6 +73,7 @@ describe('classifyFile', () => {
     expect(service.classifyFile('a.HEIC')).toEqual({ kind: 'heic' });
     expect(service.classifyFile('a.txt')).toEqual({ kind: 'other' });
     expect(service.classifyFile('noext')).toEqual({ kind: 'other' });
+    expect(service.classifyFile('a.constructor')).toEqual({ kind: 'other' });
     expect(service.classifyFile('.DS_Store')).toBeNull();
     expect(service.classifyFile('Thumbs.db')).toBeNull();
   });
@@ -87,7 +88,10 @@ describe('scanFolder', () => {
   it('refuses a folder that was not registered', async () => { // Review Focus 1
     const root = tempRoot('qp-unregistered-');
     write(root, 'a.jpg');
+    const readdir = vi.spyOn(fs.promises, 'readdir');
     expect(await service.scanFolder(root)).toEqual({ success: false, error: 'Access denied: folder not selected through dialog' });
+    expect(readdir).not.toHaveBeenCalled();
+    readdir.mockRestore();
   });
 
   it('walks subfolders read-only and classifies every file', async () => {
@@ -117,5 +121,35 @@ describe('scanFolder', () => {
     ]);
     expect(listing.skipped).toEqual({ raw: 1, video: 0, heic: 0, oversize: 0, other: 0 });
     expect(listing.subdirs).toEqual(['sub']);
+  });
+
+  it('keeps the rest of a folder when one file cannot be read', async () => {
+    const root = tempRoot('qp-stat-');
+    write(root, 'Sub/a.jpg'); write(root, 'Sub/gone.jpg'); write(root, 'Sub/Deeper/c.jpg');
+    registerAllowedPath(root);
+    const realStat = fs.promises.stat;
+    const stat = vi.spyOn(fs.promises, 'stat').mockImplementation((file, ...rest) => (path.basename(String(file)) === 'gone.jpg'
+      ? Promise.reject(Object.assign(new Error('gone'), { code: 'ENOENT' })) : realStat(file, ...rest)));
+    const result = await service.scanFolder(root);
+    stat.mockRestore();
+    const byPath = Object.fromEntries(result.folders.map(folder => [folder.relPath, folder]));
+    expect(byPath.Sub).toMatchObject({ uploadable: { count: 1, bytes: 1 }, skipped: { raw: 0, video: 0, heic: 0, oversize: 0, other: 1 } });
+    expect(byPath['Sub/Deeper']).toMatchObject({ uploadable: { count: 1, bytes: 1 } });
+  });
+
+  it('fails plainly when the dropped path itself cannot be listed', async () => {
+    const root = tempRoot('qp-notdir-');
+    const file = write(root, 'a.jpg');
+    registerAllowedPath(root);
+    expect(await service.scanFolder(file)).toEqual({ success: false, error: 'Could not read this folder.' });
+  });
+
+  it('lists folders in name order and unticks only names that end in _Blurry', async () => {
+    const root = tempRoot('qp-order-');
+    for (const rel of ['b/a.jpg', 'a/a.jpg', 'a/z/a.jpg', 'Blurry_keep/a.jpg', 'x_blurry/a.jpg', 'x_Blurry2/a.jpg']) write(root, rel);
+    registerAllowedPath(root);
+    const { folders } = await service.scanFolder(root);
+    expect(folders.map(folder => [folder.relPath, folder.defaultSelected])).toEqual(
+      [['a', true], ['a/z', true], ['b', true], ['Blurry_keep', true], ['x_blurry', false], ['x_Blurry2', true]]);
   });
 });

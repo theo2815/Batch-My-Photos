@@ -18,6 +18,7 @@ const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const { STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH } = require('./constants');
 
 const ACCESS_DENIED = 'Access denied: folder not selected through dialog';
+const UNREADABLE = 'Could not read this folder.';
 
 // What the backend accepts (storage.direct-upload accepted types) …
 const UPLOADABLE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
@@ -28,7 +29,8 @@ const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'mts', 'm2ts']);
 const HEIC_EXTENSIONS = new Set(['heic', 'heif']);
 
 const emptySkipped = () => ({ raw: 0, video: 0, heic: 0, oversize: 0, other: 0 });
-const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const collator = new Intl.Collator(undefined, { numeric: true });
+const byName = (a, b) => collator.compare(a.name, b.name);
 
 // ── Classification and the read-only walk ─────────────────────────────────────
 
@@ -42,7 +44,7 @@ function classifyFile(name, sizeBytes = 0) {
   if (lower.startsWith('.') || IGNORED_FILES.has(lower)) return null;
   const dot = lower.lastIndexOf('.');
   const ext = dot > 0 ? lower.slice(dot + 1) : '';
-  if (UPLOADABLE_TYPES[ext]) {
+  if (Object.hasOwn(UPLOADABLE_TYPES, ext)) {
     return sizeBytes > QP_MAX_FILE_BYTES ? { kind: 'oversize' } : { kind: 'uploadable', contentType: UPLOADABLE_TYPES[ext] };
   }
   if (RAW_EXTENSIONS.has(ext)) return { kind: 'raw' };
@@ -76,13 +78,20 @@ async function listFolder(dir) {
     if (!entry.isFile()) continue;
     const kind = classifyFile(entry.name);
     if (!kind) continue;
-    if (kind.kind === 'uploadable') candidates.push({ name: entry.name, contentType: kind.contentType });
+    if (kind.kind === 'uploadable') candidates.push(entry.name);
     else skipped[kind.kind] += 1;
   }
-  await runPool(candidates, STAT_CONCURRENCY, async (candidate) => {
-    const { size } = await fsPromises.stat(path.join(dir, candidate.name));
-    if (size > QP_MAX_FILE_BYTES) skipped.oversize += 1;
-    else files.push({ name: candidate.name, sizeBytes: size, contentType: candidate.contentType });
+  await runPool(candidates, STAT_CONCURRENCY, async (name) => {
+    let size;
+    try {
+      ({ size } = await fsPromises.stat(path.join(dir, name)));
+    } catch {
+      skipped.other += 1; // gone or unreadable since readdir: skip the file, keep the folder
+      return;
+    }
+    const kind = classifyFile(name, size);
+    if (kind.kind === 'uploadable') files.push({ name, sizeBytes: size, contentType: kind.contentType });
+    else skipped.oversize += 1;
   });
   files.sort(byName);
   return { files, skipped, subdirs };
@@ -109,6 +118,7 @@ async function scanFolder(rootPath) {
       listing = await listFolder(dir);
     } catch (error) {
       logger.warn('⚠️ [QP-UPLOAD] Skipping unreadable folder:', dir, error.code);
+      if (depth === 0) return { success: false, error: UNREADABLE };
       continue;
     }
     const name = relPath === '' ? path.basename(root) : path.basename(relPath);

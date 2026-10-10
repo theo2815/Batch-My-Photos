@@ -136,4 +136,11 @@ describe('QuickPitik upload channels', () => {
     expect(await api.qpScanFolder('C:/shoot')).toMatchObject({ success: true, root: 'C:/shoot' });
     expect(upload.scanFolder).toHaveBeenCalledWith('C:/shoot');
   });
+
+  it('qp-scan-folder turns a thrown scan error into a plain failure', async () => {
+    const upload = uploadMock();
+    upload.scanFolder.mockRejectedValue(new Error('disk gone'));
+    const { handlers } = ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload });
+    expect(await handlers.get('qp-scan-folder')({}, 'C:/shoot')).toMatchObject({ success: false, error: expect.any(String) });
+  });
 });
