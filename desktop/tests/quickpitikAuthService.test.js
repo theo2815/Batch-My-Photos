@@ -88,14 +88,16 @@ describe('connect', () => {
     const [exchangeUrl, init] = fetchMock.mock.calls[0];
     expect(exchangeUrl).toBe('http://api.test/api/v1/auth/desktop/exchange');
     expect(init.headers.Authorization).toBeUndefined();
+    expect(init.headers['Content-Type']).toBe('application/json');
     const body = bodyOf(fetchMock.mock.calls[0]);
     expect(body.code).toBe(CODE);
+    expect(body.codeVerifier).not.toBe(state);
     expect(base64url(sha256(body.codeVerifier))).toBe(challenge);
   });
 
   it('completeConnect refuses a callback before any Connect without calling the server', async () => {
     await qp.completeConnect(CODE, 's'.repeat(43));
-    expect(sent()).toEqual([{ success: false, error: expect.any(String) }]);
+    expect(sent()).toEqual([{ success: false, error: 'This connect link is not valid. Press Connect in BatchMyPhotos again.' }]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(memory.size).toBe(0);
   });
@@ -179,6 +181,13 @@ describe('connect', () => {
     expect(sent().at(-1)).toEqual({ success: false, error: 'Try again shortly.' });
   });
 
+  it('an unreachable server during the exchange shows the connection message', async () => {
+    const { state } = await connect();
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
+    await qp.completeConnect(CODE, state);
+    expect(sent().at(-1)).toEqual({ success: false, error: 'Could not reach QuickPitik. Check your connection and press Connect again.' });
+  });
+
   it('a 200 whose body cannot be read is a failed connect, not a crash', async () => {
     const { state } = await connect();
     fetchMock.mockResolvedValue({ ...json(200, null), json: async () => { throw new SyntaxError('bad json'); } });
@@ -228,6 +237,22 @@ describe('refreshAccessToken', () => {
     fetchMock.mockResolvedValue(json(401, { success: false, errors: [{ code: 'INVALID_REFRESH_TOKEN', message: 'x' }] }));
     expect(await qp.refreshAccessToken()).toEqual({ refreshed: false, authRejected: true });
     expect(memory.size).toBe(0);
+  });
+
+  it('a second refresh after the first has finished calls the server again', async () => {
+    memory.set('refresh_token', 'r1');
+    fetchMock.mockResolvedValueOnce(pair('a2', 'r2')).mockResolvedValueOnce(pair('a3', 'r3'));
+    await qp.refreshAccessToken();
+    expect(await qp.refreshAccessToken()).toEqual({ refreshed: true, accessToken: 'a3' });
+    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({ refreshToken: 'r2' });
+  });
+
+  it('a busy server during refresh keeps the session', async () => {
+    memory.set('access_token', 'a1');
+    memory.set('refresh_token', 'r1');
+    fetchMock.mockResolvedValue(json(503, { success: false, errors: [{ code: 'SERVICE_UNAVAILABLE', message: 'x' }] }));
+    expect(await qp.refreshAccessToken()).toEqual({ refreshed: false });
+    expect(Object.fromEntries(memory)).toEqual({ access_token: 'a1', refresh_token: 'r1' });
   });
 
   it('a network failure during refresh keeps the session', async () => {
@@ -296,6 +321,21 @@ describe('authorizedFetch', () => {
     expect(memory.size).toBe(0);
   });
 
+  it('authorizedFetch throws QpAuthError when the server refuses the renewed token too', async () => {
+    memory.set('access_token', 'a1');
+    memory.set('refresh_token', 'r1');
+    const refused = json(401, { success: false, errors: [{ code: 'TOKEN_EXPIRED', message: 'x' }] });
+    fetchMock.mockResolvedValueOnce(refused).mockResolvedValueOnce(pair('a2', 'r2')).mockResolvedValueOnce(refused);
+    await expect(qp.authorizedFetch('/x')).rejects.toBeInstanceOf(qp.QpAuthError);
+  });
+
+  it('a call that gets no answer is given up after its timeout', async () => {
+    fetchMock.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+    await expect(qp.fetchJson('http://api.test/x', { timeoutMs: 10 })).rejects.toThrow('aborted');
+  });
+
   it('authorizedFetch keeps the session and throws a retryable error when the refresh cannot reach the server', async () => {
     memory.set('access_token', 'a1');
     memory.set('refresh_token', 'r1');
@@ -339,5 +379,17 @@ describe('disconnect', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/api/v1/auth/logout');
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({ refreshToken: 'r1' });
+  });
+
+  it('disconnect forgets the session at once, without waiting for the server', async () => {
+    memory.set('refresh_token', 'r1');
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const outcome = await Promise.race([
+      qp.disconnect().then(() => 'done'),
+      new Promise(resolve => setTimeout(() => resolve('still waiting'), 50)),
+    ]);
+    expect(outcome).toBe('done');
+    expect(memory.size).toBe(0);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/api/v1/auth/logout');
   });
 });

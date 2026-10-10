@@ -18,8 +18,8 @@ function load(file, mocks = {}, overrides = {}) {
   }, { filename });
   return module.exports;
 }
-const config = { isDevelopment: true, isProduction: false, features: { QUICKPITIK_UPLOAD_ENABLED: true }, urls: {}, limits: {} };
-function ipcFor(services = {}) {
+const baseConfig = { isDevelopment: true, isProduction: false, features: { QUICKPITIK_UPLOAD_ENABLED: true }, urls: {}, limits: {} };
+function ipcFor(services = {}, config = { ...baseConfig }) {
   const handlers = new Map();
   const win = { isDestroyed: () => false, webContents: { send: vi.fn() } };
   const electron = { app: { getVersion: () => '1.0.6' }, net: { fetch: async () => ({ ok: false }) }, dialog: {}, shell: {} };
@@ -47,7 +47,7 @@ function preloadFor(handlers) {
     ipcRenderer: {
       invoke: (name, ...args) => handlers.get(name)({}, ...args),
       on: (channel, fn) => listeners.set(channel, fn),
-      removeListener: (channel) => listeners.delete(channel),
+      removeListener: (channel, fn) => { if (listeners.get(channel) === fn) listeners.delete(channel); },
     },
   } });
   return { api, listeners };
@@ -101,6 +101,13 @@ describe('QuickPitik connect channels', () => {
   it('limits Connect to the strict tier, because every call opens a browser tab', () => {
     const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
     expect(limiter.CHANNEL_TIERS['qp-connect-start']).toBe('STRICT');
+  });
+
+  it('registers no QuickPitik channel while the feature flag is off', () => {
+    const { handlers } = ipcFor({ './quickpitikAuthService': authMock() },
+      { ...baseConfig, features: { QUICKPITIK_UPLOAD_ENABLED: false } });
+    expect([...handlers.keys()].filter(name => name.startsWith('qp-'))).toEqual([]);
+    expect(handlers.has('get-quickpitik-upload-enabled')).toBe(true);
   });
 
   it('delivers qp-connect-result events to the renderer callback and cleans up', () => {

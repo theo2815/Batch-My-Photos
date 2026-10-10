@@ -140,7 +140,7 @@ async function completeConnect(code, state) {
   if (!pending
     || Date.now() - pending.createdAt > QP_CONNECT_PENDING_TTL_MS
     || state !== pending.state
-    || !BASE64URL_43.test(code) || !BASE64URL_43.test(state)) {
+    || !BASE64URL_43.test(code)) {
     // _pending stays as it is: a stale link must not cancel a fresh Connect
     logger.warn('⚠️ [QP-AUTH] Connect callback refused')
     sendConnectResult({ success: false, error: 'This connect link is not valid. Press Connect in BatchMyPhotos again.' })
@@ -171,7 +171,7 @@ async function completeConnect(code, state) {
   store.set('refresh_token', data.refreshToken)
   store.set('user_profile', { id, email, name, role })
   if (_pending === pending) _pending = null
-  logger.log(`✅ [QP-AUTH] Connected as ${email}`)
+  logger.log('✅ [QP-AUTH] Connected')
   sendConnectResult({ success: true, email, name })
 
   const win = getMainWindow()
@@ -266,7 +266,15 @@ async function authorizedFetch(path, init = {}) {
   }
 
   const result = await refreshAccessToken()
-  if (result.refreshed) return call(result.accessToken)
+  if (result.refreshed) {
+    try {
+      return await call(result.accessToken)
+    } catch (err) {
+      // Refused even with a token minted a moment ago: one refresh could not repair it
+      if (err instanceof QpApiError && err.status === 401) throw new QpAuthError('QuickPitik sign-in expired')
+      throw err
+    }
+  }
   if (result.authRejected) throw new QpAuthError('QuickPitik sign-in expired')
   // The refresh could not be completed (offline, server busy) but the session
   // is intact: no status, so callers treat it as retryable, not as signed out.
@@ -278,24 +286,21 @@ async function authorizedFetch(path, init = {}) {
 // ============================================================================
 
 /**
- * Sign out of QuickPitik: tell the server (best effort), then forget the
- * session locally whatever the server said.
+ * Sign out of QuickPitik: forget the session locally at once, and tell the
+ * server in the background (best effort, so a dead network cannot hold the
+ * Disconnect button for the length of the timeout).
  */
 async function disconnect() {
   const refreshToken = store.get('refresh_token', null)
-  if (refreshToken) {
-    const accessToken = store.get('access_token', null)
-    try {
-      await request(`${API_URL}/auth/logout`, {
-        method: 'POST',
-        body: { refreshToken },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      })
-    } catch (err) {
-      logger.warn(`⚠️ [QP-AUTH] Logout request failed: ${err.message}`)
-    }
-  }
+  const accessToken = store.get('access_token', null)
   clearSession()
+  if (refreshToken) {
+    request(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      body: { refreshToken },
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    }).catch(err => logger.warn(`⚠️ [QP-AUTH] Logout request failed: ${err.message}`))
+  }
 }
 
 function clearSession() {

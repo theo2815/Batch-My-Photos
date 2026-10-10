@@ -2027,6 +2027,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
  * Electron `net` (the vm-based tests load this file with stub services).
  */
 function registerQuickPitikHandlers(ipcMain, getMainWindow) {
+  if (!config.features.QUICKPITIK_UPLOAD_ENABLED) return;
   const qpAuth = () => require('./quickpitikAuthService');
   const send = (channel, payload) => {
     const win = getMainWindow();

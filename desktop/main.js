@@ -115,12 +115,13 @@ const appState = {
  * to prevent forged deep links from injecting invalid tokens.
  */
 async function handleDeepLink(url) {
-  logger.log('[DEEP-LINK] Received URL:', url);
+  // Without the query: it carries a login token or a one-time connect code
+  logger.log('[DEEP-LINK] Received URL:', String(url).split('?')[0]);
 
   try {
     const parsed = new URL(url);
 
-    if (parsed.hostname === 'quickpitik' && parsed.pathname === '/callback') {
+    if (config.features.QUICKPITIK_UPLOAD_ENABLED && parsed.hostname === 'quickpitik' && parsed.pathname === '/callback') {
       try {
         const quickpitikAuthService = require('./src/main/quickpitikAuthService');
         await quickpitikAuthService.completeConnect(parsed.searchParams.get('code'), parsed.searchParams.get('state'));
