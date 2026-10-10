@@ -60,7 +60,7 @@ BatchMyPhotos/
 │   ├── main/                # ── Main process modules ──
 │   │   ├── config.js        # Feature flags, env detection, limits (env overridable)
 │   │   ├── constants.js     # Performance tuning numbers (concurrency, chunk sizes)
-│   │   ├── ipcHandlers.js   # All IPC handler registration (6 groups)
+│   │   ├── ipcHandlers.js   # All IPC handler registration (7 groups)
 │   │   ├── batchEngine.js   # Core algorithm: grouping, sorting, bin-packing
 │   │   ├── batchExecutor.js # Shared file-move/copy engine (3 strategies)
 │   │   ├── exifService.js   # EXIF date extraction with caching
@@ -157,7 +157,7 @@ Defined in `src/constants/appStates.js`:
 
 ## 4. IPC Channel Map
 
-All IPC communication flows through `preload.js` → `ipcHandlers.js`. The handlers are organized into 6 groups:
+All IPC communication flows through `preload.js` → `ipcHandlers.js`. The handlers are organized into 7 groups:
 
 ### Group 1: Folder Selection & Registration
 
@@ -222,13 +222,13 @@ Contract: monorepo `docs/desktop-upload-integration-guide.md`. Tokens stay in th
 | Channel                         | Direction            | Purpose                                                   |
 | ------------------------------- | -------------------- | --------------------------------------------------------- |
 | `get-quickpitik-upload-enabled` | invoke               | Whether to show the Upload view                           |
-| `qp-connect-start`              | invoke               | Open quickpitik.com/connect/desktop in the browser        |
+| `qp-connect-start`              | invoke               | Open `QUICKPITIK_WEB_URL` + `/connect/desktop` in the browser |
 | `qp-session-status`             | invoke               | `{ connected, email, name }`                              |
 | `qp-disconnect`                 | invoke               | Best-effort logout, clear the `quickpitik-session` store  |
 | `qp-list-events`                | invoke               | Events open for upload (public window + own events)       |
 | `qp-scan-folder`                | invoke               | Read-only walk of a registered folder → per-subfolder sums |
 | `qp-upload-start`               | invoke               | Start the background upload (one subfolder at a time)     |
-| `qp-upload-cancel`              | invoke               | Stop after the files in flight                            |
+| `qp-upload-cancel`              | invoke               | Stop now: no new file starts, files in flight are aborted |
 | `qp-connect-result`             | send (main→renderer) | Result of the `batchmyphotos://quickpitik/callback` link  |
 | `qp-upload-progress`            | send (main→renderer) | `{ phase, folder, file?, counts, bytes, failures?, error? }` |
 
@@ -334,7 +334,7 @@ Requires Electron `app` module. Supports `process.env` overrides (prefix: `BATCH
 | `limits.MAX_PRESETS`                 | `BATCH_MAX_PRESETS`          | 20      | Preset storage cap         |
 | `limits.MAX_FILES_PER_BATCH_CEILING` | —                            | 10000   | DoS prevention             |
 | `features.QUICKPITIK_UPLOAD_ENABLED` | `BATCH_QUICKPITIK_UPLOAD_ENABLED` | `false` | Upload view (always off when packaged) |
-| `urls.QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_QUICKPITIK_*` | prod values / `''` | QuickPitik API, website, storage origin (source runs only) |
+| `urls.QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_QUICKPITIK_*` | localhost from source, production when packaged; origin `''` | QuickPitik API, website, storage origin (env overrides apply to source runs only) |
 
 All config objects are `Object.freeze()`d to prevent accidental mutation.
 
