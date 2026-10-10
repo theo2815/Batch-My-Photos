@@ -2075,6 +2075,19 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
       return { success: false, error: sanitizeError(error, 'qp-scan-folder') };
     }
   });
+
+  /** Events open for upload: public (race day + 3 days) plus the photographer's own. */
+  handle(ipcMain, 'qp-list-events', async () => {
+    try {
+      return { success: true, events: await qpUpload().listEvents() };
+    } catch (error) {
+      if (error instanceof qpAuth().QpAuthError) {
+        return { success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' };
+      }
+      logger.error('❌ [IPC] qp-list-events failed:', error);
+      return { success: false, error: error instanceof qpAuth().QpApiError ? error.message : sanitizeError(error, 'qp-list-events') };
+    }
+  });
 }
 
 /**

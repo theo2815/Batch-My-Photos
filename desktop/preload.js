@@ -308,6 +308,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Read-only scan of a dropped shoot folder (register it with selectFolder or registerDroppedFolder first). */
   qpScanFolder: (folderPath) => ipcRenderer.invoke('qp-scan-folder', folderPath),
 
+  /** Events the connected photographer can upload to. @returns {Promise<{ success: boolean, events?: Array, error?: string, authRejected?: boolean }>} */
+  qpListEvents: () => ipcRenderer.invoke('qp-list-events'),
+
   // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
   // ============================================================================

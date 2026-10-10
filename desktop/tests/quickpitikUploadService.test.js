@@ -153,3 +153,45 @@ describe('scanFolder', () => {
       [['a', true], ['a/z', true], ['b', true], ['Blurry_keep', true], ['x_blurry', false], ['x_Blurry2', true]]);
   });
 });
+
+describe('listEvents', () => {
+  const now = new Date('2026-10-10T12:00:00+08:00');
+
+  it('applies the public upload window: race day through the third day after, Manila time', () => {
+    const { canUploadPublic } = service._internals;
+    expect(canUploadPublic('2026-10-11', now)).toBe(false);
+    expect(canUploadPublic('2026-10-10', now)).toBe(true);
+    expect(canUploadPublic('2026-10-07', now)).toBe(true);
+    expect(canUploadPublic('2026-10-06', now)).toBe(false);
+  });
+
+  it('closes an owned event one calendar month after race day, clamped to month end', () => {
+    const { ownerCloseDate, canUploadOwned } = service._internals;
+    expect(ownerCloseDate('2026-01-31')).toBe('2026-02-28');
+    expect(ownerCloseDate('2026-12-15')).toBe('2027-01-15');
+    expect(canUploadOwned('2026-09-10', now)).toBe(true);
+    expect(canUploadOwned('2026-09-09', now)).toBe(false);
+    expect(canUploadOwned('2026-11-01', now)).toBe(true); // not run yet: the owner may stage photos ahead
+  });
+
+  it("merges the public catalog with the photographer's events, owned first, no duplicates", async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [
+      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City' },
+      { id: 'B', name: 'Old Race', date: '2026-10-01', location: 'Mandaue' },
+    ], total: 2, offset: 0, limit: 200 } });
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [
+      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', state: 'live', ownedByMe: false },
+      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', state: 'open', ownedByMe: true },
+      { id: 'D', name: 'My Old Run', date: '2026-08-01', location: 'Talisay', state: 'open', ownedByMe: true },
+    ], total: 3, offset: 0, limit: 200 } });
+
+    const events = await service.listEvents(now);
+
+    expect(authStub.fetchJson).toHaveBeenCalledWith(expect.stringMatching(/\/events\?limit=200$/));
+    expect(authStub.authorizedFetch).toHaveBeenCalledWith('/me/photographer/events?limit=200');
+    expect(events).toEqual([
+      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', ownedByMe: true, state: 'open' },
+      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live' },
+    ]);
+  });
+});

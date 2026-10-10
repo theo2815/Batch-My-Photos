@@ -143,4 +143,13 @@ describe('QuickPitik upload channels', () => {
     const { handlers } = ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload });
     expect(await handlers.get('qp-scan-folder')({}, 'C:/shoot')).toMatchObject({ success: false, error: expect.any(String) });
   });
+
+  it('qp-list-events wraps the list and turns a rejected session into authRejected', async () => {
+    const auth = authMock();
+    const upload = uploadMock();
+    const { api } = preloadFor(ipcFor({ './quickpitikAuthService': auth, './quickpitikUploadService': upload }).handlers);
+    expect(await api.qpListEvents()).toEqual({ success: true, events: [expect.objectContaining({ id: 'e1' })] });
+    upload.listEvents.mockRejectedValueOnce(new auth.QpAuthError('expired'));
+    expect(await api.qpListEvents()).toEqual({ success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' });
+  });
 });

@@ -16,6 +16,8 @@ const logger = require('../utils/logger');
 const { isPathAllowedAsync } = require('./securityManager');
 const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const { STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH } = require('./constants');
+const config = require('./config');
+const qpAuth = require('./quickpitikAuthService');
 
 const ACCESS_DENIED = 'Access denied: folder not selected through dialog';
 const UNREADABLE = 'Could not read this folder.';
@@ -146,8 +148,61 @@ async function scanFolder(rootPath) {
   return { success: true, root, folders, totals };
 }
 
+// ── Events open for upload ────────────────────────────────────────────────────
+// Same rules as the website (lib/event-catalog.ts): a public event takes
+// uploads from race day through the third day after, Manila time; the owner
+// of a photographer-created event may upload until one calendar month after
+// race day. The backend gate (PhotoUploadService.gate) still decides per upload.
+
+const MANILA_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
+const DAY_MS = 86400000;
+const PUBLIC_UPLOAD_DAYS = 4;
+
+/** Whole days from the event date to Manila-today; negative = future, 0 = race day. */
+function daysSince(dateIso, now) {
+  return Math.round((Date.parse(MANILA_DATE.format(now)) - Date.parse(dateIso)) / DAY_MS);
+}
+
+function canUploadPublic(dateIso, now = new Date()) {
+  const days = daysSince(dateIso, now);
+  return days >= 0 && days < PUBLIC_UPLOAD_DAYS;
+}
+
+/** One month after race day, clamped to the month's last day like Java's plusMonths (Jan 31 → Feb 28). */
+function ownerCloseDate(dateIso) {
+  const [y, m, d] = dateIso.split('-').map(Number);
+  const year = y + Math.floor(m / 12);
+  const month = m % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(d, lastDay))).toISOString().slice(0, 10);
+}
+
+function canUploadOwned(dateIso, now = new Date()) {
+  return daysSince(ownerCloseDate(dateIso), now) <= 0;
+}
+
+const eventRow = (event, ownedByMe, state) => ({
+  id: event.id, name: event.name, date: event.date, location: event.location, ownedByMe, state,
+});
+
+/** Events the connected photographer can upload to right now: own first, then public, no duplicates. */
+async function listEvents(now = new Date()) {
+  const { data: publicPage } = await qpAuth.fetchJson(`${config.urls.QUICKPITIK_API_URL}/events?limit=200`);
+  const { data: minePage } = await qpAuth.authorizedFetch('/me/photographer/events?limit=200');
+  const byId = new Map();
+  for (const event of minePage.items || []) {
+    const open = event.ownedByMe ? canUploadOwned(event.date, now) : canUploadPublic(event.date, now);
+    if (open) byId.set(event.id, eventRow(event, !!event.ownedByMe, event.state));
+  }
+  for (const event of publicPage.items || []) {
+    if (!byId.has(event.id) && canUploadPublic(event.date, now)) byId.set(event.id, eventRow(event, false, 'live'));
+  }
+  return [...byId.values()].sort((a, b) => (Number(b.ownedByMe) - Number(a.ownedByMe)) || b.date.localeCompare(a.date));
+}
+
 module.exports = {
   classifyFile,
   scanFolder,
-  _internals: { listFolder, runPool, ACCESS_DENIED, RAW_EXTENSIONS, VIDEO_EXTENSIONS, HEIC_EXTENSIONS },
+  listEvents,
+  _internals: { listFolder, runPool, ACCESS_DENIED, RAW_EXTENSIONS, VIDEO_EXTENSIONS, HEIC_EXTENSIONS, canUploadPublic, canUploadOwned, ownerCloseDate },
 };
