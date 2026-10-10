@@ -163,6 +163,28 @@ describe('connect', () => {
     await qp.completeConnect(CODE, state);
     expect(sent().at(-1)).toEqual({ success: false, error: 'Try again shortly.' });
   });
+
+  it('a 200 whose body cannot be read is a failed connect, not a crash', async () => {
+    const { state } = await connect();
+    fetchMock.mockResolvedValue({ ...json(200, null), json: async () => { throw new SyntaxError('bad json'); } });
+    await qp.completeConnect(CODE, state);
+    expect(sent().at(-1)).toEqual({ success: false, error: expect.any(String) });
+    expect(memory.size).toBe(0);
+  });
+
+  it('a Connect pressed while an earlier one is finishing stays valid', async () => {
+    const first = await connect();
+    let resolveFetch;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveFetch = resolve; }));
+    const finishing = qp.completeConnect(CODE, first.state);
+    const second = await connect();
+    resolveFetch(pair('a1', 'r1'));
+    await finishing;
+
+    fetchMock.mockResolvedValue(pair('a2', 'r2'));
+    await qp.completeConnect(CODE, second.state);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('refreshAccessToken', () => {

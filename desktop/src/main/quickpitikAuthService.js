@@ -72,7 +72,7 @@ async function request(url, init = {}) {
   try {
     const response = await net.fetch(url, { method: init.method || 'GET', headers, body, signal: controller.signal })
     const envelope = await response.json().catch(() => null)
-    if (!response.ok || envelope?.success === false) {
+    if (!response.ok || envelope?.success !== true) {
       const first = envelope?.errors?.[0] || {}
       const retryAfter = Number(response.headers.get('Retry-After'))
       throw new QpApiError({
@@ -82,7 +82,7 @@ async function request(url, init = {}) {
         retryAfterSeconds: retryAfter > 0 ? retryAfter : undefined,
       })
     }
-    return { data: envelope?.data, response }
+    return { data: envelope.data, response }
   } finally {
     clearTimeout(timeout)
   }
@@ -156,7 +156,7 @@ async function completeConnect(code, state) {
   store.set('access_token', data.accessToken)
   store.set('refresh_token', data.refreshToken)
   store.set('user_profile', { id, email, name, role })
-  _pending = null
+  if (_pending === pending) _pending = null
   logger.log(`✅ [QP-AUTH] Connected as ${email}`)
   sendConnectResult({ success: true, email, name })
 
