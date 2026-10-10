@@ -11,6 +11,11 @@
   gap: var(--space-lg);
 }
 
+/* The Sort view's drop zone is 500px wide; here it fills the same column as the event picker. */
+.upload-view .drop-zone {
+  max-width: none;
+}
+
 .upload-card {
   width: 100%;
   max-width: 640px;

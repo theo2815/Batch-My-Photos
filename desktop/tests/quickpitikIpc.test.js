@@ -180,4 +180,14 @@ describe('QuickPitik upload channels', () => {
     expect(await api.qpUploadCancel()).toEqual({ success: true });
     expect(upload.cancelUpload).toHaveBeenCalledTimes(1);
   });
+
+  it('opens a quickpitik.com help link, and still refuses any other site', async () => {
+    const openExternal = vi.fn(async () => {});
+    const { handlers } = ipcFor({ electron: { app: { getVersion: () => '1.0.6' }, net: {}, dialog: {}, shell: { openExternal } } });
+    const { api } = preloadFor(handlers);
+    expect(await api.openExternalUrl('https://quickpitik.com/dashboard')).toEqual({ success: true });
+    expect(openExternal).toHaveBeenCalledWith('https://quickpitik.com/dashboard');
+    expect((await api.openExternalUrl('https://quickpitik.com.evil.example/')).success).toBe(false);
+    expect(openExternal).toHaveBeenCalledTimes(1);
+  });
 });

@@ -185,6 +185,7 @@ export const STRINGS = {
   QP_FAILED_HEADING: 'Could not upload',
   QP_BTN_RETRY_FAILED: 'Retry failed',
   QP_BTN_ANOTHER_FOLDER: 'Upload another folder',
+  QP_TRY_AGAIN: 'Please wait a moment and try again.',
 };
 
 /**

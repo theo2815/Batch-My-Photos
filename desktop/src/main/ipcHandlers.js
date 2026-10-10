@@ -1848,7 +1848,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
     // Restrict to known domains for security
-    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com'];
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'quickpitik.com'];
     try {
       const parsed = new URL(url);
       const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));

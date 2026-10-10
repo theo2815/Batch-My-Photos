@@ -545,7 +545,7 @@ function App() {
                 className={`header-btn ${isProcessing ? 'disabled' : ''}`}
                 onClick={() => setShowHistoryModal(true)}
                 title="Operation History"
-                disabled={isProcessing}
+                disabled={isProcessing || uploadBusy}
               >
                 <History size={20} />
               </button>

@@ -33,7 +33,7 @@ function UploadView({ onBusyChange }) {
     <div className="upload-view">
       <div className="upload-session">
         <span className="upload-kicker">{formatString(STRINGS.QP_CONNECTED_AS, { email: qp.session?.email ?? '' })}</span>
-        <button type="button" className="upload-link" onClick={qp.disconnect}>{STRINGS.QP_BTN_DISCONNECT}</button>
+        <button type="button" className="upload-link" onClick={qp.disconnect} disabled={qp.status === 'scanning'}>{STRINGS.QP_BTN_DISCONNECT}</button>
       </div>
       <EventPicker events={qp.events} value={qp.eventId} onChange={qp.setEventId} onRefresh={qp.loadEvents} disabled={qp.status === 'scanning'} />
       {qp.status === 'reviewing' && qp.scan ? (

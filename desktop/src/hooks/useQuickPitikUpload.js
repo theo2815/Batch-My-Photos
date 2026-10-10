@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { STRINGS } from '../constants/strings';
+
+// A call the main process refuses outright (its rate limit throws) becomes a plain failure answer.
+const ask = (call) => call.catch(() => ({ success: false, error: STRINGS.QP_TRY_AGAIN }));
 
 /**
  * State machine for the QuickPitik Upload view. Owns every window.electronAPI.qp*
@@ -18,8 +22,8 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const loadEvents = useCallback(async () => {
-    const result = await window.electronAPI.qpListEvents();
-    if (result.success) { setEvents(result.events); return; }
+    const result = await ask(window.electronAPI.qpListEvents());
+    if (result.success) { setEvents(result.events); setError(null); return; }
     if (result.authRejected) { setSession(null); setStatus('disconnected'); }
     setError({ code: result.authRejected ? 'SESSION_EXPIRED' : 'EVENTS', message: result.error });
   }, []);
@@ -51,7 +55,10 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
     const stop = window.electronAPI.onQpUploadProgress((event) => {
       setProgress(event);
       if (event.phase === 'done' || event.phase === 'cancelled') setStatus('done');
-      else if (event.phase === 'error') { setError(event.error); setStatus('error'); }
+      else if (event.phase === 'error') {
+        if (event.error?.code === 'SESSION_EXPIRED') setSession(null);
+        setError(event.error); setStatus('error');
+      } else setStatus('uploading'); // also picks a running upload back up after the view was closed
     });
     return stop;
   }, []);
@@ -61,19 +68,19 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const connect = useCallback(async () => {
     setError(null);
     setStatus('connecting');
-    const result = await window.electronAPI.qpConnectStart();
+    const result = await ask(window.electronAPI.qpConnectStart());
     if (!result.success) { setError({ code: 'CONNECT', message: result.error }); setStatus('disconnected'); }
   }, []);
 
   const disconnect = useCallback(async () => {
-    await window.electronAPI.qpDisconnect();
+    await ask(window.electronAPI.qpDisconnect());
     setSession(null); setEvents([]); setEventId(''); setScan(null); setSelected([]); setProgress(null); setError(null);
     setStatus('disconnected');
   }, []);
 
   const scanPath = useCallback(async (folderPath) => {
     setStatus('scanning'); setError(null); setProgress(null);
-    const result = await window.electronAPI.qpScanFolder(folderPath);
+    const result = await ask(window.electronAPI.qpScanFolder(folderPath));
     if (!result.success) { setError({ code: 'SCAN', message: result.error }); setStatus('ready'); return; }
     setScan(result);
     setSelected(result.folders.filter(f => f.defaultSelected && f.uploadable.count > 0).map(f => f.relPath));
@@ -82,12 +89,12 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
 
   // selectFolder registers the path with securityManager before the scan.
   const chooseFolder = useCallback(async () => {
-    const folderPath = await window.electronAPI.selectFolder();
+    const folderPath = await window.electronAPI.selectFolder().catch(() => null);
     if (folderPath) await scanPath(folderPath);
   }, [scanPath]);
 
   const dropFolder = useCallback(async (folderPath) => {
-    const registered = await window.electronAPI.registerDroppedFolder(folderPath);
+    const registered = await ask(window.electronAPI.registerDroppedFolder(folderPath));
     if (!registered.success) { setError({ code: 'SCAN', message: registered.error || 'Could not open the dropped folder.' }); return; }
     await scanPath(folderPath);
   }, [scanPath]);
@@ -110,7 +117,7 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const startUpload = useCallback(async (folders = selected) => {
     if (!scan || !eventId || folders.length === 0) return;
     setError(null); setProgress(null); setStatus('uploading');
-    const result = await window.electronAPI.qpUploadStart({ rootPath: scan.root, eventId, folders });
+    const result = await ask(window.electronAPI.qpUploadStart({ rootPath: scan.root, eventId, folders }));
     if (!result.success) { setError({ code: 'UPLOAD', message: result.error }); setStatus('reviewing'); }
   }, [scan, eventId, selected]);
 
