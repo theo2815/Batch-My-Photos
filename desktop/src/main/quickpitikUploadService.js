@@ -222,7 +222,8 @@ const TERMINAL_PER_FILE = new Set(['UNSUPPORTED_MEDIA_TYPE', 'PAYLOAD_TOO_LARGE'
   'UPLOAD_KEY_MISMATCH', 'UPLOAD_REQUEST_CONFLICT', 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'UPLOAD_LINK_REJECTED', 'VALIDATION_ERROR']);
 /** Codes that mean no other photo can succeed either: the run stops. */
 const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING']);
-const OFFLINE_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED']);
+const OFFLINE_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED',
+  'ERR_NAME_NOT_RESOLVED', 'ERR_CONNECTION_REFUSED', 'ERR_ADDRESS_UNREACHABLE']);
 
 class CancelledError extends Error {
   constructor() { super('Upload cancelled'); this.name = 'CancelledError'; }
@@ -232,15 +233,27 @@ class CancelledError extends Error {
 const internals = { sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms)), now: () => Date.now() };
 
 const codeOf = (error) => (error instanceof qpAuth.QpApiError ? error.code : null);
-const isOffline = (error) => !net.isOnline() || (!!error && OFFLINE_CODES.has(error.code));
+/**
+ * The code of a network failure: Node sockets give error.code ('ECONNRESET');
+ * Electron's net.fetch gives only a message ('net::ERR_NAME_NOT_RESOLVED'),
+ * and its timeout is an AbortError.
+ */
+function netCode(error) {
+  if (!error) return null;
+  if (typeof error.code === 'string') return error.code;
+  if (error.name === 'AbortError') return 'TIMEOUT';
+  return /^net::(ERR_\w+)/.exec(error.message)?.[1] || null;
+}
+const isOffline = (error) => !net.isOnline() || OFFLINE_CODES.has(netCode(error));
 function isRetryable(error) {
   if (error instanceof qpAuth.QpApiError) {
     if (TERMINAL_PER_FILE.has(error.code)) return false;
     return error.status === undefined || error.status >= 500 || error.status === 429
       || ['UPLOAD_STORAGE_UNAVAILABLE', 'TIMEOUT', 'UPLOAD_TRANSFER_FAILED'].includes(error.code);
   }
-  // Node socket/DNS errors are plain Errors with a code and no HTTP status.
-  return !!error && typeof error.code === 'string' && error.code.startsWith('E');
+  // Socket, DNS and timeout errors are plain Errors with no HTTP status.
+  const code = netCode(error);
+  return code === 'TIMEOUT' || !!code?.startsWith('E');
 }
 function retryDelay(error, attempt) {
   const jittered = 1000 * 2 ** attempt * (0.8 + Math.random() * 0.4);
@@ -312,12 +325,14 @@ function putFile(uploadUrl, headers, file, onBytes, ctx, deadlineMs) {
     let settled = false;
     let stall = null;
     let request = null;
+    let source = null;
     const settle = () => {
       if (settled) return false;
       settled = true;
       clearTimeout(stall);
       clearTimeout(absolute);
       if (request) ctx.inFlight.delete(request);
+      if (source) source.destroy(); // or it reads on to the end of the file, reporting bytes nobody sends
       return true;
     };
     const fail = (error) => { if (settle()) { if (request) request.destroy(); reject(error); } };
@@ -334,7 +349,7 @@ function putFile(uploadUrl, headers, file, onBytes, ctx, deadlineMs) {
     });
     ctx.inFlight.add(request);
     request.on('error', fail);
-    const source = fs.createReadStream(file.path);
+    source = fs.createReadStream(file.path);
     source.on('error', fail);
     source.on('data', (chunk) => { resetStall(); onBytes(chunk.length); });
     resetStall();
@@ -405,7 +420,12 @@ async function uploadOne(ctx, file) {
       }, 'transfer', state, ctx, (error) => !renew && !unknown && isRetryable(error));
     } catch (error) {
       if (!renew) throw error;
-      // The grant expired and storage has nothing: start over with a fresh request id.
+      // The grant expired and storage has nothing: start over with a fresh
+      // request id, a bounded number of times (a PC clock far ahead of the
+      // server makes every grant look expired).
+      state.renewals = (state.renewals || 0) + 1;
+      if (state.renewals > QP_MAX_RETRIES_PER_PHASE) throw error;
+      ctx.addBytes(-sent);
       requestId = crypto.randomUUID();
       delete state.transfer;
       continue;
@@ -439,12 +459,22 @@ function recordFailure(ctx, folder, file, code, message, retryable) {
 }
 
 function makeContext({ eventId, plan, total, send }) {
+  let wake;
   const ctx = {
     eventId, plan, cancelled: false, stopError: null, inFlight: new Set(), failures: [], folder: null, lastEmit: 0,
+    stopped: new Promise(resolve => { wake = resolve; }),
     counts: { uploaded: 0, alreadyThere: 0, failed: 0, total },
     bytes: { sent: 0, total: plan.reduce((sum, folder) => sum + folder.files.reduce((a, f) => a + f.sizeBytes, 0), 0) },
-    assertActive() { if (ctx.cancelled) throw new CancelledError(); },
-    async sleep(ms) { await internals.sleep(ms); ctx.assertActive(); },
+    assertActive() { if (ctx.cancelled) throw ctx.stopError; },
+    /** No new file starts, waits end at once, in-flight PUTs are destroyed. The first reason wins. */
+    stop(error) {
+      if (ctx.cancelled) return;
+      ctx.cancelled = true;
+      ctx.stopError = error;
+      wake();
+      for (const request of ctx.inFlight) request.destroy(error);
+    },
+    async sleep(ms) { await Promise.race([internals.sleep(ms), ctx.stopped]); ctx.assertActive(); },
     async waitForConnection() {
       ctx.emit({ phase: 'waiting' }, true);
       do { await ctx.sleep(10000); } while (!net.isOnline());
@@ -467,12 +497,15 @@ async function runUpload(ctx) {
       const folder = ctx.plan[index];
       ctx.folder = { relPath: folder.relPath, index, count: ctx.plan.length };
       ctx.emit({ phase: 'hashing' }, true);
+      // A worker never throws: the pool then ends only when every file in
+      // flight has finished, so nothing is reported after the last event.
       await runPool(folder.files, QP_HASH_CONCURRENCY, async (file) => {
-        ctx.assertActive();
+        if (ctx.cancelled) return;
         file.path = path.join(folder.dir, file.name);
         try { file.hash = await sha256File(file.path); } catch (error) { file.readError = error; }
         ctx.emit({ phase: 'hashing' });
       });
+      ctx.assertActive();
       ctx.emit({ phase: 'checking' }, true);
       const existing = await checkExists(ctx, folder.files.filter(f => f.hash).map(f => f.hash));
       const queue = [];
@@ -485,27 +518,26 @@ async function runUpload(ctx) {
       }
       ctx.emit({ phase: 'uploading' }, true);
       await runPool(queue, QP_UPLOAD_CONCURRENCY, async (file) => {
-        ctx.assertActive();
+        if (ctx.cancelled) return;
         try {
           const outcome = await uploadOne(ctx, file);
           ctx.counts[outcome] += 1;
           if (outcome === 'alreadyThere') ctx.addBytes(file.sizeBytes);
         } catch (error) {
           if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError || TERMINAL_PER_UPLOAD.has(codeOf(error))) {
-            ctx.stopError = ctx.stopError || error;
-            ctx.cancelled = true; // the other workers stop before their next file
-            throw error;
+            ctx.stop(error); // the other workers finish the file they are on, then stop
+            return;
           }
-          recordFailure(ctx, folder, file, codeOf(error) || error.code || 'UPLOAD_FAILED', error.message, isRetryable(error));
+          recordFailure(ctx, folder, file, netCode(error) || 'UPLOAD_FAILED', error.message, isRetryable(error));
         }
         ctx.emit({ phase: 'uploading' });
       });
+      ctx.assertActive();
       ctx.emit({ phase: 'folder-done' }, true);
     }
     ctx.emit({ phase: 'done', failures: ctx.failures }, true);
   } catch (caught) {
     const error = ctx.stopError || caught;
-    for (const request of ctx.inFlight) request.destroy(new CancelledError());
     if (error instanceof CancelledError) {
       ctx.emit({ phase: 'cancelled', failures: ctx.failures }, true);
     } else if (error instanceof qpAuth.QpAuthError) {
@@ -525,6 +557,15 @@ let current = null; // one upload per process
  */
 async function startUpload(request, send) {
   if (current) return { success: false, error: 'An upload is already running.' };
+  const slot = current = { stop() {} }; // holds the place while the folders are listed
+  try {
+    return await beginUpload(request, send);
+  } finally {
+    if (current === slot) current = null;
+  }
+}
+
+async function beginUpload(request, send) {
   const { rootPath, eventId, folders } = request || {};
   if (typeof rootPath !== 'string' || typeof eventId !== 'string' || !Array.isArray(folders)
       || folders.some(rel => typeof rel !== 'string' || rel.split('/').includes('..') || path.isAbsolute(rel))) {
@@ -549,8 +590,7 @@ async function startUpload(request, send) {
 /** Cooperative cancel: no new file starts, in-flight PUTs are destroyed, the summary reports what finished. */
 function cancelUpload() {
   if (!current) return { success: false };
-  current.cancelled = true;
-  for (const request of current.inFlight) request.destroy(new CancelledError());
+  current.stop(new CancelledError());
   return { success: true };
 }
 

@@ -268,7 +268,7 @@ async function run(root, folders, eventId = 'event-1') {
 const netError = (code) => Object.assign(new Error(code), { code });
 
 describe('upload engine', () => {
-  beforeEach(() => { service._internals.sleep = async () => {}; });
+  beforeEach(() => { service._internals.sleep = async () => {}; service._internals.now = () => Date.now(); });
 
   it('sha256File matches a known digest', async () => {
     const file = write(tempRoot('qp-hash-'), 'hello.jpg', 'hello');
@@ -473,5 +473,113 @@ describe('upload engine', () => {
     await vi.waitFor(() => expect(release).toBeTypeOf('function')); // begin is reached after hashing and the pre-flight
     release();
     expect((await first.finished()).phase).toBe('done');
+  });
+
+  // ── Found by the Task 15 review ──
+  const pause = (ms) => new Promise(r => setTimeout(r, ms));
+  const everyEventPasses = () => { let t = Date.now(); service._internals.now = () => (t += 1000); }; // defeats the progress throttle
+
+  it("retries Electron's own network errors and timeouts, and waits when the server name does not resolve", async () => {
+    const root = tempRoot('qp-neterr-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let begins = 0; let commits = 0;
+    const table = directTable(); const begin = table.begin;
+    routes({ ...table,
+      begin: async (body) => { begins += 1; if (begins === 1) throw new Error('net::ERR_NAME_NOT_RESOLVED'); if (begins === 2) throw new Error('net::ERR_EMPTY_RESPONSE'); return begin(body); },
+      commit: async (body) => { if (++commits === 1) throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError', code: 20 }); return { id: body.photoId }; } });
+    fakeHttps();
+    const { events, finished } = await run(root, ['']);
+    const last = await finished();
+    expect(events.some(event => event.phase === 'waiting')).toBe(true);
+    expect([begins, commits]).toEqual([3, 2]);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+  });
+
+  it('a call that keeps timing out fails as a retryable TIMEOUT', async () => {
+    const root = tempRoot('qp-abort-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable({ begin: async () => { throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError', code: 20 }); } }));
+    const last = await (await run(root, [''])).finished();
+    expect(calls('begin')).toHaveLength(4);
+    expect(last.failures).toEqual([{ relPath: '', name: 'a.jpg', code: 'TIMEOUT', message: expect.any(String), retryable: true }]);
+  });
+
+  it('gives up on a photo whose upload link keeps expiring', async () => {
+    const root = tempRoot('qp-renew-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable({
+      begin: async (body) => ({ mode: 'direct', photoId: 'p', key: 'k', uploadUrl: `https://uploads.test/${body.contentHash}`, expiresAt: new Date(Date.now() - 1000).toISOString(), uploadHeaders: {} }),
+      commit: async () => { throw new QpApiError({ status: 409, code: 'UPLOAD_OBJECT_MISSING', message: 'nothing stored' }); },
+    }));
+    fakeHttps(() => 502);
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('done');
+    expect(calls('begin')).toHaveLength(4);
+    expect(last.counts).toMatchObject({ uploaded: 0, failed: 1 });
+    expect(last.bytes.sent).toBeLessThanOrEqual(last.bytes.total);
+  });
+
+  it('accepts only one of two starts made at the same moment', async () => {
+    const root = tempRoot('qp-race-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable()); fakeHttps();
+    const events = [];
+    const answers = await Promise.all([1, 2].map(() => service.startUpload({ rootPath: root, eventId: 'e', folders: [''] }, (payload) => events.push(payload))));
+    expect(answers.filter(answer => answer.success)).toHaveLength(1);
+    expect(answers.find(answer => !answer.success)).toEqual({ success: false, error: 'An upload is already running.' });
+    await untilSettled(events);
+  });
+
+  it('the last event waits for the photos in flight and counts them', async () => {
+    const root = tempRoot('qp-final-'); for (let i = 0; i < 4; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    let committing = 0;
+    const table = directTable(); const begin = table.begin;
+    routes({ ...table,
+      begin: async (body) => {
+        if (body.originalFilename !== 'p0.jpg') return begin(body);
+        while (committing < 3) await pause(2);
+        throw new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'closed' });
+      },
+      commit: async (body) => { committing += 1; await pause(30); return { id: body.photoId }; } });
+    fakeHttps();
+    const { events, finished } = await run(root, ['']);
+    const last = await finished();
+    await pause(60);
+    expect(events.at(-1)).toBe(last);
+    expect(last.phase).toBe('error');
+    expect(last.counts).toMatchObject({ uploaded: 3, failed: 0 });
+  });
+
+  it('stops reading a photo once its upload is cancelled', async () => {
+    const root = tempRoot('qp-stopread-'); write(root, 'big.jpg', Buffer.alloc(1024 * 1024)); registerAllowedPath(root);
+    routes(directTable());
+    httpsMock.request.mockImplementation(() => new Writable({ write(_chunk, _encoding, callback) { service.cancelUpload(); setTimeout(callback, 5); } }));
+    everyEventPasses();
+    const { events, finished } = await run(root, ['']);
+    const last = await finished();
+    await pause(100);
+    expect(last.phase).toBe('cancelled');
+    expect(events.at(-1)).toBe(last);
+  });
+
+  it('sends nothing after the cancelled event when cancel arrives during hashing', async () => {
+    const root = tempRoot('qp-hashcancel-'); for (let i = 0; i < 8; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    routes(directTable()); fakeHttps();
+    everyEventPasses();
+    const real = fs.createReadStream;
+    const spy = vi.spyOn(fs, 'createReadStream').mockImplementation((...args) => { service.cancelUpload(); return real(...args); });
+    const { events, finished } = await run(root, ['']);
+    const last = await finished();
+    await pause(50);
+    spy.mockRestore();
+    expect(last.phase).toBe('cancelled');
+    expect(events.at(-1)).toBe(last);
+  });
+
+  it('cancel is seen at once during a retry wait', async () => {
+    const root = tempRoot('qp-sleepcancel-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let sleeping; const asleep = new Promise(resolve => { sleeping = resolve; });
+    service._internals.sleep = () => { sleeping(); return new Promise(() => {}); };
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'down', retryAfterSeconds: 300 }); } }));
+    const { finished } = await run(root, ['']);
+    await asleep;
+    service.cancelUpload();
+    expect((await finished()).phase).toBe('cancelled');
   });
 });
