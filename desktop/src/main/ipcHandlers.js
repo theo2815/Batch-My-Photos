@@ -2029,6 +2029,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   if (!config.features.QUICKPITIK_UPLOAD_ENABLED) return;
   const qpAuth = () => require('./quickpitikAuthService');
+  const qpUpload = () => require('./quickpitikUploadService');
   const send = (channel, payload) => {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -2062,6 +2063,16 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
     } catch (error) {
       logger.error('❌ [IPC] qp-disconnect failed:', error);
       return { success: false, error: sanitizeError(error, 'qp-disconnect') };
+    }
+  });
+
+  /** Read-only walk of a dropped folder; the path must have been registered through the dialog or a drop. */
+  handle(ipcMain, 'qp-scan-folder', async (_event, folderPath) => {
+    try {
+      return await qpUpload().scanFolder(folderPath);
+    } catch (error) {
+      logger.error('❌ [IPC] qp-scan-folder failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-scan-folder') };
     }
   });
 }

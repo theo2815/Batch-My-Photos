@@ -305,6 +305,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
 
+  /** Read-only scan of a dropped shoot folder (register it with selectFolder or registerDroppedFolder first). */
+  qpScanFolder: (folderPath) => ipcRenderer.invoke('qp-scan-folder', folderPath),
+
   // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
   // ============================================================================

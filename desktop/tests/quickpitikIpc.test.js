@@ -60,6 +60,14 @@ function authMock() {
     QpAuthError: class QpAuthError extends Error {},
   };
 }
+function uploadMock() {
+  return {
+    scanFolder: vi.fn(async (folderPath) => ({ success: true, root: folderPath, folders: [], totals: { folders: 0, uploadable: { count: 0, bytes: 0 }, skipped: {} } })),
+    listEvents: vi.fn(async () => [{ id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', location: 'Cebu City', ownedByMe: false, state: 'live' }]),
+    startUpload: vi.fn(async (_request, send) => { send({ phase: 'done', counts: { uploaded: 0, alreadyThere: 0, failed: 0, total: 0 } }); return { success: true, total: 0 }; }),
+    cancelUpload: vi.fn(() => ({ success: true })),
+  };
+}
 
 describe('QuickPitik connect channels', () => {
   it('reach the session service through preload and expose no token', async () => {
@@ -118,5 +126,14 @@ describe('QuickPitik connect channels', () => {
     expect(received).toEqual([{ success: true, email: 'p@test.local', name: 'P' }]);
     stop();
     expect(listeners.has('qp-connect-result')).toBe(false);
+  });
+});
+
+describe('QuickPitik upload channels', () => {
+  it('qp-scan-folder passes the path to the upload service', async () => {
+    const upload = uploadMock();
+    const { api } = preloadFor(ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload }).handlers);
+    expect(await api.qpScanFolder('C:/shoot')).toMatchObject({ success: true, root: 'C:/shoot' });
+    expect(upload.scanFolder).toHaveBeenCalledWith('C:/shoot');
   });
 });
