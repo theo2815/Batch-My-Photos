@@ -89,6 +89,20 @@ describe('QuickPitik connect channels', () => {
     expect(await handlers.get('qp-connect-start')({})).toMatchObject({ success: false, error: expect.any(String) });
   });
 
+  it('answers plainly when disconnect or the status read throws', async () => {
+    const auth = authMock();
+    auth.disconnect.mockRejectedValue(new Error('disk full'));
+    auth.getStatus.mockImplementation(() => { throw new Error('store unreadable'); });
+    const { handlers } = ipcFor({ './quickpitikAuthService': auth });
+    expect(await handlers.get('qp-disconnect')({})).toMatchObject({ success: false, error: expect.any(String) });
+    expect(await handlers.get('qp-session-status')({})).toEqual({ connected: false, email: null, name: null });
+  });
+
+  it('limits Connect to the strict tier, because every call opens a browser tab', () => {
+    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
+    expect(limiter.CHANNEL_TIERS['qp-connect-start']).toBe('STRICT');
+  });
+
   it('delivers qp-connect-result events to the renderer callback and cleans up', () => {
     const { api, listeners } = preloadFor(new Map());
     const received = [];

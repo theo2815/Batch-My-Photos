@@ -49,6 +49,7 @@ const CHANNEL_TIERS = {
   'export-batch-report':    'STRICT',
   'export-history-report':  'STRICT',
   'analyze-blur':           'STRICT',
+  'qp-connect-start':       'STRICT',
 
   // RELAXED — lightweight reads / preference getters
   'get-theme':              'RELAXED',

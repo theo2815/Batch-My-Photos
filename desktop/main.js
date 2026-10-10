@@ -121,8 +121,17 @@ async function handleDeepLink(url) {
     const parsed = new URL(url);
 
     if (parsed.hostname === 'quickpitik' && parsed.pathname === '/callback') {
-      const quickpitikAuthService = require('./src/main/quickpitikAuthService');
-      await quickpitikAuthService.completeConnect(parsed.searchParams.get('code'), parsed.searchParams.get('state'));
+      try {
+        const quickpitikAuthService = require('./src/main/quickpitikAuthService');
+        await quickpitikAuthService.completeConnect(parsed.searchParams.get('code'), parsed.searchParams.get('state'));
+      } catch (err) {
+        // The renderer waits for qp-connect-result, so a crash here must still answer it.
+        logger.error('[DEEP-LINK] QuickPitik connect failed:', err.message);
+        const mainWindow = getMainWindow();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('qp-connect-result', { success: false, error: 'Could not finish connecting. Press Connect again.' });
+        }
+      }
       return;
     }
 

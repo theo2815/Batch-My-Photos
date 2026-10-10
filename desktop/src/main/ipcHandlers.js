@@ -2045,11 +2045,23 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   });
 
   /** { connected, email, name } — never a token. */
-  handle(ipcMain, 'qp-session-status', async () => qpAuth().getStatus());
+  handle(ipcMain, 'qp-session-status', async () => {
+    try {
+      return qpAuth().getStatus();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-session-status failed:', error);
+      return { connected: false, email: null, name: null };
+    }
+  });
 
   handle(ipcMain, 'qp-disconnect', async () => {
-    await qpAuth().disconnect();
-    return { success: true };
+    try {
+      await qpAuth().disconnect();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] qp-disconnect failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-disconnect') };
+    }
   });
 }
 
