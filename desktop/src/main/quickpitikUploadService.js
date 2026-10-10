@@ -191,6 +191,10 @@ async function listEvents(now = new Date()) {
   const { data: minePage } = await qpAuth.authorizedFetch('/me/photographer/events?limit=200');
   const byId = new Map();
   for (const event of minePage.items || []) {
+    // The server refuses an archived event, and an own event until an admin
+    // approves it (website: isOwnedEventLive).
+    if (event.state === 'past') continue;
+    if (event.ownedByMe && !['approved', 'change_pending'].includes(event.reviewStatus ?? 'approved')) continue;
     const open = event.ownedByMe ? canUploadOwned(event.date, now) : canUploadPublic(event.date, now);
     if (open) byId.set(event.id, eventRow(event, !!event.ownedByMe, event.state));
   }

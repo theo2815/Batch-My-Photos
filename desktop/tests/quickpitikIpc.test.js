@@ -152,4 +152,16 @@ describe('QuickPitik upload channels', () => {
     upload.listEvents.mockRejectedValueOnce(new auth.QpAuthError('expired'));
     expect(await api.qpListEvents()).toEqual({ success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' });
   });
+
+  it("qp-list-events shows the server's own message, and a plain one for anything else", async () => {
+    const auth = { ...authMock(), QpApiError: class QpApiError extends Error {} };
+    const upload = uploadMock();
+    const { handlers } = ipcFor({ './quickpitikAuthService': auth, './quickpitikUploadService': upload });
+    upload.listEvents.mockRejectedValueOnce(new auth.QpApiError('Could not reach QuickPitik to renew the sign-in.'));
+    expect(await handlers.get('qp-list-events')({})).toEqual({ success: false, error: 'Could not reach QuickPitik to renew the sign-in.' });
+    upload.listEvents.mockRejectedValueOnce(new Error('getaddrinfo ENOTFOUND api.quickpitik.com'));
+    const answer = await handlers.get('qp-list-events')({});
+    expect(answer).toEqual({ success: false, error: expect.any(String) });
+    expect(answer.error).not.toContain('ENOTFOUND');
+  });
 });

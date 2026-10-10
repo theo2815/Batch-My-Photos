@@ -194,4 +194,24 @@ describe('listEvents', () => {
       { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live' },
     ]);
   });
+
+  it('leaves out events the server would refuse: own events not approved yet, and archived ones', async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [] } });
+    const mine = (id, extra) => ({ id, name: id, date: '2026-10-09', location: 'Cebu City', state: 'open', ownedByMe: true, ...extra });
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [
+      mine('approved', { reviewStatus: 'approved' }),
+      mine('parked', { reviewStatus: 'change_pending' }),
+      mine('pending', { reviewStatus: 'pending', state: 'upcoming' }),
+      mine('rejected', { reviewStatus: 'rejected', state: 'upcoming' }),
+      mine('archived-own', { reviewStatus: 'approved', state: 'past' }),
+      mine('archived-covered', { ownedByMe: false, state: 'past' }),
+    ] } });
+    expect((await service.listEvents(now)).map(event => event.id).sort()).toEqual(['approved', 'parked']);
+  });
+
+  it('counts the day in Manila, not in UTC or on this PC', () => {
+    const { canUploadPublic } = service._internals;
+    expect(canUploadPublic('2026-10-10', new Date('2026-10-09T15:59:59Z'))).toBe(false); // 23:59 on the 9th in Manila
+    expect(canUploadPublic('2026-10-10', new Date('2026-10-09T16:00:00Z'))).toBe(true); // midnight in Manila
+  });
 });
