@@ -120,6 +120,12 @@ async function handleDeepLink(url) {
   try {
     const parsed = new URL(url);
 
+    if (parsed.hostname === 'quickpitik' && parsed.pathname === '/callback') {
+      const quickpitikAuthService = require('./src/main/quickpitikAuthService');
+      await quickpitikAuthService.completeConnect(parsed.searchParams.get('code'), parsed.searchParams.get('state'));
+      return;
+    }
+
     // Only handle auth callback path
     if (parsed.hostname !== 'auth' || parsed.pathname !== '/callback') {
       logger.warn('[DEEP-LINK] Ignoring unknown deep link path:', parsed.hostname, parsed.pathname);

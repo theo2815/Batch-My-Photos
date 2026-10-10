@@ -70,6 +70,7 @@ const CHANNEL_TIERS = {
   'cancel-batch':           'RELAXED',
   'clear-rollback-manifest':'RELAXED',
   'get-quickpitik-upload-enabled': 'RELAXED',
+  'qp-session-status':      'RELAXED',
 };
 
 // ============================================================================

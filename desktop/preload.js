@@ -280,6 +280,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // ============================================================================
+  // QUICKPITIK UPLOAD APIs (feature-flagged; tokens never reach the renderer)
+  // ============================================================================
+
+  /** Open the QuickPitik connect page in the browser. @returns {Promise<{ success: boolean, error?: string }>} */
+  qpConnectStart: () => ipcRenderer.invoke('qp-connect-start'),
+
+  /** @returns {Promise<{ connected: boolean, email: string|null, name: string|null }>} */
+  qpSessionStatus: () => ipcRenderer.invoke('qp-session-status'),
+
+  /** Sign the QuickPitik account out of this app. @returns {Promise<{ success: boolean }>} */
+  qpDisconnect: () => ipcRenderer.invoke('qp-disconnect'),
+
+  /**
+   * Listen for the browser hand-off result (batchmyphotos://quickpitik/callback).
+   * @param {Function} callback - Called with { success, email, name } or { success: false, error }
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onQpConnectResult: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('qp-connect-result', listener);
+    return () => {
+      ipcRenderer.removeListener('qp-connect-result', listener);
+    };
+  },
+
+  // ============================================================================
   // UX IMPROVEMENT FUNCTIONS
   // ============================================================================
   

@@ -70,6 +70,7 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
   registerBatchHandlers(ipcInstance, storeInstance, getMainWindow, appState);
   registerRollbackHandlers(ipcInstance, getMainWindow, appState);
   registerHistoryHandlers(ipcInstance, getMainWindow, appState);
+  registerQuickPitikHandlers(ipcInstance, getMainWindow);
 
 }
 
@@ -2011,6 +2012,44 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       logger.error('Export history report failed:', error);
       return { success: false, error: sanitizeError(error, 'export-history-report') };
     }
+  });
+}
+
+// ============================================================================
+// GROUP 11: QUICKPITIK UPLOAD — connect, scan, list events, upload
+// (feature-flagged Upload view; spec desktop/docs/superpowers/specs/
+// 2026-10-10-quickpitik-upload-workflow-design.md). Owner-approved channels.
+// ============================================================================
+
+/**
+ * The two QuickPitik services are required lazily, inside the handlers, so
+ * registering the group never opens the encrypted session store or touches
+ * Electron `net` (the vm-based tests load this file with stub services).
+ */
+function registerQuickPitikHandlers(ipcMain, getMainWindow) {
+  const qpAuth = () => require('./quickpitikAuthService');
+  const send = (channel, payload) => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  };
+  void send; // used by the upload channels added in Task 15
+
+  /** Opens quickpitik.com/connect/desktop in the browser; the result arrives as a qp-connect-result event. */
+  handle(ipcMain, 'qp-connect-start', async () => {
+    try {
+      return await qpAuth().startConnect();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-connect-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-connect-start') };
+    }
+  });
+
+  /** { connected, email, name } — never a token. */
+  handle(ipcMain, 'qp-session-status', async () => qpAuth().getStatus());
+
+  handle(ipcMain, 'qp-disconnect', async () => {
+    await qpAuth().disconnect();
+    return { success: true };
   });
 }
 
