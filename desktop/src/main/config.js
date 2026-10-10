@@ -172,6 +172,14 @@ const features = {
    * BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
    */
   BLUR_AI_API_KEY: isProduction ? '' : process.env.BATCH_BLUR_AI_API_KEY || '',
+
+  /**
+   * QuickPitik Upload view (spec: desktop/docs/superpowers/specs/
+   * 2026-10-10-quickpitik-upload-workflow-design.md). Off in every packaged
+   * build until the release that ships the feature changes this literal;
+   * source runs opt in with BATCH_QUICKPITIK_UPLOAD_ENABLED=true.
+   */
+  QUICKPITIK_UPLOAD_ENABLED: isProduction ? false : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', false),
 };
 
 // ============================================================================
@@ -214,6 +222,13 @@ const limits = {
 
 const PROD_URL = 'https://www.batchmyphotos.com'
 
+// Production storage upload origin for the QuickPitik Upload view: the host
+// every presigned upload URL must match (the website's
+// NEXT_PUBLIC_R2_UPLOAD_ORIGIN). Taken from the monorepo
+// docs/desktop-upload-integration-guide.md § 4 with the owner's go — never
+// guessed. '' means direct uploads are refused until it is filled in; the
+// packaged flag is off, so nothing reaches this value yet.
+const QUICKPITIK_PROD_UPLOAD_ORIGIN = '';
 const urls = {
   /** Supabase project base URL (no trailing slash) */
   SUPABASE_URL: (!isProduction && process.env.BATCH_SUPABASE_URL)
@@ -226,6 +241,22 @@ const urls = {
   /** Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version */
   FRONTEND_URL: (!isProduction && process.env.BATCH_FRONTEND_URL)
     || (isProduction ? PROD_URL : 'http://localhost:3000'),
+
+  // QuickPitik (the marathon marketplace — a separate account from
+  // BatchMyPhotos). Used only by the feature-flagged Upload view. Env
+  // overrides are honoured only when unpackaged, like the Supabase values.
+
+  /** QuickPitik Spring Boot API, including the /api/v1 prefix */
+  QUICKPITIK_API_URL: (!isProduction && process.env.BATCH_QUICKPITIK_API_URL)
+    || (isProduction ? 'https://api.quickpitik.com/api/v1' : 'http://localhost:8080/api/v1'),
+
+  /** QuickPitik website — hosts the /connect/desktop hand-off page */
+  QUICKPITIK_WEB_URL: (!isProduction && process.env.BATCH_QUICKPITIK_WEB_URL)
+    || (isProduction ? 'https://quickpitik.com' : 'http://localhost:3000'),
+
+  /** Origin presigned upload URLs must match; '' = direct uploads not configured */
+  QUICKPITIK_UPLOAD_ORIGIN: (!isProduction && process.env.BATCH_QUICKPITIK_UPLOAD_ORIGIN)
+    || (isProduction ? QUICKPITIK_PROD_UPLOAD_ORIGIN : ''),
 };
 
 // ============================================================================

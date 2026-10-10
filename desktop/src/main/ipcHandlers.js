@@ -1133,6 +1133,10 @@ function registerPreferenceHandlers(ipcMain, store) {
     ? { enabled: config.features.BLUR_DETECTION_ENABLED, betaEnabled: config.features.BLUR_BETA_ENABLED }
     : config.features.BLUR_DETECTION_ENABLED);
 
+  // Whether the QuickPitik Upload view is available
+  // (config.features.QUICKPITIK_UPLOAD_ENABLED; off in packaged builds).
+  handle(ipcMain, 'get-quickpitik-upload-enabled', async () => config.features.QUICKPITIK_UPLOAD_ENABLED);
+
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'
     const validThemes = ['dark', 'light'];

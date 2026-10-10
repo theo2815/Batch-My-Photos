@@ -283,6 +283,51 @@ const BLUR_AI_STREAM_TIMEOUT_MS = 210000;
 /** Longer server backoffs require a manual retry instead of holding the scan open. */
 const BLUR_AI_MAX_RETRY_WAIT_MS = 30000;
 
+// ============================================================================
+// QUICKPITIK UPLOAD (feature-flagged Upload view; spec 2026-10-10)
+// ============================================================================
+// Not env-overridable on purpose: these mirror the website upload client and
+// the backend's contract (500 hashes per pre-flight, 25 MiB per photo).
+
+/** Files in flight per subfolder (each is begin + PUT + commit). */
+const QP_UPLOAD_CONCURRENCY = 4;
+
+/** Streaming SHA-256 hashes in flight. */
+const QP_HASH_CONCURRENCY = 4;
+
+/** Hashes per POST …/photos/exists request (backend cap). */
+const QP_EXISTS_CHUNK = 500;
+
+/** Backend storage.direct-upload.max-bytes (25 MiB); larger photos are skipped. */
+const QP_MAX_FILE_BYTES = 26214400;
+
+/** How many subfolder levels the read-only walk descends below the dropped folder. */
+const QP_WALK_MAX_DEPTH = 6;
+
+/** JSON calls to the QuickPitik API. */
+const QP_API_TIMEOUT_MS = 30000;
+
+/** Commit and the multipart fallback (the server verifies the object). */
+const QP_COMMIT_TIMEOUT_MS = 120000;
+
+/** A PUT that accepts no bytes for this long is destroyed and retried. */
+const QP_PUT_STALL_MS = 120000;
+
+/** Absolute cap on one PUT, also bounded by the grant's expiresAt. */
+const QP_PUT_DEADLINE_MS = 900000;
+
+/** UPLOAD_IN_PROGRESS / 429 on commit are waits, not failures, for this long per file. */
+const QP_COMMIT_BUSY_WINDOW_MS = 600000;
+
+/** Retries per phase (begin, transfer, commit, pre-flight) for retryable errors. */
+const QP_MAX_RETRIES_PER_PHASE = 3;
+
+/** A Connect the browser has not answered within this time is forgotten. */
+const QP_CONNECT_PENDING_TTL_MS = 600000;
+
+/** Minimum gap between qp-upload-progress events. */
+const QP_PROGRESS_INTERVAL_MS = 250;
+
 module.exports = {
   UV_THREADPOOL_SIZE,
   MAX_FILE_CONCURRENCY,
@@ -316,4 +361,17 @@ module.exports = {
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,
   VERSION_CHECK_TIMEOUT_MS,
+  QP_UPLOAD_CONCURRENCY,
+  QP_HASH_CONCURRENCY,
+  QP_EXISTS_CHUNK,
+  QP_MAX_FILE_BYTES,
+  QP_WALK_MAX_DEPTH,
+  QP_API_TIMEOUT_MS,
+  QP_COMMIT_TIMEOUT_MS,
+  QP_PUT_STALL_MS,
+  QP_PUT_DEADLINE_MS,
+  QP_COMMIT_BUSY_WINDOW_MS,
+  QP_MAX_RETRIES_PER_PHASE,
+  QP_CONNECT_PENDING_TTL_MS,
+  QP_PROGRESS_INTERVAL_MS,
 };

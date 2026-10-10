@@ -69,6 +69,7 @@ const CHANNEL_TIERS = {
   'get-operation-history':  'RELAXED',
   'cancel-batch':           'RELAXED',
   'clear-rollback-manifest':'RELAXED',
+  'get-quickpitik-upload-enabled': 'RELAXED',
 };
 
 // ============================================================================
