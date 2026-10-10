@@ -222,6 +222,35 @@ describe('refreshAccessToken', () => {
     expect(await qp.refreshAccessToken()).toEqual({ refreshed: false, networkError: true });
     expect(Object.fromEntries(memory)).toEqual({ access_token: 'a1', refresh_token: 'r1' });
   });
+
+  it('a refresh that lands after disconnect does not sign back in', async () => {
+    memory.set('access_token', 'a1');
+    memory.set('refresh_token', 'r1');
+    let resolveRefresh;
+    fetchMock
+      .mockReturnValueOnce(new Promise(resolve => { resolveRefresh = resolve; }))
+      .mockResolvedValueOnce(json(200, { success: true, data: { loggedOut: true } }));
+
+    const refreshing = qp.refreshAccessToken();
+    await qp.disconnect();
+    resolveRefresh(pair('a2', 'r2'));
+
+    expect((await refreshing).refreshed).toBe(false);
+    expect(memory.size).toBe(0);
+  });
+
+  it('a late rejection of an old refresh token keeps a newer session', async () => {
+    memory.set('refresh_token', 'r1');
+    let resolveRefresh;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveRefresh = resolve; }));
+
+    const refreshing = qp.refreshAccessToken();
+    memory.set('refresh_token', 'r9');
+    resolveRefresh(json(401, { success: false, errors: [{ code: 'INVALID_REFRESH_TOKEN', message: 'x' }] }));
+    await refreshing;
+
+    expect(memory.get('refresh_token')).toBe('r9');
+  });
 });
 
 describe('authorizedFetch', () => {
@@ -250,6 +279,18 @@ describe('authorizedFetch', () => {
       .mockResolvedValueOnce(json(401, { success: false, errors: [{ code: 'INVALID_REFRESH_TOKEN', message: 'x' }] }));
     await expect(qp.authorizedFetch('/x')).rejects.toBeInstanceOf(qp.QpAuthError);
     expect(memory.size).toBe(0);
+  });
+
+  it('authorizedFetch keeps the session and throws a retryable error when the refresh cannot reach the server', async () => {
+    memory.set('access_token', 'a1');
+    memory.set('refresh_token', 'r1');
+    fetchMock
+      .mockResolvedValueOnce(json(401, { success: false, errors: [{ code: 'TOKEN_EXPIRED', message: 'x' }] }))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const error = await qp.authorizedFetch('/x').catch(e => e);
+    expect(error).toBeInstanceOf(qp.QpApiError);
+    expect(error.status).toBeUndefined();
+    expect(Object.fromEntries(memory)).toEqual({ access_token: 'a1', refresh_token: 'r1' });
   });
 
   it('authorizedFetch turns an error envelope into QpApiError with status, code, message and Retry-After', async () => {

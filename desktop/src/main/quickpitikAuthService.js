@@ -195,7 +195,7 @@ async function refreshAccessToken() {
   const refreshToken = store.get('refresh_token', null)
   if (!refreshToken) {
     logger.warn('⚠️ [QP-AUTH] No refresh token stored — cannot refresh')
-    return { refreshed: false }
+    return { refreshed: false, authRejected: true }
   }
 
   _refreshPromise = _doRefresh(refreshToken)
@@ -207,8 +207,12 @@ async function refreshAccessToken() {
 }
 
 async function _doRefresh(refreshToken) {
+  // False once a disconnect or a new Connect replaced the session this
+  // refresh was started for: a late answer must not touch the newer state.
+  const stillCurrent = () => store.get('refresh_token', null) === refreshToken
   try {
     const { data } = await request(`${API_URL}/auth/refresh`, { method: 'POST', body: { refreshToken } })
+    if (!stillCurrent()) return { refreshed: false, authRejected: true }
     // Both tokens are written here, before anyone waiting sees the result
     store.set('access_token', data.accessToken)
     store.set('refresh_token', data.refreshToken)
@@ -217,7 +221,7 @@ async function _doRefresh(refreshToken) {
     logger.warn(`⚠️ [QP-AUTH] Refresh failed: ${err.message}`)
     if (!(err instanceof QpApiError)) return { refreshed: false, networkError: true }
     if (err.status === 401 || err.code === 'INVALID_REFRESH_TOKEN') {
-      store.clear()
+      if (stillCurrent()) store.clear()
       return { refreshed: false, authRejected: true }
     }
     return { refreshed: false }
@@ -230,7 +234,7 @@ async function _doRefresh(refreshToken) {
  * @param {string} path - Relative to QUICKPITIK_API_URL, e.g. '/me/photographer/events'
  * @param {{ method?: string, body?: object|FormData, headers?: object, timeoutMs?: number }} [init]
  * @returns {Promise<{ data: any, response: Response }>}
- * @throws {QpAuthError} when there is no session or the 401 cannot be repaired
+ * @throws {QpAuthError} when there is no session or the refresh is rejected
  * @throws {QpApiError} on any other error answer
  */
 async function authorizedFetch(path, init = {}) {
@@ -248,8 +252,11 @@ async function authorizedFetch(path, init = {}) {
   }
 
   const result = await refreshAccessToken()
-  if (!result.refreshed) throw new QpAuthError('QuickPitik sign-in expired')
-  return call(result.accessToken)
+  if (result.refreshed) return call(result.accessToken)
+  if (result.authRejected) throw new QpAuthError('QuickPitik sign-in expired')
+  // The refresh could not be completed (offline, server busy) but the session
+  // is intact: no status, so callers treat it as retryable, not as signed out.
+  throw new QpApiError({ code: 'REFRESH_FAILED', message: 'Could not reach QuickPitik to renew the sign-in.' })
 }
 
 // ============================================================================
