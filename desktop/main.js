@@ -115,10 +115,26 @@ const appState = {
  * to prevent forged deep links from injecting invalid tokens.
  */
 async function handleDeepLink(url) {
-  logger.log('[DEEP-LINK] Received URL:', url);
+  // Without the query: it carries a login token or a one-time connect code
+  logger.log('[DEEP-LINK] Received URL:', String(url).split('?')[0]);
 
   try {
     const parsed = new URL(url);
+
+    if (config.features.QUICKPITIK_UPLOAD_ENABLED && parsed.hostname === 'quickpitik' && parsed.pathname === '/callback') {
+      try {
+        const quickpitikAuthService = require('./src/main/quickpitikAuthService');
+        await quickpitikAuthService.completeConnect(parsed.searchParams.get('code'), parsed.searchParams.get('state'));
+      } catch (err) {
+        // The renderer waits for qp-connect-result, so a crash here must still answer it.
+        logger.error('[DEEP-LINK] QuickPitik connect failed:', err.message);
+        const mainWindow = getMainWindow();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('qp-connect-result', { success: false, error: 'Could not finish connecting. Press Connect again.' });
+        }
+      }
+      return;
+    }
 
     // Only handle auth callback path
     if (parsed.hostname !== 'auth' || parsed.pathname !== '/callback') {

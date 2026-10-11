@@ -1,0 +1,169 @@
+/**
+ * Upload view — QuickPitik upload (feature-flagged).
+ * Paper cards, ink text, one green element per screen (the primary button).
+ */
+
+.upload-view {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* The Sort view's drop zone is 500px wide; here it fills the same column as the event picker. */
+.upload-view .drop-zone {
+  max-width: none;
+}
+
+.upload-card {
+  width: 100%;
+  max-width: 640px;
+  text-align: left;
+}
+
+.upload-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.upload-path {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.upload-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.upload-link:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.upload-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.upload-event-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.upload-event-select {
+  flex: 1;
+}
+
+.upload-muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.upload-error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.upload-folders {
+  list-style: none;
+  margin: var(--space-md) 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.upload-folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.upload-folder-row:last-child {
+  border-bottom: none;
+}
+
+.upload-folder-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.upload-folder-pick input {
+  accent-color: var(--accent-primary);
+  width: 18px;
+  height: 18px;
+}
+
+.upload-folder-name {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-folder-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.upload-folder-skipped {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.upload-counts {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.upload-failures ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0 0;
+  font-size: 0.85rem;
+}

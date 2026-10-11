@@ -70,6 +70,7 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
   registerBatchHandlers(ipcInstance, storeInstance, getMainWindow, appState);
   registerRollbackHandlers(ipcInstance, getMainWindow, appState);
   registerHistoryHandlers(ipcInstance, getMainWindow, appState);
+  registerQuickPitikHandlers(ipcInstance, getMainWindow);
 
 }
 
@@ -1133,6 +1134,10 @@ function registerPreferenceHandlers(ipcMain, store) {
     ? { enabled: config.features.BLUR_DETECTION_ENABLED, betaEnabled: config.features.BLUR_BETA_ENABLED }
     : config.features.BLUR_DETECTION_ENABLED);
 
+  // Whether the QuickPitik Upload view is available
+  // (config.features.QUICKPITIK_UPLOAD_ENABLED; off in packaged builds).
+  handle(ipcMain, 'get-quickpitik-upload-enabled', async () => config.features.QUICKPITIK_UPLOAD_ENABLED);
+
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'
     const validThemes = ['dark', 'light'];
@@ -1843,7 +1848,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
     // Restrict to known domains for security
-    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com'];
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'quickpitik.com'];
     try {
       const parsed = new URL(url);
       const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
@@ -2008,6 +2013,92 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: sanitizeError(error, 'export-history-report') };
     }
   });
+}
+
+// ============================================================================
+// GROUP 11: QUICKPITIK UPLOAD — connect, scan, list events, upload
+// (feature-flagged Upload view; spec desktop/docs/superpowers/specs/
+// 2026-10-10-quickpitik-upload-workflow-design.md). Owner-approved channels.
+// ============================================================================
+
+/**
+ * The two QuickPitik services are required lazily, inside the handlers, so
+ * registering the group never opens the encrypted session store or touches
+ * Electron `net` (the vm-based tests load this file with stub services).
+ */
+function registerQuickPitikHandlers(ipcMain, getMainWindow) {
+  if (!config.features.QUICKPITIK_UPLOAD_ENABLED) return;
+  const qpAuth = () => require('./quickpitikAuthService');
+  const qpUpload = () => require('./quickpitikUploadService');
+  const send = (channel, payload) => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  };
+
+  /** Opens quickpitik.com/connect/desktop in the browser; the result arrives as a qp-connect-result event. */
+  handle(ipcMain, 'qp-connect-start', async () => {
+    try {
+      return await qpAuth().startConnect();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-connect-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-connect-start') };
+    }
+  });
+
+  /** { connected, email, name } — never a token. */
+  handle(ipcMain, 'qp-session-status', async () => {
+    try {
+      return qpAuth().getStatus();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-session-status failed:', error);
+      return { connected: false, email: null, name: null };
+    }
+  });
+
+  handle(ipcMain, 'qp-disconnect', async () => {
+    try {
+      await qpAuth().disconnect();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] qp-disconnect failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-disconnect') };
+    }
+  });
+
+  /** Read-only walk of a dropped folder; the path must have been registered through the dialog or a drop. */
+  handle(ipcMain, 'qp-scan-folder', async (_event, folderPath) => {
+    try {
+      return await qpUpload().scanFolder(folderPath);
+    } catch (error) {
+      logger.error('❌ [IPC] qp-scan-folder failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-scan-folder') };
+    }
+  });
+
+  /** Events open for upload: public (race day + 3 days) plus the photographer's own. */
+  handle(ipcMain, 'qp-list-events', async () => {
+    try {
+      return { success: true, events: await qpUpload().listEvents() };
+    } catch (error) {
+      if (error instanceof qpAuth().QpAuthError) {
+        return { success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' };
+      }
+      logger.error('❌ [IPC] qp-list-events failed:', error);
+      return { success: false, error: error instanceof qpAuth().QpApiError ? error.message : sanitizeError(error, 'qp-list-events') };
+    }
+  });
+
+  /** Starts the background upload; results arrive as qp-upload-progress events. */
+  handle(ipcMain, 'qp-upload-start', async (_event, request) => {
+    try {
+      return await qpUpload().startUpload(request, (payload) => send('qp-upload-progress', payload));
+    } catch (error) {
+      logger.error('❌ [IPC] qp-upload-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-upload-start') };
+    }
+  });
+
+  handle(ipcMain, 'qp-upload-cancel', async () => qpUpload().cancelUpload());
 }
 
 /**

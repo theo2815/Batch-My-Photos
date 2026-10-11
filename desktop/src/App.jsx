@@ -37,6 +37,7 @@ import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModa
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
+import { UploadView } from './components/Upload';
 import BoxSpinner from './components/common/BoxSpinner';
 import { UpdateBanner } from './components/common/UpdateBanner';
 
@@ -85,6 +86,10 @@ function App() {
   } = settings;
 
   const [blurBetaEnabled, setBlurBetaEnabled] = useState(true);
+  // QuickPitik Upload view (feature-flagged). 'sort' is the app as it was.
+  const [view, setView] = useState('sort');
+  const [uploadEnabled, setUploadEnabled] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const blurDetection = useBlurDetection({
     isBeta: blurBetaEnabled,
     folderPath,
@@ -106,6 +111,12 @@ function App() {
     window.electronAPI.getBlurDetectionEnabled(true)
       .then(flags => setBlurBetaEnabled(flags?.betaEnabled !== false))
       .catch(() => setBlurBetaEnabled(true));
+  }, []);
+
+  useEffect(() => {
+    Promise.resolve(window.electronAPI.getQuickPitikUploadEnabled?.())
+      .then((enabled) => setUploadEnabled(enabled === true))
+      .catch(() => setUploadEnabled(false));
   }, []);
 
   // Device manager modal state
@@ -459,6 +470,7 @@ function App() {
   // ============================================================================
 
   const isProcessing = appState === STATES.EXECUTING || appState === STATES.SCANNING;
+  const sortView = view === 'sort';
 
   // Show loading screen while checking authentication or verifying after login
   if (authLoading || isVerifyingAuth) {
@@ -509,6 +521,12 @@ function App() {
       <header className="app-header">
         <h1><img src={appLogo} className="app-logo" alt="" /> {STRINGS.APP_TITLE}</h1>
         <p>{STRINGS.APP_SUBTITLE}</p>
+        {uploadEnabled && (
+          <div className="view-switch" role="group" aria-label="View">
+            <button type="button" aria-pressed={sortView} disabled={isProcessing || uploadBusy} onClick={() => setView('sort')}>{STRINGS.VIEW_SORT}</button>
+            <button type="button" aria-pressed={!sortView} disabled={isProcessing || uploadBusy} onClick={() => setView('upload')}>{STRINGS.VIEW_UPLOAD}</button>
+          </div>
+        )}
         <div className="header-actions">
           <ProfileDropdown
             user={user}
@@ -527,7 +545,7 @@ function App() {
                 className={`header-btn ${isProcessing ? 'disabled' : ''}`}
                 onClick={() => setShowHistoryModal(true)}
                 title="Operation History"
-                disabled={isProcessing}
+                disabled={isProcessing || uploadBusy}
               >
                 <History size={20} />
               </button>
@@ -545,7 +563,8 @@ function App() {
       </header>
 
       <main className="app-main">
-        {appState === STATES.IDLE && (
+        {!sortView && <UploadView onBusyChange={setUploadBusy} />}
+        {sortView && appState === STATES.IDLE && (
           <IdleScreen
             isDragOver={isDragOver}
             recentFolders={recentFolders}
@@ -556,8 +575,8 @@ function App() {
             onSelectRecentFolder={handleSelectRecentFolder}
           />
         )}
-        {appState === STATES.SCANNING && <ScanningCard />}
-        {appState === STATES.READY && !batchLimitExceeded && (
+        {sortView && appState === STATES.SCANNING && <ScanningCard />}
+        {sortView && appState === STATES.READY && !batchLimitExceeded && (
           <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
             <PreviewPanel
               folderPath={folderPath}
@@ -588,7 +607,7 @@ function App() {
             )}
           </div>
         )}
-        {appState === STATES.READY && batchLimitExceeded && (
+        {sortView && appState === STATES.READY && batchLimitExceeded && (
           <BatchLimitCard
             limitInfo={batchLimitExceeded}
             onUpgrade={handleUpgrade}
@@ -601,14 +620,14 @@ function App() {
             }}
           />
         )}
-        {appState === STATES.EXECUTING && (
+        {sortView && appState === STATES.EXECUTING && (
           <ExecutingCard
             progress={progress}
             isRollback={isRollingBack}
             onCancel={(isRollingBack || batchMode === 'move') ? undefined : handleCancelBatch}
           />
         )}
-        {appState === STATES.COMPLETE && undoCompleteResult && (
+        {sortView && appState === STATES.COMPLETE && undoCompleteResult && (
           <UndoCompleteCard
             undoResult={undoCompleteResult}
             onOpenFolder={async () => {
@@ -623,7 +642,7 @@ function App() {
             }}
           />
         )}
-        {appState === STATES.COMPLETE && !undoCompleteResult && (
+        {sortView && appState === STATES.COMPLETE && !undoCompleteResult && (
           <CompleteCard
             executionResults={executionResults}
             rollbackAvailable={rollbackAvailable}
@@ -639,7 +658,7 @@ function App() {
             }}
           />
         )}
-        {appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
+        {sortView && appState === STATES.ERROR && <ErrorCard error={error} onReset={handleReset} />}
       </main>
 
       <footer className="app-footer">
