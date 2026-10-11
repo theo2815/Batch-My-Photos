@@ -96,6 +96,12 @@ describe('EventPicker', () => {
     expect(row).not.toContain('1 days');
   });
 
+  it('counts the days in Manila, not in UTC', () => {
+    vi.setSystemTime(new Date('2026-10-10T16:30:00Z')); // already the 11th in Manila
+    const [row] = rows(picker({ events: [{ ...lastDay, closesOn: '2026-10-11' }] })).map(text);
+    expect(row).toContain('Uploads close today');
+  });
+
   it('clicking a row chooses that event, and the chosen row is marked pressed', () => {
     const onChange = vi.fn();
     const tree = picker({ value: 'e1', onChange });

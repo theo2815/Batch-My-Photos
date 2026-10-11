@@ -186,17 +186,6 @@
   color: var(--text-secondary);
 }
 
-/* Narrow window: the tag and the closing text move under the name. */
-@media (max-width: 520px) {
-  .upload-event-side {
-    grid-column: 2;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
-  }
-}
-
 .upload-muted {
   color: var(--text-muted);
   font-size: 0.9rem;
