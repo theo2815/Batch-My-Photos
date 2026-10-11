@@ -191,6 +191,8 @@ function canUploadOwned(dateIso, now = new Date()) {
 
 const eventRow = (event, ownedByMe, state) => ({
   id: event.id, name: event.name, date: event.date, location: event.location, ownedByMe, state,
+  // The last day the event takes uploads (YYYY-MM-DD).
+  closesOn: ownedByMe ? ownerCloseDate(event.date) : new Date(Date.parse(event.date) + (PUBLIC_UPLOAD_DAYS - 1) * DAY_MS).toISOString().slice(0, 10),
 });
 
 /** Events the connected photographer can upload to right now: own first, then public, no duplicates. */
