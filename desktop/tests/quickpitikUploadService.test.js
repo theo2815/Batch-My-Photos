@@ -291,7 +291,7 @@ describe('upload engine', () => {
     expect(started).toEqual({ success: true, total: 1 });
     const last = await finished();
     expect(last.phase).toBe('done');
-    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, failed: 0, total: 1 });
+    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, inTrash: 0, failed: 0, total: 1 });
     expect(last.bytes).toEqual({ sent: 11, total: 11 });
     expect(last.failures).toEqual([]);
     const hash = await service.sha256File(path.join(root, name));
@@ -316,7 +316,7 @@ describe('upload engine', () => {
     const puts = fakeHttps();
     const last = await (await run(root, ['A', 'B'])).finished();
     expect(last.phase).toBe('done');
-    expect(last.counts).toEqual({ uploaded: 2, alreadyThere: 1, failed: 0, total: 3 });
+    expect(last.counts).toEqual({ uploaded: 2, alreadyThere: 1, inTrash: 0, failed: 0, total: 3 });
     expect(puts).toHaveLength(2);
     expect(last.bytes.sent).toBe(last.bytes.total);
   });
@@ -327,17 +327,36 @@ describe('upload engine', () => {
     const puts = fakeHttps();
     const last = await (await run(root, [''])).finished();
     expect(puts).toHaveLength(0);
-    expect(last.counts).toEqual({ uploaded: 0, alreadyThere: 1, failed: 0, total: 1 });
+    expect(last.counts).toEqual({ uploaded: 0, alreadyThere: 1, inTrash: 0, failed: 0, total: 1 });
   });
 
-  it('rejects an upload link on another origin without sending bytes', async () => {
-    const root = tempRoot('qp-origin-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
-    routes(directTable({ begin: async () => ({ mode: 'direct', photoId: 'p', key: 'k', uploadUrl: 'https://elsewhere.test/k', expiresAt: future(), uploadHeaders: {} }) }));
+  it('photos in the trash on quickpitik.com are counted apart, not as already there', async () => {
+    const root = tempRoot('qp-trash-'); write(root, 'a.jpg', 'a'); write(root, 'b.jpg', 'b'); write(root, 'c.jpg', 'c'); registerAllowedPath(root);
+    const hashA = await service.sha256File(path.join(root, 'a.jpg'));
+    const hashB = await service.sha256File(path.join(root, 'b.jpg'));
+    routes(directTable({
+      // a: the pre-flight says it is there but in the trash; b and c: begin answers existing, b in the trash, c live
+      exists: async ({ hashes }) => ({ results: hashes.map(hash => ({ hash, status: hash === hashA ? 'same_event' : 'new', eventName: null, inTrash: hash === hashA })) }),
+      begin: async (body) => ({ mode: 'existing', existing: { id: `p-${body.contentHash.slice(0, 8)}`, inTrash: body.contentHash === hashB } }),
+    }));
     const puts = fakeHttps();
     const last = await (await run(root, [''])).finished();
     expect(puts).toHaveLength(0);
     expect(last.phase).toBe('done');
-    expect(last.failures).toEqual([{ relPath: '', name: 'a.jpg', code: 'UPLOAD_LINK_REJECTED', message: expect.any(String), retryable: false }]);
+    expect(last.counts).toEqual({ uploaded: 0, alreadyThere: 1, inTrash: 2, failed: 0, total: 3 });
+    expect(last.bytes.sent).toBe(last.bytes.total);
+  });
+
+  it('rejects an upload link on another origin without sending bytes, and stops the run there', async () => {
+    const root = tempRoot('qp-origin-'); for (let i = 0; i < 6; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    routes(directTable({ begin: async () => ({ mode: 'direct', photoId: 'p', key: 'k', uploadUrl: 'https://elsewhere.test/k', expiresAt: future(), uploadHeaders: {} }) }));
+    const puts = fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(puts).toHaveLength(0);
+    expect(last.phase).toBe('error');
+    expect(last.error).toEqual({ code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' });
+    expect(calls('begin').length).toBeLessThanOrEqual(4); // the four in flight; a fifth photo never began
+    expect(calls('commit')).toHaveLength(0);
   });
 
   it('treats UPLOAD_IN_PROGRESS on commit as a wait, not a failure', async () => {
@@ -401,7 +420,7 @@ describe('upload engine', () => {
     fakeHttps();
     const last = await (await run(root, [''])).finished();
     expect(last.phase).toBe('done');
-    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, failed: 1, total: 2 });
+    expect(last.counts).toEqual({ uploaded: 1, alreadyThere: 0, inTrash: 0, failed: 1, total: 2 });
     expect(last.failures).toEqual([{ relPath: '', name: 'bad.jpg', code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.', retryable: false }]);
   });
 

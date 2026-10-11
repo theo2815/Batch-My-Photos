@@ -179,6 +179,7 @@ export const STRINGS = {
   QP_CANCELLED_TITLE: 'Upload cancelled',
   QP_STOPPED_TITLE: 'Upload stopped',
   QP_DONE: '{uploaded} uploaded. {alreadyThere} already there. {skipped} skipped. {failed} failed.',
+  QP_IN_TRASH: '{count} are in your trash on quickpitik.com. Restore them there to bring them back; uploading again will not.',
   QP_SESSION_EXPIRED: 'Your QuickPitik sign-in expired. Reconnect to continue. Finished photos are kept; dropping the folder again skips them.',
   QP_BTN_RECONNECT: 'Reconnect',
   QP_FIX_ON_SITE: 'Fix this on quickpitik.com',

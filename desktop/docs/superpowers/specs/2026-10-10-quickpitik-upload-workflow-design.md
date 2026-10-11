@@ -26,7 +26,7 @@ Non-goals for version one: moving or copying files on disk; any 500-per-batch ru
 3. Pick an event from the list: public events currently accepting uploads, plus the photographer's own events.
 4. Drop a folder or click Choose folder. The app walks it and shows one row per subfolder: uploadable photos, skipped files by reason. Every row is ticked except a folder whose name ends in `_Blurry`.
 5. Press "Upload 9,412 photos to Cebu Marathon 2026". Progress shows per subfolder and overall. Cancel is available.
-6. Done: uploaded, already there, skipped, failed, with Retry failed and Upload another folder.
+6. Done: uploaded, already there, in your trash on quickpitik.com (when any), skipped, failed, with Retry failed and Upload another folder.
 
 ## Desktop app
 
@@ -64,7 +64,7 @@ No new npm dependency. Node `crypto`, `fs` and `https` plus Electron `net` cover
 
 - `listEvents()`: `GET /events?limit=200` (public catalog, no bearer) filtered to events whose date satisfies `date <= today <= date + 3 days` in Asia/Manila, the same rule as `canUploadToEvent` in `website/src/lib/event-catalog.ts`; plus `GET /me/photographer/events?limit=200` through `authorizedFetch` (covered and owned events), keeping owned events while `today <= date + 1 month`. Return `[{ id, name, date, location, ownedByMe, state }]` deduplicated by id, owned events first. The server still decides per upload.
 - `scanFolder(rootPath)`: `isPathAllowedAsync(rootPath)` first, else `{ success: false, error }`. An iterative walk with `fs.promises.readdir(…, { withFileTypes: true })` to depth `QP_WALK_MAX_DEPTH`, skipping names that start with `.` and the ignored-file names `batchEngine` uses, never following symbolic links. Each regular file is classified by its lower-cased extension: uploadable `jpg jpeg png webp`; skipped `raw` (the RAW extensions in `batchEngine`), `video` (its video extensions), `heic` (`heic heif`), `oversize` (an uploadable type whose `stat` size exceeds `QP_MAX_FILE_BYTES`), `other`. Output: `{ success, root, folders: [{ relPath, name, uploadable: { count, bytes }, skipped: { raw, video, heic, oversize, other }, defaultSelected }], totals }`, where `defaultSelected` is false for a folder whose name ends with `_Blurry`. File lists are not kept and do not cross IPC; `stat` runs with `STAT_CONCURRENCY`.
-- `startUpload({ rootPath, eventId, folders })`: one upload at a time per process, refused while one is running. For each selected `relPath` in order: list that folder's uploadable files again; hash them (streaming SHA-256 hex, lower case, pool `QP_HASH_CONCURRENCY`); pre-flight `POST …/photos/exists` in chunks of `QP_EXISTS_CHUNK` (if the pre-flight still fails after retries, treat every file as `new`; the server dedups anyway); upload the `new` files through a pool of `QP_UPLOAD_CONCURRENCY` `uploadOne` calls; count `same_event` as `alreadyThere` and `different_event` as terminal `failed`. Then the next folder. Progress events are throttled to `QP_PROGRESS_INTERVAL_MS`.
+- `startUpload({ rootPath, eventId, folders })`: one upload at a time per process, refused while one is running. For each selected `relPath` in order: list that folder's uploadable files again; hash them (streaming SHA-256 hex, lower case, pool `QP_HASH_CONCURRENCY`); pre-flight `POST …/photos/exists` in chunks of `QP_EXISTS_CHUNK` (if the pre-flight still fails after retries, treat every file as `new`; the server dedups anyway); upload the `new` files through a pool of `QP_UPLOAD_CONCURRENCY` `uploadOne` calls; count `same_event` as `alreadyThere`, or as `inTrash` when the pre-flight row (or begin's `existing`) carries `inTrash: true`, and `different_event` as terminal `failed`. Then the next folder. Progress events are throttled to `QP_PROGRESS_INTERVAL_MS`.
 - `uploadOne(file)` mirrors `uploadPhotographerPhoto` in `website/src/lib/api-photographer.ts` without the persisted checkpoint:
   1. `requestId = randomUUID()`.
   2. Begin: `POST …/photos/direct { contentHash, contentType, sizeBytes, originalFilename, requestId }` with no `client`. `existing` ends the file as `alreadyThere`; `multipart` goes to step 5; `direct` checks `new URL(uploadUrl).protocol === 'https:'` and `new URL(uploadUrl).origin === QUICKPITIK_UPLOAD_ORIGIN` (terminal `UPLOAD_LINK_REJECTED` otherwise), then step 3.
@@ -162,8 +162,8 @@ CREATE INDEX idx_desktop_auth_codes_user_id ON desktop_auth_codes (user_id);
 | PUT failed or its reply was lost | retryable | try commit first; `UPLOAD_OBJECT_MISSING` with an unexpired grant means PUT again; an expired grant means a new `requestId` and begin again |
 | Commit answers `UPLOAD_IN_PROGRESS` or 429 | wait | retry with capped backoff (15 s max) inside `QP_COMMIT_BUSY_WINDOW_MS`; not counted as a failure |
 | 401 | session | one shared refresh, retry once; a rejected refresh pauses the upload with `error { code: 'SESSION_EXPIRED' }` and the renderer offers Reconnect |
-| `UNSUPPORTED_MEDIA_TYPE`, `PAYLOAD_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `UPLOAD_KEY_MISMATCH`, `UPLOAD_REQUEST_CONFLICT`, `PHOTO_DUPLICATE_DIFFERENT_EVENT`, `UPLOAD_LINK_REJECTED` | terminal per file | record in `failures`, continue with the next file |
-| `EVENT_NOT_UPLOADABLE`, `EVENT_NOT_FOUND`, `PHOTOGRAPHER_NOT_VERIFIED`, `ACCOUNT_SUSPENDED`, `WATERMARK_MISSING` | terminal per upload | stop everything; `error` carries the server message; the renderer shows it with a "Fix this on quickpitik.com" link |
+| `UNSUPPORTED_MEDIA_TYPE`, `PAYLOAD_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `UPLOAD_KEY_MISMATCH`, `UPLOAD_REQUEST_CONFLICT`, `PHOTO_DUPLICATE_DIFFERENT_EVENT` | terminal per file | record in `failures`, continue with the next file |
+| `EVENT_NOT_UPLOADABLE`, `EVENT_NOT_FOUND`, `PHOTOGRAPHER_NOT_VERIFIED`, `ACCOUNT_SUSPENDED`, `WATERMARK_MISSING`, and the app's own `UPLOAD_LINK_REJECTED` (upload address not on the configured storage origin, or no origin configured) | terminal per upload | stop everything; `error` carries the message; the renderer shows it with a "Fix this on quickpitik.com" link, except for `UPLOAD_LINK_REJECTED`, which is this app's fault and asks for an update (changed 2026-10-11, review F2) |
 | Offline (`net.isOnline()` false, `ENOTFOUND`, `ECONNREFUSED`) | pause | phase `waiting` with "Waiting for connection"; retry every 10 s; resumes by itself |
 
 ## Failures and copy
@@ -171,7 +171,7 @@ CREATE INDEX idx_desktop_auth_codes_user_id ON desktop_auth_codes (user_id);
 - Review screen: "412 photos ready. 88 RAW files and 2 videos skipped." Oversize: "3 JPEGs over 25 MB skipped."
 - Session expired mid-upload: "Your QuickPitik sign-in expired. Reconnect to continue. Finished photos are kept; dropping the folder again skips them."
 - Event closed: the server message, for example "Upload window for this event has closed."
-- Done: "9,391 uploaded. 18 already there. 90 skipped. 3 failed."
+- Done: "9,391 uploaded. 18 already there. 90 skipped. 3 failed." and, when any: "12 are in your trash on quickpitik.com. Restore them there to bring them back; uploading again will not."
 - The Upload view never moves, copies, renames or deletes anything on disk.
 
 ## Testing

@@ -219,9 +219,14 @@ async function listEvents(now = new Date()) {
 
 /** Codes the backend answers per photo: the file is recorded as failed and the run continues. */
 const TERMINAL_PER_FILE = new Set(['UNSUPPORTED_MEDIA_TYPE', 'PAYLOAD_TOO_LARGE', 'UPLOAD_CHECKSUM_MISMATCH',
-  'UPLOAD_KEY_MISMATCH', 'UPLOAD_REQUEST_CONFLICT', 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'UPLOAD_LINK_REJECTED', 'VALIDATION_ERROR']);
-/** Codes that mean no other photo can succeed either: the run stops. */
-const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING']);
+  'UPLOAD_KEY_MISMATCH', 'UPLOAD_REQUEST_CONFLICT', 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'VALIDATION_ERROR']);
+/**
+ * Codes that mean no other photo can succeed either: the run stops.
+ * UPLOAD_LINK_REJECTED is raised here, not by the server: every photo would
+ * fail the same way, and each begin leaves a pending slot on the server.
+ */
+const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING',
+  'UPLOAD_LINK_REJECTED']);
 const OFFLINE_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED',
   'ERR_NAME_NOT_RESOLVED', 'ERR_CONNECTION_REFUSED', 'ERR_ADDRESS_UNREACHABLE']);
 
@@ -310,7 +315,7 @@ function assertUploadOrigin(uploadUrl) {
   let url = null;
   try { url = new URL(uploadUrl); } catch { url = null; }
   if (!configured || !url || url.protocol !== 'https:' || url.origin !== configured || url.username || url.password) {
-    throw new qpAuth.QpApiError({ code: 'UPLOAD_LINK_REJECTED', message: 'The upload link did not point at the QuickPitik storage origin.' });
+    throw new qpAuth.QpApiError({ code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' });
   }
 }
 
@@ -377,7 +382,7 @@ async function uploadOne(ctx, file) {
       method: 'POST',
       body: { contentHash: file.hash, contentType: file.contentType, sizeBytes: file.sizeBytes, originalFilename: file.name, requestId },
     }), 'begin', state, ctx);
-    if (begin.mode === 'existing') return 'alreadyThere';
+    if (begin.mode === 'existing') return begin.existing?.inTrash === true ? 'inTrash' : 'alreadyThere';
     if (begin.mode === 'multipart') { await multipartUpload(ctx, file, base, state); return 'uploaded'; }
     if (begin.mode !== 'direct' || !begin.photoId || !begin.key || !begin.uploadUrl) {
       throw new qpAuth.QpApiError({ code: 'UPLOAD_LINK_REJECTED', message: 'The server did not return a usable upload link.' });
@@ -444,7 +449,8 @@ async function checkExists(ctx, hashes) {
       const { data } = await withRetries(() => qpAuth.authorizedFetch(
         `/me/photographer/events/${encodeURIComponent(ctx.eventId)}/photos/exists`, { method: 'POST', body: { hashes: chunk } },
       ), 'exists', {}, ctx);
-      for (const row of data.results || []) statuses.set(row.hash, row.status);
+      // same_event + inTrash: the bytes are there, but in the photographer's trash; the event page does not show them
+      for (const row of data.results || []) statuses.set(row.hash, row.status === 'same_event' && row.inTrash === true ? 'in_trash' : row.status);
     } catch (error) {
       if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError || TERMINAL_PER_UPLOAD.has(codeOf(error))) throw error;
       logger.warn('⚠️ [QP-UPLOAD] Pre-flight failed, treating the chunk as new:', error.message);
@@ -463,7 +469,7 @@ function makeContext({ eventId, plan, total, send }) {
   const ctx = {
     eventId, plan, cancelled: false, stopError: null, inFlight: new Set(), failures: [], folder: null, lastEmit: 0,
     stopped: new Promise(resolve => { wake = resolve; }),
-    counts: { uploaded: 0, alreadyThere: 0, failed: 0, total },
+    counts: { uploaded: 0, alreadyThere: 0, inTrash: 0, failed: 0, total },
     bytes: { sent: 0, total: plan.reduce((sum, folder) => sum + folder.files.reduce((a, f) => a + f.sizeBytes, 0), 0) },
     assertActive() { if (ctx.cancelled) throw ctx.stopError; },
     /** No new file starts, waits end at once, in-flight PUTs are destroyed. The first reason wins. */
@@ -513,6 +519,7 @@ async function runUpload(ctx) {
         if (file.readError) { recordFailure(ctx, folder, file, file.readError.code || 'READ_ERROR', file.readError.message, false); continue; }
         const status = existing.get(file.hash) || 'new';
         if (status === 'same_event') { ctx.counts.alreadyThere += 1; ctx.addBytes(file.sizeBytes); }
+        else if (status === 'in_trash') { ctx.counts.inTrash += 1; ctx.addBytes(file.sizeBytes); }
         else if (status === 'different_event') recordFailure(ctx, folder, file, 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'This photo already belongs to another of your events.', false);
         else queue.push(file);
       }
@@ -522,7 +529,7 @@ async function runUpload(ctx) {
         try {
           const outcome = await uploadOne(ctx, file);
           ctx.counts[outcome] += 1;
-          if (outcome === 'alreadyThere') ctx.addBytes(file.sizeBytes);
+          if (outcome !== 'uploaded') ctx.addBytes(file.sizeBytes);
         } catch (error) {
           if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError || TERMINAL_PER_UPLOAD.has(codeOf(error))) {
             ctx.stop(error); // the other workers finish the file they are on, then stop
