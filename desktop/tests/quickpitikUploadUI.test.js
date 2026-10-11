@@ -78,6 +78,13 @@ describe('UploadSummary', () => {
     expect(button(tree, 'Upload another folder')).toBeDefined();
   });
 
+  it('names the photos that sit in the trash on quickpitik.com', () => {
+    const progress = { phase: 'done', counts: { uploaded: 1, alreadyThere: 2, inTrash: 3, failed: 0, total: 6 }, bytes: { sent: 6, total: 6 }, failures: [] };
+    const tree = render(UploadSummary, { status: 'done', progress, scan, selected: [''], error: null, onRetryFailed: noop, onReset: noop, onReconnect: noop });
+    expect(text(tree)).toContain('1 uploaded. 2 already there. 2 skipped. 0 failed.');
+    expect(text(tree)).toContain('3 are in your trash on quickpitik.com. Restore them there to bring them back; uploading again will not.');
+  });
+
   it('a sign-in that expired mid-upload offers Reconnect', () => {
     const onReconnect = vi.fn();
     const tree = render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 5, alreadyThere: 0, failed: 0, total: 412 }, bytes: { sent: 5, total: 412 }, failures: [] },

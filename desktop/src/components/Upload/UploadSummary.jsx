@@ -14,7 +14,7 @@ function skippedInSelection(scan, selected) {
 
 /** Done, cancelled, or stopped by an error — with Retry failed, Reconnect or a link to the site. */
 function UploadSummary({ status, progress, scan, selected, error, onRetryFailed, onReset, onReconnect }) {
-  const counts = progress?.counts || { uploaded: 0, alreadyThere: 0, failed: 0, total: 0 };
+  const counts = progress?.counts || { uploaded: 0, alreadyThere: 0, inTrash: 0, failed: 0, total: 0 };
   const failures = progress?.failures || [];
   const cancelled = progress?.phase === 'cancelled';
   const sessionExpired = status === 'error' && error?.code === 'SESSION_EXPIRED';
@@ -29,6 +29,7 @@ function UploadSummary({ status, progress, scan, selected, error, onRetryFailed,
         uploaded: counts.uploaded.toLocaleString(), alreadyThere: counts.alreadyThere.toLocaleString(),
         skipped: skippedInSelection(scan, selected).toLocaleString(), failed: counts.failed.toLocaleString(),
       })}</p>
+      {counts.inTrash > 0 && <p className="upload-muted">{formatString(STRINGS.QP_IN_TRASH, { count: counts.inTrash.toLocaleString() })}</p>}
       {sessionExpired && <p role="alert" className="upload-error">{STRINGS.QP_SESSION_EXPIRED}</p>}
       {status === 'error' && !sessionExpired && <p role="alert" className="upload-error">{error?.message}</p>}
       {failures.length > 0 && (
