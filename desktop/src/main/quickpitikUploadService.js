@@ -219,9 +219,14 @@ async function listEvents(now = new Date()) {
 
 /** Codes the backend answers per photo: the file is recorded as failed and the run continues. */
 const TERMINAL_PER_FILE = new Set(['UNSUPPORTED_MEDIA_TYPE', 'PAYLOAD_TOO_LARGE', 'UPLOAD_CHECKSUM_MISMATCH',
-  'UPLOAD_KEY_MISMATCH', 'UPLOAD_REQUEST_CONFLICT', 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'UPLOAD_LINK_REJECTED', 'VALIDATION_ERROR']);
-/** Codes that mean no other photo can succeed either: the run stops. */
-const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING']);
+  'UPLOAD_KEY_MISMATCH', 'UPLOAD_REQUEST_CONFLICT', 'PHOTO_DUPLICATE_DIFFERENT_EVENT', 'VALIDATION_ERROR']);
+/**
+ * Codes that mean no other photo can succeed either: the run stops.
+ * UPLOAD_LINK_REJECTED is raised here, not by the server: every photo would
+ * fail the same way, and each begin leaves a pending slot on the server.
+ */
+const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING',
+  'UPLOAD_LINK_REJECTED']);
 const OFFLINE_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED',
   'ERR_NAME_NOT_RESOLVED', 'ERR_CONNECTION_REFUSED', 'ERR_ADDRESS_UNREACHABLE']);
 
@@ -310,7 +315,7 @@ function assertUploadOrigin(uploadUrl) {
   let url = null;
   try { url = new URL(uploadUrl); } catch { url = null; }
   if (!configured || !url || url.protocol !== 'https:' || url.origin !== configured || url.username || url.password) {
-    throw new qpAuth.QpApiError({ code: 'UPLOAD_LINK_REJECTED', message: 'The upload link did not point at the QuickPitik storage origin.' });
+    throw new qpAuth.QpApiError({ code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' });
   }
 }
 

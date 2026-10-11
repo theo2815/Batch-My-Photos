@@ -330,14 +330,16 @@ describe('upload engine', () => {
     expect(last.counts).toEqual({ uploaded: 0, alreadyThere: 1, failed: 0, total: 1 });
   });
 
-  it('rejects an upload link on another origin without sending bytes', async () => {
-    const root = tempRoot('qp-origin-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+  it('rejects an upload link on another origin without sending bytes, and stops the run there', async () => {
+    const root = tempRoot('qp-origin-'); for (let i = 0; i < 6; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
     routes(directTable({ begin: async () => ({ mode: 'direct', photoId: 'p', key: 'k', uploadUrl: 'https://elsewhere.test/k', expiresAt: future(), uploadHeaders: {} }) }));
     const puts = fakeHttps();
     const last = await (await run(root, [''])).finished();
     expect(puts).toHaveLength(0);
-    expect(last.phase).toBe('done');
-    expect(last.failures).toEqual([{ relPath: '', name: 'a.jpg', code: 'UPLOAD_LINK_REJECTED', message: expect.any(String), retryable: false }]);
+    expect(last.phase).toBe('error');
+    expect(last.error).toEqual({ code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' });
+    expect(calls('begin').length).toBeLessThanOrEqual(4); // the four in flight; a fifth photo never began
+    expect(calls('commit')).toHaveLength(0);
   });
 
   it('treats UPLOAD_IN_PROGRESS on commit as a wait, not a failure', async () => {

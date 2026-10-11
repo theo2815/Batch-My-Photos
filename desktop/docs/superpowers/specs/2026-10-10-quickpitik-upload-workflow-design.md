@@ -162,8 +162,8 @@ CREATE INDEX idx_desktop_auth_codes_user_id ON desktop_auth_codes (user_id);
 | PUT failed or its reply was lost | retryable | try commit first; `UPLOAD_OBJECT_MISSING` with an unexpired grant means PUT again; an expired grant means a new `requestId` and begin again |
 | Commit answers `UPLOAD_IN_PROGRESS` or 429 | wait | retry with capped backoff (15 s max) inside `QP_COMMIT_BUSY_WINDOW_MS`; not counted as a failure |
 | 401 | session | one shared refresh, retry once; a rejected refresh pauses the upload with `error { code: 'SESSION_EXPIRED' }` and the renderer offers Reconnect |
-| `UNSUPPORTED_MEDIA_TYPE`, `PAYLOAD_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `UPLOAD_KEY_MISMATCH`, `UPLOAD_REQUEST_CONFLICT`, `PHOTO_DUPLICATE_DIFFERENT_EVENT`, `UPLOAD_LINK_REJECTED` | terminal per file | record in `failures`, continue with the next file |
-| `EVENT_NOT_UPLOADABLE`, `EVENT_NOT_FOUND`, `PHOTOGRAPHER_NOT_VERIFIED`, `ACCOUNT_SUSPENDED`, `WATERMARK_MISSING` | terminal per upload | stop everything; `error` carries the server message; the renderer shows it with a "Fix this on quickpitik.com" link |
+| `UNSUPPORTED_MEDIA_TYPE`, `PAYLOAD_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `UPLOAD_KEY_MISMATCH`, `UPLOAD_REQUEST_CONFLICT`, `PHOTO_DUPLICATE_DIFFERENT_EVENT` | terminal per file | record in `failures`, continue with the next file |
+| `EVENT_NOT_UPLOADABLE`, `EVENT_NOT_FOUND`, `PHOTOGRAPHER_NOT_VERIFIED`, `ACCOUNT_SUSPENDED`, `WATERMARK_MISSING`, and the app's own `UPLOAD_LINK_REJECTED` (upload address not on the configured storage origin, or no origin configured) | terminal per upload | stop everything; `error` carries the message; the renderer shows it with a "Fix this on quickpitik.com" link, except for `UPLOAD_LINK_REJECTED`, which is this app's fault and asks for an update (changed 2026-10-11, review F2) |
 | Offline (`net.isOnline()` false, `ENOTFOUND`, `ECONNREFUSED`) | pause | phase `waiting` with "Waiting for connection"; retry every 10 s; resumes by itself |
 
 ## Failures and copy
