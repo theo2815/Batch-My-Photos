@@ -311,6 +311,27 @@ describe('useQuickPitikUpload', () => {
     expect(qp.error).toBeNull();
     expect(qp.events).toEqual([event]);
   });
+
+  const other = { ...event, id: 'e2', name: 'Mandaue Dash' };
+
+  it('chooses the event when it is the only one open', async () => {
+    connectedApi();
+    expect((await mounted()).eventId).toBe('e1');
+  });
+
+  it('leaves the choice to the photographer when two events are open', async () => {
+    connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    expect((await mounted()).eventId).toBe('');
+  });
+
+  it('keeps an event the photographer already chose when a Refresh leaves one event', async () => {
+    const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    let qp = await mounted();
+    qp.setEventId('e2');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [event] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('e2');
+  });
 });
 
 describe('UploadView', () => {
