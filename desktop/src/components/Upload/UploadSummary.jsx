@@ -51,7 +51,7 @@ function UploadSummary({ status, progress, scan, selected, error, onRetryFailed,
         {status === 'error' && !sessionExpired && error?.code !== 'UPLOAD_LINK_REJECTED' && (
           <button type="button" className="btn primary" onClick={() => window.electronAPI.openExternalUrl(QP_SITE_URL)}>{STRINGS.QP_FIX_ON_SITE}</button>
         )}
-        {failures.length > 0 && !sessionExpired && <button type="button" className="btn secondary" onClick={onRetryFailed}>{STRINGS.QP_BTN_RETRY_FAILED}</button>}
+        {failures.length > 0 && !sessionExpired && error?.code !== 'UPLOAD_LINK_REJECTED' && <button type="button" className="btn secondary" onClick={onRetryFailed}>{STRINGS.QP_BTN_RETRY_FAILED}</button>}
         <button type="button" className="btn secondary" onClick={onReset}>{STRINGS.QP_BTN_ANOTHER_FOLDER}</button>
       </div>
     </div>

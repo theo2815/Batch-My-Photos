@@ -108,6 +108,14 @@ describe('UploadSummary', () => {
     expect(button(tree, 'Fix this on quickpitik.com')).toBeUndefined();
     expect(button(tree, 'Upload another folder')).toBeDefined();
   });
+
+  it('after a rejected upload link, Retry failed is not offered either', () => {
+    const failures = [{ relPath: '', name: 'bad.jpg', code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.', retryable: false }];
+    const tree = render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 0, alreadyThere: 0, inTrash: 0, failed: 1, total: 6 }, bytes: { sent: 0, total: 6 }, failures },
+      scan, selected: [''], error: { code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' }, onRetryFailed: noop, onReset: noop, onReconnect: noop });
+    expect(button(tree, 'Retry failed')).toBeUndefined();
+    expect(button(tree, 'Upload another folder')).toBeDefined();
+  });
 });
 
 describe('useQuickPitikUpload', () => {
