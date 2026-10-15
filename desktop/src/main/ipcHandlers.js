@@ -1801,7 +1801,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
-    if (config.features.BLUR_BETA_ENABLED) return { updateAvailable: false, currentVersion };
+    if (config.blurBetaEnvironment === 'staging') return { updateAvailable: false, currentVersion };
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;

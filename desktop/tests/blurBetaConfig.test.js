@@ -276,6 +276,11 @@ describe('beta public updater suppression', () => {
     expect(await handlers.get('check-app-version')({})).toMatchObject({ updateAvailable: false });
     expect(net.fetch).not.toHaveBeenCalled();
   });
+  it('keeps the version banner check in the Store app', async () => {
+    const { handlers, net } = ipcFor(configFor(storeManifest));
+    await handlers.get('check-app-version')({});
+    expect(net.fetch).toHaveBeenCalledTimes(1);
+  });
   it('disables startup and all manual updater actions', async () => {
     vi.useFakeTimers();
     const handlers = new Map();

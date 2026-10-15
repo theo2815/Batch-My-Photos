@@ -40,10 +40,11 @@ describe('blur analysis start disclosure', () => {
     const onStart = vi.fn();
     const tree = BlurSensitivityModal({ ...props, isBeta: true, onStart });
     const start = walk(tree, node => node.type === 'button' && textOf(node).includes('Start Analysis'));
-    const notice = walk(tree, node => node.type === 'p' && textOf(node).includes('staging'));
+    const notice = walk(tree, node => node.type === 'p' && textOf(node).includes('Resized photos'));
 
     expect(notice).not.toBeNull();
-    expect(textOf(notice)).toMatch(/resized photos.*staging/i);
+    expect(textOf(notice)).toMatch(/resized photos.*QuickPitik blur service/i);
+    expect(textOf(notice)).not.toMatch(/staging/i);
     expect(textOf(notice)).toMatch(/suggestions.*(move|exclude)/i);
     expect(textOf(tree)).not.toContain('Sharp photos are always kept.');
     expect(textOf(tree).indexOf('Resized photos')).toBeLessThan(textOf(tree).indexOf('Start Analysis'));

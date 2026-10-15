@@ -206,7 +206,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, i
 
         {isBeta && (
           <p className="confirmation-details">
-            Resized photos are sent to the staging blur service when you start. Suggestions never move or exclude photos from batches.
+            Resized photos are sent to the QuickPitik blur service when you start. Suggestions never move or exclude photos from batches.
           </p>
         )}
 
