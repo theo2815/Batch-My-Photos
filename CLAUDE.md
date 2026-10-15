@@ -60,11 +60,11 @@ The main process is service-oriented. Key services:
 - **batchEngine.js** - Core algorithm: groups files by basename (JPG+RAW pairing), then bin-packs with First-Fit-Decreasing. Supports 50+ image formats.
 - **batchExecutor.js** - Executes file move/copy operations with concurrency limits. Detects same-drive for instant moves vs cross-drive copies.
 - **authService.js** - JWT + refresh token auth via deep links (`batchmyphotos://auth/callback`). Offline session recovery.
-- **subscriptionService.js** - Enforces subscription gating (batch processing is unlimited for all users as of 2026-09-02; offline batching stays Pro-only). Offline enforcement with 3-day cache grace. Clock-tampering detection via monotonic high-water mark.
+- **subscriptionService.js** - Enforces subscription gating (BatchMyPhotos is free for every account since 2026-10-15: the server reports `is_pro: true` with no expiry, so offline batching is open to all). Offline enforcement with 3-day cache grace. Clock-tampering detection via monotonic high-water mark.
 - **rollbackManager.js** - Persists encrypted operation manifests for full undo capability (max 20 history entries).
 - **progressManager.js** - Tracks file operation progress with interrupt recovery (resume/discard).
 - **securityManager.js** - Path whitelist validation, prevents directory traversal.
-- **deviceService.js** - Hardware ID binding via node-machine-id. Pro: 2 devices, Pro+: 5. 5-minute heartbeat.
+- **deviceService.js** - Hardware ID binding via node-machine-id. Every account: at least 3 devices (server `_device_limit()`), higher stored limits kept. 5-minute heartbeat.
 - **blurDetectionService.js** - AI blur detection (feature-flagged, currently disabled). Batch API with polling + exponential backoff.
 - **secureStore.js** - Wraps electron-store with OS-level encryption (Windows DPAPI / macOS Keychain).
 - **config.js** - Feature flags controlled by `BATCH_*` env vars (rollback, encryption, blur detection, HWID binding, etc.).
