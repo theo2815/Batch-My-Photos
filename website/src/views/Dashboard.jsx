@@ -5,36 +5,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PricingModal from '../components/PricingModal'
 import InfoModal from '../components/modals/InfoModal'
-import ModalShell from '../components/modals/ModalShell'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../hooks/useSubscription'
 import { useDevices } from '../hooks/useDevices'
 import {
-  Crown, Sparkles, Download, Settings, HelpCircle, CreditCard,
+  Sparkles, Download, Settings, HelpCircle, FlaskConical,
   ShieldCheck, User, Key, Monitor, Smartphone, Trash2, RefreshCw,
   ArrowRight, ExternalLink, Lock, Play,
   Copy, Check, FileText, MessageCircle, X, AlertTriangle, Timer,
 } from 'lucide-react'
-
-/* ─── Modal content (dashboard-specific modals) ──────────────────────────── */
-const getDashModals = () => ({
-  managePlan: {
-    title: 'Manage Your Plan',
-    icon: CreditCard,
-    color: 'text-accent',
-    body: null, // Placeholder — content will be injected dynamically
-  },
-})
-
-function DashModal({ modalKey, onClose }) {
-  const content = getDashModals()[modalKey]
-  if (!content) return null
-  return (
-    <ModalShell title={content.title} icon={content.icon} iconColor={content.color} onClose={onClose}>
-      {content.body}
-    </ModalShell>
-  )
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function Dashboard() {
@@ -43,17 +22,13 @@ export default function Dashboard() {
   const [loading, setLoading]       = useState(true)
   const [copied, setCopied]         = useState(false)
   const [activeModal, setActiveModal] = useState(null)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const [confirmCancel, setConfirmCancel]   = useState(false)
-  const [paymentMsg, setPaymentMsg] = useState(null)
-  const { subscription: sub, loading: subLoading, createCheckout, refetch: refetchSub, verifyPayment, startFreeTrial, cancelSubscription, validateCoupon } = useSubscription()
+  const { subscription: sub, loading: subLoading } = useSubscription()
   const { devices, deviceLimit, loading: devicesLoading, error: devicesError, fetchDevices, removeDevice, removalsUsed, removalsLimit, cooldownEndsAt} = useDevices()
   const [removingDeviceId, setRemovingDeviceId] = useState(null)
   const [confirmRemoveDevice, setConfirmRemoveDevice] = useState(null) // { id, label }
   const [removeError, setRemoveError] = useState(null)
   const [cooldownText, setCooldownText] = useState('')
   const cooldownRef = useRef(null)
-  const isFree = !sub || sub.plan === 'free'
   const timersRef = useRef([])
 
   // Clear all pending timeouts on unmount to prevent state updates after navigation
@@ -70,23 +45,6 @@ export default function Dashboard() {
     return id
   }
 
-  // Handle trial activation redirect from Navbar (nav state via sessionStorage —
-  // removed after reading so refreshing doesn't re-trigger)
-  useEffect(() => {
-    const raw = sessionStorage.getItem('bmp_nav_state')
-    if (!raw) return
-    sessionStorage.removeItem('bmp_nav_state')
-    try {
-      const state = JSON.parse(raw)
-      if (state?.trialActivated) {
-        setPaymentMsg({ type: 'success', text: 'Your 30-day Pro trial is active.' })
-        safeTimeout(() => setPaymentMsg(null), 6000)
-      }
-    } catch {
-      // Malformed nav state — ignore
-    }
-  }, [])
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
@@ -98,12 +56,12 @@ export default function Dashboard() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Fetch devices when user has a Pro subscription
+  // Fetch devices (every account can bind up to its device limit)
   useEffect(() => {
-    if (!isFree && !subLoading && user) {
+    if (!subLoading && user) {
       fetchDevices()
     }
-  }, [isFree, subLoading, user, fetchDevices])
+  }, [subLoading, user, fetchDevices])
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -147,103 +105,16 @@ export default function Dashboard() {
     safeTimeout(() => setCopied(false), 2000)
   }
 
-  // Handle payment redirect params (?payment=success, ?payment=cancelled) or ?modal=pricing
+  // ?modal=pricing opens the pricing modal (older desktop apps link here from "Upgrade to Pro")
   // Read from window.location on mount (not next/navigation's useSearchParams — it forces Suspense)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const paymentStatus = params.get('payment')
-    const modalParam = params.get('modal')
-
-    // Strip a query param from the URL without navigating
-    const stripParam = (name) => {
-      const next = new URLSearchParams(window.location.search)
-      next.delete(name)
-      const qs = next.toString()
-      window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname)
-    }
-
-    if (modalParam === 'pricing') {
-      setActiveModal('pricing')
-      // Optional: Clear the param so refreshing doesn't re-open it,
-      // but keeping it might be better for preserving state.
-      // Let's clear it to keep URL clean after opening.
-      stripParam('modal')
-    }
-
-    // #region agent log
-    if (paymentStatus === 'success') {
-      setPaymentMsg({ type: 'success', text: 'Verifying your payment…' })
-
-      // Clean URL immediately to prevent re-triggering
-      stripParam('payment')
-
-      // Verify payment directly with PayMongo (webhook fallback)
-      verifyPayment().then((result) => {
-        console.log('Payment verification result:', result)
-        if (result?.verified) {
-          setPaymentMsg({ type: 'success', text: 'Payment confirmed. Your Pro plan is active.' })
-        } else {
-          // Webhook may have handled it — just refetch
-          refetchSub()
-          setPaymentMsg({ type: 'success', text: 'Payment received. Refreshing your plan…' })
-        }
-        safeTimeout(() => setPaymentMsg(null), 6000)
-      })
-    } else if (paymentStatus === 'cancelled') {
-      setPaymentMsg({ type: 'info', text: 'Payment was cancelled. You can try again anytime.' })
-
-      stripParam('payment')
-
-      safeTimeout(() => setPaymentMsg(null), 5000)
-    }
+    if (params.get('modal') !== 'pricing') return
+    setActiveModal('pricing')
+    params.delete('modal')
+    const qs = params.toString()
+    window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname)
   }, [])
-
-  // Check for expired subscription and show notification
-  useEffect(() => {
-    if (!subLoading && sub && sub.status === 'expired' && sub.expires_at) {
-      const daysExpired = Math.floor(
-        (new Date() - new Date(sub.expires_at)) / (1000 * 60 * 60 * 24)
-      )
-
-      // Show notification for first 7 days
-      if (daysExpired <= 7) {
-        setPaymentMsg({
-          type: 'warning',
-          text: `Your Pro subscription expired ${daysExpired} day${daysExpired === 1 ? '' : 's'} ago. Renew now to restore offline batching and your extra device.`
-        })
-      }
-    }
-  }, [sub, subLoading])
-
-  const handleUpgrade = async (couponCode = null) => {
-    try {
-      setCheckoutLoading(true)
-      console.log('Initiating checkout process...', couponCode ? `with coupon: ${couponCode}` : '')
-      
-      const checkoutUrl = await createCheckout(couponCode)
-      
-      // Navigate to PayMongo checkout in the same tab to preserve session consistency
-      if (checkoutUrl) {
-        console.log('Redirecting to checkout:', checkoutUrl)
-        // Force hard navigation, bypassing React router/hydration issues for external links
-        window.location.href = checkoutUrl
-      } else {
-        throw new Error('No checkout URL returned')
-      }
-    } catch (err) {
-      console.error('Checkout error:', err)
-      setCheckoutLoading(false)
-      // Re-throw so PricingModal can display the error inline
-      throw err
-    }
-  }
-
-  const handleStartTrial = async () => {
-    await startFreeTrial()
-    setActiveModal(null)
-    setPaymentMsg({ type: 'success', text: 'Your 30-day Pro trial is active.' })
-    safeTimeout(() => setPaymentMsg(null), 6000)
-  }
 
   /* ── Loading state ── */
   // Only show full loading screen on initial load. 
@@ -276,17 +147,6 @@ export default function Dashboard() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8 pt-24 pb-20">
-
-        {/* Payment notification toast */}
-        {paymentMsg && (
-          <div className={`mb-6 rounded-xl px-5 py-4 text-sm flex items-center gap-3 animate-[footerModalIn_0.2s_ease-out] ${
-            paymentMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700'
-            : paymentMsg.type === 'error'   ? 'bg-red-500/10 border border-red-500/20 text-red-700'
-            : 'bg-primary/10 border border-primary/20 text-accent'
-          }`}>
-            <span>{paymentMsg.text}</span>
-          </div>
-        )}
 
         {/* ════════════════════════════════════════════════════════════════════
             HERO  —  Welcome banner with avatar + profile menu
@@ -394,39 +254,31 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Crown className="w-4 h-4 text-accent" />
+                    <Sparkles className="w-4 h-4 text-accent" />
                   </div>
                   <h3 className="text-[15px] font-display font-bold text-text-primary">Your Plan</h3>
                 </div>
-                <span className={`text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full ${
-                  sub?.status === 'active'  ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20'
-                : sub?.status === 'past_due'? 'bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/20'
-                :                            'bg-bg-elevated text-text-muted ring-1 ring-border-subtle'
-                }`}>
-                  {sub?.status === 'active' ? 'Active' : sub?.status === 'past_due' ? 'Past Due' : sub?.status === 'trialing' ? 'Trial' : isFree ? 'Free' : 'Unknown'}
+                <span className="text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20">
+                  Free
                 </span>
               </div>
 
-              {/* Plan name + badge */}
+              {/* Plan name */}
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/10 flex items-center justify-center">
-                  {isFree
-                    ? <Sparkles className="w-5 h-5 text-accent" />
-                    : <Crown  className="w-5 h-5 text-amber-700" />}
+                  <Sparkles className="w-5 h-5 text-accent" />
                 </div>
                 <div>
-                  <p className="text-xl font-display font-bold text-text-primary tracking-tight">{isFree ? 'Free' : 'Pro'}</p>
-                  <p className="text-[13px] text-text-muted">
-                    {isFree ? 'Free forever · core features included' : sub?.expires_at ? `Active until ${new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'Pro plan active'}
-                  </p>
+                  <p className="text-xl font-display font-bold text-text-primary tracking-tight">Free</p>
+                  <p className="text-[13px] text-text-muted">Every feature included · no subscription</p>
                 </div>
               </div>
 
               {/* Quick details row */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {[
-                  { label: 'Plan', value: isFree ? 'Free' : 'Pro — ₱299/mo' },
-                  { label: 'Status', value: sub?.status === 'active' ? 'Active' : sub?.status || '—' },
+                  { label: 'Batches', value: 'Unlimited' },
+                  { label: 'Devices', value: `Up to ${deviceLimit}` },
                   { label: 'Usage',   value: `${sub?.usage?.used ?? 0} batches this month`, full: true },
                 ].map(d => (
                   <div key={d.label} className={`rounded-xl bg-bg-elevated border border-border-subtle px-4 py-3 ${d.full ? 'col-span-2' : ''}`}>
@@ -453,23 +305,11 @@ export default function Dashboard() {
 
               {/* Action buttons */}
               <div className="flex flex-wrap gap-3">
-                {isFree ? (
-                  <div className="flex flex-col gap-1.5">
-                    <button
-                      onClick={() => setActiveModal('pricing')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover px-4 py-2.5 text-sm font-semibold text-white transition-all cursor-pointer"
-                    >
-                      <Sparkles className="w-4 h-4 text-white" /> {!sub?.free_trial_used ? 'Start Free Trial' : 'Upgrade to Pro'}
-                    </button>
-                    {/* <span className="text-[10px] text-text-muted text-center italic">Under review</span> */}
-                  </div>
-                ) : (
-                  <button onClick={() => setActiveModal('managePlan')} className="px-5 py-2.5 rounded-xl border border-border-subtle bg-bg-elevated hover:bg-bg-surface text-text-secondary text-sm font-medium transition-colors cursor-pointer">
-                    Manage Plan
-                  </button>
-                )}
-                <button onClick={() => router.push('/billing')} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-subtle bg-bg-elevated hover:bg-bg-surface text-text-secondary text-sm font-medium transition-colors cursor-pointer">
-                  <CreditCard className="w-4 h-4 text-text-muted" /> Billing History
+                <button
+                  onClick={() => setActiveModal('pricing')}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover px-4 py-2.5 text-sm font-semibold text-white transition-all cursor-pointer"
+                >
+                  <FlaskConical className="w-4 h-4 text-white" /> Join the blur detection beta
                 </button>
               </div>
             </div>
@@ -528,7 +368,6 @@ export default function Dashboard() {
           </section>
 
           {/* ────────── Help & Resources  (full width) ────────── */}
-          {!isFree && (
           <section className="lg:col-span-12 auth-card-in" style={{ animationDelay: '0.18s' }}>
             <div className="rounded-2xl border border-border-subtle bg-bg-elevated p-6">
 
@@ -686,12 +525,11 @@ export default function Dashboard() {
               {/* Footer note */}
               <div className="mt-4 pt-4 border-t border-border-subtle">
                 <p className="text-[11px] text-text-muted leading-relaxed">
-                  Your Pro plan allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per billing month.
+                  Your account allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per billing month.
                 </p>
               </div>
             </div>
           </section>
-          )}
 
           {/* ────────── Help & Resources  (full width, original) ────────── */}
           <section className="lg:col-span-12 auth-card-in" style={{ animationDelay: '0.25s' }}>
@@ -745,148 +583,9 @@ export default function Dashboard() {
       {(activeModal === 'documentation' || activeModal === 'privacyPolicy') && (
         <InfoModal modalKey={activeModal} onClose={() => setActiveModal(null)} />
       )}
-      {activeModal && activeModal !== 'managePlan' && activeModal !== 'pricing' && activeModal !== 'documentation' && activeModal !== 'privacyPolicy' && (
-        <DashModal modalKey={activeModal} onClose={() => setActiveModal(null)} onUpgrade={handleUpgrade} checkoutLoading={checkoutLoading} />
-      )}
 
       {/* ── Pricing Modal ── */}
-      <PricingModal
-        isOpen={activeModal === 'pricing'}
-        onClose={() => setActiveModal(null)}
-        onUpgrade={handleUpgrade}
-        onStartTrial={handleStartTrial}
-        checkoutLoading={checkoutLoading}
-        onValidateCoupon={validateCoupon}
-        isPro={sub?.plan === 'pro' && sub?.status === 'active'}
-        freeTrialUsed={!!sub?.free_trial_used}
-        subscriptionLoading={subLoading}
-        isTrialActive={!!sub?.free_trial_used && sub?.plan === 'pro' && sub?.status === 'active' && sub?.free_trial_end_at && new Date(sub.free_trial_end_at) >= new Date()}
-      />
-
-      {/* ── Manage Plan Modal ── */}
-      {activeModal === 'managePlan' && (
-        <ModalShell
-          title="Manage Your Plan"
-          icon={CreditCard}
-          maxWidth="max-w-md"
-          bodyClassName="px-6 py-5 space-y-5"
-          onClose={() => { setActiveModal(null); setConfirmCancel(false) }}
-        >
-              {confirmCancel ? (
-                // Cancellation Confirmation View
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl border bg-red-500/10 border-red-500/20 flex gap-3">
-                    <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-bold text-sm text-red-700 mb-1">Cancel Subscription?</h4>
-                      <p className="text-sm text-red-800 leading-relaxed">
-                        This will <strong>immediately</strong> downgrade your account to the Free plan. You will lose access to Pro features right now.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={() => setConfirmCancel(false)}
-                      className="flex-1 py-2.5 rounded-xl border border-border-subtle hover:bg-bg-surface text-text-secondary text-sm font-medium transition-colors cursor-pointer"
-                    >
-                      Keep Plan
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          setCheckoutLoading(true) // reuse loading state
-                          await cancelSubscription()
-                          setActiveModal(null)
-                          setConfirmCancel(false)
-                          setPaymentMsg({ type: 'info', text: 'Subscription cancelled. You are now on the Free plan.' })
-                          safeTimeout(() => setPaymentMsg(null), 5000)
-                        } catch (err) {
-                          console.error(err)
-                          setPaymentMsg({ type: 'error', text: 'Failed to cancel subscription' })
-                        } finally {
-                          setCheckoutLoading(false)
-                        }
-                      }}
-                      disabled={checkoutLoading}
-                      className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {checkoutLoading ? 'Processing…' : 'Confirm Cancel'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                // Standard Management View
-                <>
-                  {/* Current Plan Badge */}
-                  <div className="rounded-xl p-4 bg-primary/[0.06] border border-primary/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-accent">Current Plan</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary text-white">
-                        {sub?.plan === 'pro' ? 'Pro' : 'Free'}
-                      </span>
-                    </div>
-                    <p className="text-2xl font-mono font-bold text-text-primary">
-                      {sub?.plan === 'pro' ? '₱299' : '₱0'}<span className="text-sm font-sans font-normal text-text-muted">/month</span>
-                    </p>
-                  </div>
-
-                  {/* Plan Details */}
-                  <div className="space-y-3">
-                    {[
-                      { label: 'Status', value: sub?.status === 'active' ? 'Active' : (sub?.status || 'Unknown') },
-                      { label: 'Paid On', value: sub?.paid_at ? new Date(sub.paid_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Expires', value: sub?.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—' },
-                      { label: 'Batches', value: `${sub?.usage?.used || 0} this month` },
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-bg-elevated">
-                        <span className="text-sm text-text-secondary">{item.label}</span>
-                        <span className="text-sm font-mono font-medium text-text-primary">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Features list */}
-                  <div className="rounded-xl border border-border-subtle bg-bg-elevated p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-text-muted">Included Features</p>
-                    <ul className="space-y-2.5 text-sm">
-                      {[
-                        { text: 'Unlimited batches', included: true },
-                        { text: 'Offline batching', included: sub?.plan === 'pro' },
-                        { text: 'Up to 2 devices', included: sub?.plan === 'pro' },
-                      ].map((f) => (
-                        <li key={f.text} className={`flex items-center gap-2.5 ${f.included ? 'text-text-primary' : 'text-text-muted'}`}>
-                          {f.included
-                            ? <Check className="w-4 h-4 shrink-0 text-emerald-700" />
-                            : <X className="w-4 h-4 shrink-0 opacity-50" />
-                          }
-                          <span>{f.text}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2.5 pt-1">
-                    <button
-                      onClick={() => { setActiveModal(null); router.push('/billing') }}
-                      className="w-full py-2.5 rounded-xl border border-border-subtle hover:bg-bg-surface text-text-secondary text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <CreditCard className="w-4 h-4" /> View Billing History
-                    </button>
-
-                    {sub?.plan === 'pro' && (
-                      <button
-                        onClick={() => setConfirmCancel(true)}
-                        className="w-full py-2 text-xs font-medium text-red-700 hover:text-red-800 transition-colors cursor-pointer"
-                      >
-                        Cancel Subscription
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-        </ModalShell>
-      )}
+      <PricingModal isOpen={activeModal === 'pricing'} onClose={() => setActiveModal(null)} />
     </div>
   )
 }

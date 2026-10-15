@@ -460,11 +460,6 @@ function App() {
     await window.electronAPI.authOpenDashboard();
   };
 
-  // Handle upgrade to Pro (opens website dashboard with upgrade parameter)
-  const handleUpgrade = async () => {
-    await window.electronAPI.authOpenDashboard();
-  };
-
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -533,7 +528,6 @@ function App() {
             subscription={subscription}
             onLogout={handleLogout}
             onViewProfile={handleViewProfile}
-            onUpgrade={handleUpgrade}
             onManageDevices={() => setShowDeviceManagerModal(true)}
             updateAvailable={updateAvailable}
             latestVersion={latestVersion}
@@ -610,7 +604,6 @@ function App() {
         {sortView && appState === STATES.READY && batchLimitExceeded && (
           <BatchLimitCard
             limitInfo={batchLimitExceeded}
-            onUpgrade={handleUpgrade}
             onGoBack={() => {
               clearBatchLimitExceeded();
             }}

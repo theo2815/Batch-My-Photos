@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useSubscription } from '../hooks/useSubscription';
 import { Play, Menu, X } from 'lucide-react';
 import PricingModal from './PricingModal';
 
@@ -20,14 +19,11 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const mobileMenuRef = useRef(null);
   const hamburgerRef = useRef(null);
   const pathname = usePathname();
   const router = useRouter();
   const isLanding = pathname === '/';
-  // Billing data + actions come from the shared hook (no duplicated fetches)
-  const { subscription, loading: subLoading, createCheckout, startFreeTrial, validateCoupon } = useSubscription();
 
   // Handle hash links (e.g. /#faq) — scroll if on landing, navigate if not
   const handleHashClick = (e, href) => {
@@ -89,49 +85,6 @@ export default function Navbar() {
     } finally {
       setLoggingOut(false);
     }
-  };
-
-  // Pricing modal: if guest → login, if logged in → create checkout directly and redirect to PayMongo
-  const handlePricingUpgrade = async (couponCode = null) => {
-    if (!user) {
-      setPricingOpen(false);
-      router.push('/login');
-      return;
-    }
-    try {
-      setCheckoutLoading(true);
-      const checkoutUrl = await createCheckout(couponCode);
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
-    } catch (err) {
-      setCheckoutLoading(false);
-      throw err; // PricingModal will catch this and display the error inline
-    }
-  };
-
-  // Free trial activation (no payment required)
-  const handleStartTrial = async () => {
-    if (!user) {
-      setPricingOpen(false);
-      router.push('/login');
-      return;
-    }
-    await startFreeTrial();
-
-    // Trial activated — close modal and go to dashboard for success feedback
-    // (the hook refetches the subscription; the toast flag travels via sessionStorage)
-    setPricingOpen(false);
-    sessionStorage.setItem('bmp_nav_state', JSON.stringify({ trialActivated: true }));
-    router.push('/dashboard');
-  };
-
-  // Coupon validation for logged-in users
-  const handleValidateCoupon = async (code) => {
-    if (!user) return { valid: false, reason: 'Not authenticated' };
-    return validateCoupon(code);
   };
 
   return (
@@ -340,21 +293,7 @@ export default function Navbar() {
       </nav>
 
       {/* Pricing Modal — opened from navbar */}
-      <PricingModal
-        isOpen={pricingOpen}
-        onClose={() => {
-          setPricingOpen(false);
-          setCheckoutLoading(false);
-        }}
-        onUpgrade={handlePricingUpgrade}
-        onStartTrial={handleStartTrial}
-        checkoutLoading={checkoutLoading}
-        onValidateCoupon={user ? handleValidateCoupon : null}
-        isPro={subscription?.plan === 'pro'}
-        freeTrialUsed={!!subscription?.free_trial_used}
-        subscriptionLoading={subLoading}
-        isTrialActive={!!subscription?.free_trial_used && subscription?.plan === 'pro' && subscription?.free_trial_end_at && new Date(subscription.free_trial_end_at) >= new Date()}
-      />
+      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </>
   );
 }

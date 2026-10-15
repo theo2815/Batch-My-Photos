@@ -35,10 +35,10 @@ const TermsOfService = () => {
               <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process — we don't monitor, review, or access your files.</p>
             </div>
             <div>
-              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Free &amp; Pro plans</h4>
+              <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">Free to use</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
-                <li>• The <strong className="text-text-secondary">Free plan</strong> lets you process unlimited batches and requires an internet connection.</li>
-                <li>• The <strong className="text-text-secondary">Pro plan</strong> adds offline batching and additional devices. Monthly billing. Cancel anytime.</li>
+                <li>• Batch My Photos is <strong className="text-text-secondary">free</strong>: unlimited batches, offline batching, and up to 3 devices per account. There are no paid plans.</li>
+                <li>• <strong className="text-text-secondary">Blur detection</strong> is a free, invite-only beta. Its suggestions may be wrong; check them before you move or delete photos.</li>
               </ul>
             </div>
             <div>

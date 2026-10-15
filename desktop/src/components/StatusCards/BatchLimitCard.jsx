@@ -2,14 +2,14 @@
  * BatchLimitCard Component
  *
  * Shown when user has exceeded their monthly batch limit.
- * Provides upgrade CTA and reassurance about file safety.
+ * Explains why the batch could not run and reassures about file safety.
  */
 
 import React from 'react';
-import { AlertTriangle, Crown, ArrowLeft, ShieldCheck, WifiOff, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ShieldCheck, WifiOff, RefreshCw } from 'lucide-react';
 import './StatusCards.css';
 
-function BatchLimitCard({ limitInfo, onUpgrade, onGoBack, onRetry }) {
+function BatchLimitCard({ limitInfo, onGoBack, onRetry }) {
   const { message, usage, isExpired, isOfflineFree } = limitInfo;
 
   const usedCount = usage?.used ?? 0;
@@ -56,22 +56,16 @@ function BatchLimitCard({ limitInfo, onUpgrade, onGoBack, onRetry }) {
               <RefreshCw size={18} />
               Try Again
             </button>
-            <button className="btn secondary" onClick={onUpgrade}>
-              <Crown size={18} />
-              Upgrade to Pro
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn primary" onClick={onUpgrade}>
-              <Crown size={18} />
-              Upgrade to Pro
-            </button>
             <button className="btn secondary" onClick={onGoBack}>
               <ArrowLeft size={18} />
               Go Back
             </button>
           </>
+        ) : (
+          <button className="btn primary" onClick={onGoBack}>
+            <ArrowLeft size={18} />
+            Go Back
+          </button>
         )}
       </div>
     </div>
