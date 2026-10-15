@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { FlaskConical, Mail, Loader2, AlertTriangle, X, Check, RotateCcw } from 'lucide-react'
+import { FlaskConical, Mail, Loader2, AlertTriangle, X, Send } from 'lucide-react'
 
 const VOLUME_LABELS = {
   'under-500': 'Under 500',
@@ -17,7 +17,8 @@ export default function AdminBetaRequests() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [savingId, setSavingId] = useState(null)
+  const [sendingId, setSendingId] = useState(null)
+  const [keys, setKeys] = useState({}) // user_id -> key typed in that card
 
   // Direct table access — RLS lets admins read every row
   const loadRequests = () =>
@@ -34,16 +35,18 @@ export default function AdminBetaRequests() {
 
   useEffect(() => { loadRequests() }, [])
 
-  const setKeySent = async (userId, sent) => {
-    setSavingId(userId)
+  // Emails the key (send-email template) and marks the request as sent
+  const sendKey = async (userId) => {
+    setSendingId(userId)
     setError('')
-    const { error: updateError } = await supabase
-      .from('blur_beta_requests')
-      .update({ key_sent_at: sent ? new Date().toISOString() : null })
-      .eq('user_id', userId)
-    setSavingId(null)
-    if (updateError) setError('Failed to update the request')
-    else loadRequests()
+    const { error: rpcError } = await supabase.rpc('send_blur_beta_key', { p_user_id: userId, p_key: (keys[userId] || '').trim() })
+    setSendingId(null)
+    if (rpcError) {
+      setError(rpcError.message || 'Failed to send the key')
+      return
+    }
+    setKeys((k) => ({ ...k, [userId]: '' }))
+    loadRequests()
   }
 
   const pending = requests.filter((r) => !r.key_sent_at).length
@@ -107,18 +110,35 @@ export default function AdminBetaRequests() {
                     </dl>
                     {r.reason && <p className="mt-3 text-sm text-text-secondary whitespace-pre-line break-words">{r.reason}</p>}
                   </div>
-                  <button
-                    onClick={() => setKeySent(r.user_id, !r.key_sent_at)}
-                    disabled={savingId === r.user_id}
-                    className={`shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 ${
-                      r.key_sent_at
-                        ? 'border border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-surface'
-                        : 'bg-primary hover:bg-primary-hover text-white'
-                    }`}
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); sendKey(r.user_id) }}
+                    className="shrink-0 flex flex-col gap-2 w-full sm:w-64"
                   >
-                    {savingId === r.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : r.key_sent_at ? <RotateCcw className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                    {r.key_sent_at ? 'Undo' : 'Mark key sent'}
-                  </button>
+                    <label htmlFor={`key-${r.user_id}`} className="sr-only">Beta key for {r.full_name}</label>
+                    <input
+                      id={`key-${r.user_id}`}
+                      required
+                      maxLength={1024}
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={keys[r.user_id] || ''}
+                      onChange={(e) => setKeys((k) => ({ ...k, [r.user_id]: e.target.value }))}
+                      placeholder="Paste beta key"
+                      className="block w-full rounded-xl border border-border-subtle bg-bg-surface text-text-primary placeholder:text-text-muted py-2.5 px-3.5 text-sm font-mono focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingId === r.user_id}
+                      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 ${
+                        r.key_sent_at
+                          ? 'border border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-surface'
+                          : 'bg-primary hover:bg-primary-hover text-white'
+                      }`}
+                    >
+                      {sendingId === r.user_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {r.key_sent_at ? 'Send again' : 'Send key'}
+                    </button>
+                  </form>
                 </div>
               </div>
             ))}

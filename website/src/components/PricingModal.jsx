@@ -131,7 +131,7 @@ export default function PricingModal({ isOpen, onClose }) {
           ) : sent ? (
             <div className="mt-auto flex items-start gap-2 px-3 py-3 rounded-lg border text-sm border-emerald-600/30 bg-emerald-600/10 text-emerald-800">
               <Check className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Request sent. We&apos;ll email your beta key to <strong>{user.email}</strong>.</span>
+              <span>Request sent. We emailed a confirmation to <strong>{user.email}</strong>; your beta key will come there if you&apos;re picked.</span>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-auto">

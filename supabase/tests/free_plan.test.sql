@@ -58,16 +58,14 @@ SELECT is(request_blur_beta('Ana Cruz', 'Trail races', 'under-500', NULL)->>'ok'
 SELECT is((SELECT count(*) FROM public.blur_beta_requests), 1::bigint, 'one request per account');
 SELECT throws_ok($$SELECT request_blur_beta('Ana', 'Marathons', 'lots', NULL)$$, '23514', NULL, 'unknown photo volume is rejected');
 SELECT throws_ok($$SELECT request_blur_beta('', 'Marathons', 'under-500', NULL)$$, '23514', NULL, 'name is required');
-WITH own AS (UPDATE public.blur_beta_requests SET key_sent_at = now() RETURNING 1)
-SELECT is((SELECT count(*) FROM own), 0::bigint, 'user cannot mark their own key as sent');
+SELECT throws_ok($$UPDATE public.blur_beta_requests SET key_sent_at = now()$$, '42501', NULL, 'user cannot mark their own key as sent');
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000102', true);
 SELECT is((SELECT count(*) FROM public.blur_beta_requests), 0::bigint, 'user cannot read another request');
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000104', true);
 SELECT is((SELECT count(*) FROM public.blur_beta_requests WHERE user_id = '00000000-0000-0000-0000-000000000101'), 1::bigint, 'admin reads another user''s request');
-WITH sent AS (UPDATE public.blur_beta_requests SET key_sent_at = now() WHERE user_id = '00000000-0000-0000-0000-000000000101' RETURNING 1)
-SELECT is((SELECT count(*) FROM sent), 1::bigint, 'admin marks a key as sent');
+SELECT throws_ok($$UPDATE public.blur_beta_requests SET key_sent_at = now()$$, '42501', NULL, 'admins mark a key sent only by sending it (send_blur_beta_key)');
 
 RESET ROLE;
 SET LOCAL ROLE anon;
