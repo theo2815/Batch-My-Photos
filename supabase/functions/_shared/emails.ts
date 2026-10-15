@@ -8,6 +8,8 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
 const LOGO_URL = 'https://www.batchmyphotos.com/app_icon.png'
 const DASHBOARD_URL = 'https://www.batchmyphotos.com/login'
+const ADMIN_BETA_URL = 'https://www.batchmyphotos.com/admin/beta-requests'
+const STORE_URL = 'https://apps.microsoft.com/detail/9N1KKMV4NX4J'
 
 const COLORS = {
   bgOuter: '#141414',
@@ -261,4 +263,54 @@ export function sendFreeTrialConfirmation({ to, trialEndAt }: { to: string; tria
      ${ctaButton('Download BatchMyPhotos', 'https://apps.microsoft.com/detail/9N1KKMV4NX4J')}`
   )
   return sendEmail({ to, subject: 'Free Trial Activated — BatchMyPhotos Pro', html })
+}
+
+// ── Blur beta ────────────────────────────────────────────────────────────────
+
+// Escape text a user typed before it goes into HTML
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+
+const VOLUME_LABELS: Record<string, string> = {
+  'under-500': 'Under 500', '500-2000': '500 – 2,000', '2000-5000': '2,000 – 5,000', 'over-5000': 'Over 5,000',
+}
+
+export function sendBetaRequestReceived({ to, fullName }: { to: string; fullName: string }) {
+  const html = wrapTemplate(
+    'Request Received', 'You asked to join the blur detection beta',
+    `${p(`Hi ${esc(fullName)}, thanks for offering to test blur detection.`)}
+     ${p('We open the beta to a few photographers at a time while the detector is still learning. If you are picked, we will email your personal beta key to this address with steps to turn it on.')}
+     ${p('You can update your request any time from the Pricing page on our website.')}`
+  )
+  return sendEmail({ to, subject: 'We got your blur beta request — BatchMyPhotos', html })
+}
+
+export function sendBetaRequestAdminAlert({ to, data }: {
+  to: string
+  data: { full_name: string; email: string; photography_type: string; photos_per_event: string; reason?: string | null }
+}) {
+  const html = wrapTemplate(
+    'New Beta Request', 'Someone asked to join the blur detection beta',
+    `${highlightCard([
+       { label: 'Name', value: esc(data.full_name) },
+       { label: 'Email', value: esc(data.email) },
+       { label: 'Shoots', value: esc(data.photography_type) },
+       { label: 'Photos per event', value: esc(VOLUME_LABELS[data.photos_per_event] || data.photos_per_event) },
+     ])}
+     ${data.reason ? p(`<strong style="color: ${COLORS.textPri};">Why:</strong> ${esc(data.reason)}`) : ''}
+     ${ctaButton('Review requests', ADMIN_BETA_URL)}`
+  )
+  return sendEmail({ to, subject: `New blur beta request: ${data.full_name}`, html })
+}
+
+export function sendBetaKey({ to, fullName, betaKey }: { to: string; fullName: string; betaKey: string }) {
+  const html = wrapTemplate(
+    'Your Blur Beta Key', 'Blur detection is ready for you to test',
+    `${p(`Hi ${esc(fullName)}, you're in. Here is your personal blur detection beta key:`)}
+     <p style="margin: 0 0 22px; padding: 16px; background-color: ${COLORS.bgCard}; border: 1px solid ${COLORS.border}; border-radius: 10px; color: ${COLORS.textPri}; font-family: Consolas, Menlo, monospace; font-size: 14px; word-break: break-all; text-align: center;">${esc(betaKey)}</p>
+     ${p(`<strong style="color: ${COLORS.textPri};">To turn it on:</strong> open BatchMyPhotos from the Microsoft Store, choose a photo folder, paste the key into <strong style="color: ${COLORS.textPri};">Blur beta key</strong> in the settings panel, and press <strong style="color: ${COLORS.textPri};">Save beta key</strong>.`)}
+     ${p('The key is for you only, so please do not share it. Blur detection is still learning: it suggests, it never moves or removes your photos. Reply to this email to tell us what it gets right or wrong.')}
+     ${ctaButton('Get BatchMyPhotos', STORE_URL)}`
+  )
+  return sendEmail({ to, subject: 'Your blur detection beta key — BatchMyPhotos', html })
 }
