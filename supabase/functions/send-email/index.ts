@@ -11,6 +11,9 @@ import {
   sendFreeTrialConfirmation,
   sendSubscriptionCancelled,
   sendSubscriptionExpiring,
+  sendBetaRequestReceived,
+  sendBetaRequestAdminAlert,
+  sendBetaKey,
 } from '../_shared/emails.ts'
 
 Deno.serve(async (req) => {
@@ -38,6 +41,15 @@ Deno.serve(async (req) => {
         break
       case 'subscription_expiring':
         await sendSubscriptionExpiring({ to, expiresAt: data.expires_at })
+        break
+      case 'beta_request_received':
+        await sendBetaRequestReceived({ to, fullName: data.full_name })
+        break
+      case 'beta_request_admin':
+        await sendBetaRequestAdminAlert({ to, data })
+        break
+      case 'beta_key':
+        await sendBetaKey({ to, fullName: data.full_name, betaKey: data.key })
         break
       default:
         console.warn('send-email: unknown kind', kind)
