@@ -58,7 +58,7 @@ const TermsOfService = () => {
               <p className="text-sm text-text-secondary leading-relaxed">Questions? Reach us at <a href="mailto:batchmyphotos@gmail.com" className="text-accent hover:text-accent transition-colors">batchmyphotos@gmail.com</a>.</p>
             </div>
             <div className="pt-3 border-t border-border-subtle">
-              <p className="text-xs font-mono text-text-muted">Last updated: February 2026</p>
+              <p className="text-xs font-mono text-text-muted">Last updated: October 2026</p>
             </div>
           </div>
         </div>

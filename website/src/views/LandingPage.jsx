@@ -308,7 +308,7 @@ const PERSONAS = [
 
 // ─── FAQ ────────────────────────────────────────────────────────────────────
 const FAQ_ITEMS = [
-  { q: 'Are my photos uploaded anywhere?', a: "No. Photos are processed on your computer and are never uploaded. There's no cloud step and no third-party access." },
+  { q: 'Are my photos uploaded anywhere?', a: "No. Photos are processed on your computer and are never uploaded. The only exception is the opt-in blur detection beta, which sends resized copies to our blur service for analysis." },
   { q: 'How accurate is the live demo compared to the real app?', a: 'The demo runs the same workflow as the desktop app, on sample photos instead of your own. Download the app to use it on your real files.' },
   { q: 'Can it handle very large folders (10,000+ photos)?', a: "Yes. It's built for 5,000 to 20,000+ photos and processes files directly on your drive, so speed depends on your hardware, not a server." },
   { q: "What if I don't like the result? Can I undo?", a: 'Yes. Every batch is reversible. Undo puts files back where they were, and you can re-batch with different settings as often as you want.' },
