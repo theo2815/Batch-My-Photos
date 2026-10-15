@@ -247,15 +247,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} [threshold='moderate'] - Sensitivity: 'strict' | 'moderate' | 'lenient'
    * @returns {Promise<Object>} { success, blurResults, totalAnalyzed, blurryCount, totalGroups }
    */
-  analyzeBlur: (folderPath, threshold = 'moderate', categories = null) =>
-    ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories }),
+  analyzeBlur: (folderPath, threshold = 'moderate', categories = null, requestId = null) =>
+    ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories, requestId }),
 
   /**
    * Whether blur detection is available (feature-flagged off for release).
    * The settings toggle stays visible but is disabled when this is false.
+   * @param {boolean} [includeBeta=false] - Request beta status alongside availability
+   * @returns {Promise<boolean|{ enabled: boolean, betaEnabled: boolean }>}
+   */
+  getBlurDetectionEnabled: (includeBeta = false) => ipcRenderer.invoke('get-blur-detection-enabled', includeBeta),
+
+  /**
+   * Whether the QuickPitik Upload view is available (feature-flagged; off in
+   * packaged builds until it ships).
    * @returns {Promise<boolean>}
    */
-  getBlurDetectionEnabled: () => ipcRenderer.invoke('get-blur-detection-enabled'),
+  getQuickPitikUploadEnabled: () => ipcRenderer.invoke('get-quickpitik-upload-enabled'),
 
   /**
    * Listen for blur analysis progress updates
@@ -268,6 +276,60 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('blur-progress', listener);
     return () => {
       ipcRenderer.removeListener('blur-progress', listener);
+    };
+  },
+
+  // ============================================================================
+  // QUICKPITIK UPLOAD APIs (feature-flagged; tokens never reach the renderer)
+  // ============================================================================
+
+  /** Open the QuickPitik connect page in the browser. @returns {Promise<{ success: boolean, error?: string }>} */
+  qpConnectStart: () => ipcRenderer.invoke('qp-connect-start'),
+
+  /** @returns {Promise<{ connected: boolean, email: string|null, name: string|null }>} */
+  qpSessionStatus: () => ipcRenderer.invoke('qp-session-status'),
+
+  /** Sign the QuickPitik account out of this app. @returns {Promise<{ success: boolean }>} */
+  qpDisconnect: () => ipcRenderer.invoke('qp-disconnect'),
+
+  /**
+   * Listen for the browser hand-off result (batchmyphotos://quickpitik/callback).
+   * @param {Function} callback - Called with { success, email, name } or { success: false, error }
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onQpConnectResult: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('qp-connect-result', listener);
+    return () => {
+      ipcRenderer.removeListener('qp-connect-result', listener);
+    };
+  },
+
+  /** Read-only scan of a dropped shoot folder (register it with selectFolder or registerDroppedFolder first). */
+  qpScanFolder: (folderPath) => ipcRenderer.invoke('qp-scan-folder', folderPath),
+
+  /** Events the connected photographer can upload to. @returns {Promise<{ success: boolean, events?: Array, error?: string, authRejected?: boolean }>} */
+  qpListEvents: () => ipcRenderer.invoke('qp-list-events'),
+
+  /**
+   * Start uploading the ticked subfolders (relPaths from qpScanFolder) to one event.
+   * Resolves at once with { success, total } or { success: false, error }; progress
+   * arrives through onQpUploadProgress.
+   */
+  qpUploadStart: ({ rootPath, eventId, folders }) => ipcRenderer.invoke('qp-upload-start', { rootPath, eventId, folders }),
+
+  /** Stop after the files in flight. @returns {Promise<{ success: boolean }>} */
+  qpUploadCancel: () => ipcRenderer.invoke('qp-upload-cancel'),
+
+  /**
+   * Listen for upload progress ({ phase, folder, file?, counts, bytes, failures?, error? }).
+   * @returns {Function} Cleanup function to remove the listener
+   */
+  onQpUploadProgress: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('qp-upload-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('qp-upload-progress', listener);
     };
   },
 
@@ -528,6 +590,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * Returns { updateAvailable, currentVersion, latestVersion, downloadUrl, releaseDate }
    */
   checkAppVersion: () => ipcRenderer.invoke('check-app-version'),
+
+  // Explicitly share one analyzed image and its human label.
+  submitBlurExample: ({ folderPath, fileName, label, displayedHash }) =>
+    ipcRenderer.invoke('submit-blur-example', { folderPath, fileName, label, displayedHash }),
+  // Write-only beta key setup; queries expose status, never the secret.
+  blurBetaKey: (key) => ipcRenderer.invoke('blur-beta-key', { key }),
 
   /**
    * Open a URL in the user's default browser (HTTPS only)

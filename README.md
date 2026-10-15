@@ -45,7 +45,7 @@ It is a sibling product of **QuickPitik** — the marathon photography ecosystem
 | Image handling   | Sharp · Exifr (EXIF parsing)                            |
 | Storage          | electron-store + OS encryption (Windows DPAPI)          |
 | Backend          | Supabase — Postgres (RLS + RPCs) · Auth · Edge Functions · pg_cron · Resend |
-| Payments         | PayMongo (via Supabase Edge Functions)                  |
+| Payments         | None — free since 2026-10-15 (PayMongo functions kept, checkout closed) |
 | Marketing site   | Next.js 15 (App Router) · React 19 · Tailwind v4 · Framer Motion — on Vercel |
 | Packaging        | electron-builder (NSIS + AppX)                          |
 
@@ -73,10 +73,10 @@ BatchMyPhotos is a desktop client + a Next.js marketing/dashboard website, with 
 - **batchEngine.js** — groups files by basename, then bin-packs with First-Fit-Decreasing.
 - **batchExecutor.js** — executes moves/copies with concurrency limits and cross-drive detection.
 - **authService.js** — JWT + refresh-token auth via deep links (`batchmyphotos://auth/callback`).
-- **subscriptionService.js** — enforces subscription gating (batch processing unlimited for all; offline batching stays Pro-only) with offline grace and monotonic clock-tampering detection.
+- **subscriptionService.js** — enforces subscription gating (BatchMyPhotos is free for every account since 2026-10-15: the server reports `is_pro: true` with no expiry, so offline batching is open to all) with offline grace and monotonic clock-tampering detection.
 - **rollbackManager.js** — persists encrypted operation manifests for full undo.
 - **progressManager.js** — tracks progress with interrupt recovery.
-- **deviceService.js** — hardware-ID binding via node-machine-id (Pro: 2 devices, Pro+: 5).
+- **deviceService.js** — hardware-ID binding via node-machine-id (every account: at least 3 devices, set on the server).
 - **blurDetectionService.js** — AI blur detection via the shared `ai-api` service (feature-flagged).
 - **securityManager.js** — path-whitelist validation; prevents directory traversal.
 

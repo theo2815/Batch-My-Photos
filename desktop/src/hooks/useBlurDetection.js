@@ -21,12 +21,48 @@ function formatEta(seconds) {
  * @param {boolean} params.blurDetectionEnabled - Whether blur detection is toggled on
  * @param {string} params.blurSensitivity - Sensitivity preset: 'strict' | 'moderate' | 'lenient'
  */
-export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity, blurCategories }) {
+export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, isBeta = false }) {
   const [blurResults, setBlurResults] = useState(null);     // Full results map: { baseName: { score, isBlurry, analyzedFile, predictedClass } }
   const [blurProgress, setBlurProgress] = useState(null);   // { current, total }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [unflaggedGroups, setUnflaggedGroups] = useState(new Set()); // User-unflagged base names
   const [aiUnavailable, setAiUnavailable] = useState(false); // AI service down
+
+  const [labels, setLabels] = useState(new Map());
+  const [submissions, setSubmissions] = useState(new Map());
+  const pendingSubmissions = useRef(new Set());
+  const submissionKey = useCallback(fileName => JSON.stringify([folderPath, fileName]), [folderPath]);
+  const setLabel = useCallback((fileName, label) => {
+    setLabels(previous => new Map(previous).set(fileName, label));
+    const key = submissionKey(fileName);
+    setSubmissions(previous => {
+      if (previous.get(key)?.status === 'pending') return previous;
+      const next = new Map(previous);
+      next.delete(key);
+      return next;
+    });
+  }, [submissionKey]);
+  const getSubmission = (fileName, displayedHash) => {
+    const state = submissions.get(submissionKey(fileName));
+    return state?.displayedHash === displayedHash ? state : undefined;
+  };
+  const submitExample = useCallback(async (fileName, label, displayedHash) => {
+    const key = submissionKey(fileName);
+    if (pendingSubmissions.current.has(key)) return;
+    pendingSubmissions.current.add(key);
+    const update = state => setSubmissions(previous => new Map(previous).set(key,
+      displayedHash ? { ...state, displayedHash } : state));
+    update({ status: 'pending' });
+    try {
+      const result = await window.electronAPI.submitBlurExample({ folderPath, fileName, label, displayedHash });
+      update({ status: result.success ? 'success' : 'error',
+        error: result.error || 'Could not submit this example. Please try again.' });
+    } catch (_error) {
+      update({ status: 'error', error: 'Could not submit this example. Check your connection and try again.' });
+    } finally {
+      pendingSubmissions.current.delete(key);
+    }
+  }, [folderPath, submissionKey]);
 
   // Cache discriminator: stable serialization of (sensitivity, categories)
   // Re-analysis runs when this changes between calls.
@@ -41,12 +77,15 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   // Guard against concurrent analysis runs (refs are synchronous, unlike state)
   const analysisInFlightRef = useRef(false);
+  const analysisSettledRef = useRef(null);
+  const analysisRunRef = useRef(0);
+  const analysisResetRef = useRef(0);
 
   // Subscribe to blur progress updates from main process
   useEffect(() => {
     if (!window.electronAPI?.onBlurProgress) return;
     const cleanup = window.electronAPI.onBlurProgress((data) => {
-      setBlurProgress(data);
+      if (data?.requestId === analysisRunRef.current && analysisInFlightRef.current) setBlurProgress(data);
     });
     return cleanup;
   }, []);
@@ -60,6 +99,12 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   }, [blurResults, unflaggedGroups]);
 
   const blurryCount = blurryGroups.length;
+
+  const { analyzedCount, unanalyzedCount } = useMemo(() => {
+    const results = Object.values(blurResults || {});
+    const analyzedCount = results.filter(result => result.score >= 0).length;
+    return { analyzedCount, unanalyzedCount: results.length - analyzedCount };
+  }, [blurResults]);
 
   // Derived: ETA for blur analysis based on progress and elapsed time
   const blurEta = useMemo(() => {
@@ -78,14 +123,20 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   /**
    * Run blur analysis on the current folder.
-   * Called when blur detection is enabled or sensitivity changes.
+   * Called only after the user chooses Start Analysis.
    */
   const runBlurAnalysis = useCallback(async () => {
     if (!folderPath || !blurDetectionEnabled) return;
 
     // Prevent concurrent analysis runs — ref check is synchronous and
     // immune to React batching race conditions (unlike state).
-    if (analysisInFlightRef.current) return;
+    if (analysisInFlightRef.current) {
+      const queuedReset = analysisResetRef.current;
+      await analysisSettledRef.current;
+      if (queuedReset !== analysisResetRef.current) return;
+      if (blurDetectionEnabled) return runBlurAnalysis();
+      return;
+    }
 
     // Skip if we already analyzed this folder with the same sensitivity + categories
     if (
@@ -96,13 +147,19 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     }
 
     analysisInFlightRef.current = true;
+    analysisSettledRef.current = new Promise(resolve => { analysisSettledRef.currentResolve = resolve; });
+    const runId = ++analysisRunRef.current;
     setIsAnalyzing(true);
+    setBlurResults(null);
+    setLabels(new Map());
+    setUnflaggedGroups(new Set());
     setBlurProgress(null);
     setAiUnavailable(false);
     analysisStartTimeRef.current = Date.now();
 
     try {
-      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories);
+      const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories, runId);
+      if (runId !== analysisRunRef.current) return;
 
       if (result.success) {
         setBlurResults(result.blurResults);
@@ -116,19 +173,22 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
         setBlurResults(null);
       }
     } catch (err) {
+      if (runId !== analysisRunRef.current) return;
       console.error('[BLUR] Analysis error:', err);
       setBlurResults(null);
     } finally {
       analysisInFlightRef.current = false;
-      setIsAnalyzing(false);
-      setBlurProgress(null);
-      analysisStartTimeRef.current = null;
+      analysisSettledRef.currentResolve?.();
+      if (runId === analysisRunRef.current) {
+        setIsAnalyzing(false);
+        setBlurProgress(null);
+        analysisStartTimeRef.current = null;
+      }
     }
   }, [folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, analysisKey]);
 
   /**
-   * Toggle a group's blur flag (un-flag or re-flag).
-   * Un-flagged groups are placed back into normal batches.
+   * Dismiss or restore a blur suggestion without changing batch routing.
    */
   const toggleBlurFlag = useCallback((baseName) => {
     setUnflaggedGroups(prev => {
@@ -146,13 +206,16 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
    * Reset all blur state (called when folder changes or feature is toggled off).
    */
   const resetBlurState = useCallback(() => {
+    analysisRunRef.current++;
+    analysisResetRef.current++;
+    setLabels(new Map());
     setBlurResults(null);
     setBlurProgress(null);
     setIsAnalyzing(false);
     setUnflaggedGroups(new Set());
     setAiUnavailable(false);
     lastAnalysisRef.current = { folderPath: null, key: null };
-    analysisInFlightRef.current = false;
+    // Keep the guard until main settles; a toggle must not start another stream.
   }, []);
 
   /**
@@ -165,12 +228,19 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   }, []);
 
   return {
+    isBeta,
+    labels,
+    setLabel,
+    getSubmission,
+    submitExample,
     blurResults,
     blurProgress,
     blurEta,
     isAnalyzing,
     blurryGroups,
     blurryCount,
+    analyzedCount,
+    unanalyzedCount,
     unflaggedGroups,
     aiUnavailable,
     runBlurAnalysis,

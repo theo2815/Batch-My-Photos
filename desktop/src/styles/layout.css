@@ -105,6 +105,47 @@
   border-color: var(--border);
 }
 
+/* Sort | Upload switch (QuickPitik Upload view, feature-flagged) */
+.view-switch {
+  display: inline-flex;
+  margin-top: var(--space-md);
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.view-switch button {
+  min-width: 88px;
+  min-height: 36px;
+  padding: 0 var(--space-md);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.view-switch button[aria-pressed="true"] {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.view-switch button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.view-switch button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .app-main {
   flex: 1;
   display: flex;

@@ -96,7 +96,7 @@ export function useBatchExecution({ setAppState, setError }) {
         // No fire-and-forget needed here — tracks are enqueued for retry if offline.
       } else if (results.code === 'BATCH_LIMIT_EXCEEDED' || results.code === 'PENDING_TRACKS_EXCEEDED') {
         // Subscription limit or pending-tracks limit enforced server-side — show limit card
-        const message = results.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.';
+        const message = results.error || 'Could not verify your account. Connect to the internet and try again.';
         setBatchLimitExceeded({
           message,
           usage: results.usage || null,

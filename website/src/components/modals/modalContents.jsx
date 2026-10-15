@@ -120,14 +120,15 @@ const MODAL_CONTENT = {
         <p className="text-text-secondary leading-relaxed">Exactly how Batch My Photos handles your data.</p>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your photos stay on your device</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are never uploaded, transmitted, or shared with any server, cloud service, or third party.</p>
+          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are not uploaded, transmitted, or shared with any server, cloud service, or third party. The one exception is the opt-in blur detection beta, described below.</p>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we collect</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• <strong className="text-text-secondary">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
-            <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce per-plan device limits. We do not collect your device name, model, or operating system.</li>
-            <li>• <strong className="text-text-secondary">Subscription & payment data</strong> — Plan type, payment status, and PayMongo transaction references. We never store full card numbers.</li>
+            <li>• <strong className="text-text-secondary">Account info</strong> — When you create an account, we store your email and plan.</li>
+            <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce the per-account device limit. We do not collect your device name, model, or operating system.</li>
+            <li>• <strong className="text-text-secondary">Blur beta requests</strong> — If you ask to join the blur detection beta, we store your name, what you shoot, your photos per event, and your note, so we can choose testers and email your key.</li>
+            <li>• <strong className="text-text-secondary">Blur beta photos</strong> — If you are a blur beta tester and run blur detection, resized copies of those photos are sent to the QuickPitik blur service for analysis. If you press &quot;Submit this example&quot; on a photo, that resized photo and your Sharp/Blurry label are stored privately so we can improve the detector. Only our team can see them.</li>
             <li>• <strong className="text-text-secondary">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity, batch counts) to improve the app. This never includes file names, photo content, or personal data.</li>
             <li>• <strong className="text-text-secondary">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
           </ul>
@@ -135,7 +136,7 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we don't collect</h4>
           <ul className="space-y-1 text-sm text-text-secondary">
-            <li>• Photo content, metadata, or file names</li>
+            <li>• Photo content, metadata, or file names (except the blur beta photos above)</li>
             <li>• File system paths or folder structures</li>
             <li>• Any data from your local machine</li>
           </ul>
@@ -143,9 +144,9 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Data handling & retention</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• <strong className="text-text-secondary">Photos</strong> — All photo processing happens entirely on your local device. No images are ever uploaded to our servers.</li>
-            <li>• <strong className="text-text-secondary">Account data</strong> — Your email, subscription status, and device bindings are stored securely in our database (hosted by Supabase) for as long as your account is active.</li>
-            <li>• <strong className="text-text-secondary">Payment records</strong> — Transaction references are retained for accounting and dispute resolution purposes.</li>
+            <li>• <strong className="text-text-secondary">Photos</strong> — Outside the blur beta, all photo processing happens on your device and no images are uploaded. Beta examples you submit are kept until we no longer need them to improve the detector. They are not removed automatically when you delete your account; ask us and we will delete them.</li>
+            <li>• <strong className="text-text-secondary">Account data</strong> — Your email, usage counts, and device bindings are stored securely in our database (hosted by Supabase) for as long as your account is active.</li>
+            <li>• <strong className="text-text-secondary">Payment records</strong> — References for payments made while BatchMyPhotos had paid plans are retained for accounting and dispute resolution purposes.</li>
             <li>• <strong className="text-text-secondary">Deletion</strong> — When you delete your account, all associated data (account info, device bindings, usage history, and transaction records) is permanently removed from our systems.</li>
           </ul>
         </div>
@@ -155,7 +156,7 @@ const MODAL_CONTENT = {
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Third-party services</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">We use Supabase for authentication and Paymongo for payment processing. Both handle only the minimum data required (email, payment info) and are GDPR-compliant.</p>
+          <p className="text-sm text-text-secondary leading-relaxed">We use Supabase for sign-in, our database, and private file storage. PayMongo processed payments while BatchMyPhotos had paid plans; we no longer take payments. Both handle only the minimum data required and are GDPR-compliant.</p>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your rights</h4>
@@ -168,7 +169,7 @@ const MODAL_CONTENT = {
           <p className="text-sm text-text-secondary leading-relaxed mt-2">To exercise any of these rights, email <a href="mailto:batchmyphotos@gmail.com" className="text-accent hover:text-accent transition-colors">batchmyphotos@gmail.com</a>. We will respond within 30 days.</p>
         </div>
         <div className="pt-3 border-t border-border-subtle">
-          <p className="text-xs text-text-muted">Last updated: February 2026</p>
+          <p className="text-xs text-text-muted">Last updated: October 2026</p>
         </div>
       </div>
     ),
@@ -186,10 +187,10 @@ const MODAL_CONTENT = {
           <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process we don't monitor, review, or access your files.</p>
         </div>
         <div>
-          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Free &amp; Pro plans</h4>
+          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Free to use</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• The <strong className="text-text-secondary">Free plan</strong> lets you process unlimited batches and requires an internet connection.</li>
-            <li>• The <strong className="text-text-secondary">Pro plan</strong> adds offline batching and additional devices. Monthly billing. Cancel anytime.</li>
+            <li>• Batch My Photos is <strong className="text-text-secondary">free</strong>: unlimited batches, offline batching, and up to 3 devices per account. There are no paid plans.</li>
+            <li>• <strong className="text-text-secondary">Blur detection</strong> is a free, invite-only beta. Its suggestions may be wrong; check them before you move or delete photos.</li>
           </ul>
         </div>
         <div>
@@ -209,7 +210,7 @@ const MODAL_CONTENT = {
           <p className="text-sm text-text-secondary leading-relaxed">Questions? Reach us at <a href="mailto:batchmyphotos@gmail.com" className="text-accent hover:text-accent transition-colors">batchmyphotos@gmail.com</a>.</p>
         </div>
         <div className="pt-3 border-t border-border-subtle">
-          <p className="text-xs text-text-muted">Last updated: February 2026</p>
+          <p className="text-xs text-text-muted">Last updated: October 2026</p>
         </div>
       </div>
     ),

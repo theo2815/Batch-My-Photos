@@ -1316,3 +1316,41 @@
   color: #fff;
   transform: scale(1.05);
 }
+
+/* Beta review reuses Finish Line surfaces and native controls. */
+.image-preview-beta {
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: 60px 72px 44px;
+  overflow-y: auto;
+}
+.image-preview-beta .image-preview-container,
+.image-preview-beta .image-preview-img {
+  max-width: 100%;
+  max-height: 45vh;
+}
+.blur-feedback {
+  width: min(680px, 100%);
+  flex-shrink: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.blur-feedback p { margin: 0 0 var(--space-sm); }
+.blur-feedback-file { font-weight: 600; overflow-wrap: anywhere; }
+.blur-feedback-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.blur-feedback button { min-height: 32px; }
+.blur-feedback-actions span { color: var(--text-secondary); }
+.blur-feedback button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-primary); color: var(--accent-primary); }
+.blur-feedback [role="alert"] { color: var(--error); margin-top: var(--space-sm); }
+.blur-feedback [role="status"] { margin-top: var(--space-sm); }
+.image-preview-overlay button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; opacity: 1; }
+.image-preview-overlay button:disabled { cursor: default; opacity: 0.5; }
+@media (max-height: 650px) {
+  .image-preview-beta { justify-content: flex-start; }
+  .image-preview-beta .image-preview-img { max-height: 30vh; }
+}

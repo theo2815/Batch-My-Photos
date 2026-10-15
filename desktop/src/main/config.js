@@ -22,6 +22,8 @@
  */
 
 const { app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 // ============================================================================
 // HELPERS — Parse environment variables with type safety
@@ -70,6 +72,20 @@ const isDevelopment = !app.isPackaged;
 
 /** True when running as a packaged/distributed application */
 const isProduction = app.isPackaged;
+
+// Only the private beta artifact (staging) and the Microsoft Store package (production)
+// contain this nonsecret manifest.
+function readBetaManifest() {
+  if (!isProduction) return null;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, 'blur-beta.json'), 'utf8'));
+    const url = new URL(manifest.blurApiUrl);
+    if (!['staging', 'production'].includes(manifest.environment) || url.protocol !== 'https:' ||
+        url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    return { environment: manifest.environment, blurApiUrl: url.origin };
+  } catch { return null; }
+}
+const betaManifest = readBetaManifest();
 
 // ============================================================================
 // FEATURE FLAGS
@@ -121,7 +137,10 @@ const features = {
    *
    * DISABLED FOR INITIAL RELEASE - Feature under development
    */
-  BLUR_DETECTION_ENABLED: envBool('BATCH_BLUR_DETECTION_ENABLED', false),
+  BLUR_DETECTION_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_DETECTION_ENABLED', false),
+
+  /** Beta suggestions never change batch routing. */
+  BLUR_BETA_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_BETA_ENABLED', false),
 
   /**
    * Enable the AI-powered blur detection backend.
@@ -129,7 +148,7 @@ const features = {
    * instead of using the local Laplacian-based algorithm.
    * Set to false to use the local Laplacian backend (offline baseline).
    */
-  BLUR_AI_ENABLED: envBool('BATCH_BLUR_AI_ENABLED', false),
+  BLUR_AI_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_AI_ENABLED', false),
 
   /**
    * Enable Hardware ID (HWID) device binding.
@@ -146,14 +165,22 @@ const features = {
    * Defaults to a local ai-api in development; set BATCH_BLUR_AI_URL to a
    * deployed ai-api host for production.
    */
-  BLUR_AI_URL: process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
+  BLUR_AI_URL: isProduction ? betaManifest?.blurApiUrl || '' : process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
 
   /**
    * API key sent as X-API-Key to ai-api. Empty by default — a local ai-api in
    * DEBUG mode accepts requests without a key. For a deployed ai-api, set
    * BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
    */
-  BLUR_AI_API_KEY: process.env.BATCH_BLUR_AI_API_KEY || '',
+  BLUR_AI_API_KEY: isProduction ? '' : process.env.BATCH_BLUR_AI_API_KEY || '',
+
+  /**
+   * QuickPitik Upload view (spec: desktop/docs/superpowers/specs/
+   * 2026-10-10-quickpitik-upload-workflow-design.md). Off in every packaged
+   * build until the release that ships the feature changes this literal;
+   * source runs opt in with BATCH_QUICKPITIK_UPLOAD_ENABLED=true.
+   */
+  QUICKPITIK_UPLOAD_ENABLED: isProduction ? false : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', false),
 };
 
 // ============================================================================
@@ -196,6 +223,13 @@ const limits = {
 
 const PROD_URL = 'https://www.batchmyphotos.com'
 
+// Production storage upload origin for the QuickPitik Upload view: the host
+// every presigned upload URL must match (the website's
+// NEXT_PUBLIC_R2_UPLOAD_ORIGIN). Taken from the monorepo
+// docs/desktop-upload-integration-guide.md § 4 with the owner's go — never
+// guessed. '' means direct uploads are refused until it is filled in; the
+// packaged flag is off, so nothing reaches this value yet.
+const QUICKPITIK_PROD_UPLOAD_ORIGIN = '';
 const urls = {
   /** Supabase project base URL (no trailing slash) */
   SUPABASE_URL: (!isProduction && process.env.BATCH_SUPABASE_URL)
@@ -208,6 +242,22 @@ const urls = {
   /** Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version */
   FRONTEND_URL: (!isProduction && process.env.BATCH_FRONTEND_URL)
     || (isProduction ? PROD_URL : 'http://localhost:3000'),
+
+  // QuickPitik (the marathon marketplace — a separate account from
+  // BatchMyPhotos). Used only by the feature-flagged Upload view. Env
+  // overrides are honoured only when unpackaged, like the Supabase values.
+
+  /** QuickPitik Spring Boot API, including the /api/v1 prefix */
+  QUICKPITIK_API_URL: (!isProduction && process.env.BATCH_QUICKPITIK_API_URL)
+    || (isProduction ? 'https://api.quickpitik.com/api/v1' : 'http://localhost:8080/api/v1'),
+
+  /** QuickPitik website — hosts the /connect/desktop hand-off page */
+  QUICKPITIK_WEB_URL: (!isProduction && process.env.BATCH_QUICKPITIK_WEB_URL)
+    || (isProduction ? 'https://quickpitik.com' : 'http://localhost:3000'),
+
+  /** Origin presigned upload URLs must match; '' = direct uploads not configured */
+  QUICKPITIK_UPLOAD_ORIGIN: (!isProduction && process.env.BATCH_QUICKPITIK_UPLOAD_ORIGIN)
+    || (isProduction ? QUICKPITIK_PROD_UPLOAD_ORIGIN : ''),
 };
 
 // ============================================================================
@@ -217,6 +267,8 @@ const urls = {
 const config = {
   isDevelopment,
   isProduction,
+  /** 'staging' (private beta installer), 'production' (Store), or null. */
+  blurBetaEnvironment: betaManifest?.environment || null,
   features: Object.freeze(features),
   limits: Object.freeze(limits),
   urls: Object.freeze(urls),

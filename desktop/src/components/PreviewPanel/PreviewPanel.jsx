@@ -60,6 +60,7 @@ function PreviewPanel({
       
       {/* Stats Grid */}
       <StatsGrid
+        isBeta={blurDetection?.isBeta}
         totalFiles={scanResults?.totalFiles || 0}
         totalGroups={scanResults?.totalGroups || 0}
         batchCount={previewResults?.batchCount || 0}
@@ -71,6 +72,7 @@ function PreviewPanel({
       
       {/* Settings Panel */}
       <SettingsPanel
+        isBeta={blurDetection?.isBeta}
         maxFilesPerBatch={maxFilesPerBatch}
         outputPrefix={outputPrefix}
         batchMode={batchMode}
@@ -121,6 +123,7 @@ function PreviewPanel({
       
       {/* Confirmation Box */}
       <div className="confirmation-box">
+        {blurDetection?.isBeta && <p className="note">Blur suggestions are advisory. Every photo stays in the ordinary batches.</p>}
         <p>
           This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
           named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.

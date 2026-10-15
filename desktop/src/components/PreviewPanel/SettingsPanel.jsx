@@ -14,6 +14,7 @@ import './PreviewPanel.css';
 // ... (props definition)
 
 function SettingsPanel({ 
+  isBeta = false,
   maxFilesPerBatch, 
   outputPrefix, 
   batchMode,
@@ -55,6 +56,45 @@ function SettingsPanel({
       .then((enabled) => setBlurFeatureAvailable(!!enabled))
       .catch(() => setBlurFeatureAvailable(false));
   }, []);
+
+  const [betaKeyStatus, setBetaKeyStatus] = useState(null);
+  const [betaKey, setBetaKey] = useState('');
+  const [replacingBetaKey, setReplacingBetaKey] = useState(false);
+  const [savingBetaKey, setSavingBetaKey] = useState(false);
+  const [betaKeyError, setBetaKeyError] = useState('');
+  const [betaStatusError, setBetaStatusError] = useState('');
+  const [checkingBetaKey, setCheckingBetaKey] = useState(false);
+  const loadBetaKeyStatus = useCallback(async () => {
+    setCheckingBetaKey(true);
+    setBetaStatusError('');
+    try {
+      setBetaKeyStatus(await window.electronAPI.blurBetaKey());
+    } catch (_error) {
+      setBetaStatusError('Could not check the beta key. Try again.');
+    } finally {
+      setCheckingBetaKey(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (isBeta) loadBetaKeyStatus();
+  }, [isBeta, loadBetaKeyStatus]);
+
+  const saveBetaKey = async () => {
+    if (!betaKey.trim() || savingBetaKey) return;
+    setSavingBetaKey(true);
+    setBetaKeyError('');
+    try {
+      const status = await window.electronAPI.blurBetaKey(betaKey.trim());
+      if (!status.configured) throw new Error('Key was not saved');
+      setBetaKeyStatus(status);
+      setBetaKey('');
+      setReplacingBetaKey(false);
+    } catch (_error) {
+      setBetaKeyError('Could not save the beta key. Try again.');
+    } finally {
+      setSavingBetaKey(false);
+    }
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -403,6 +443,37 @@ function SettingsPanel({
         />
       </div>
 
+      {isBeta && (betaStatusError || checkingBetaKey) && (
+        <div className="blur-beta-key">
+          {betaStatusError && <p role="alert">{betaStatusError}</p>}
+          {checkingBetaKey && <p role="status">Checking beta key...</p>}
+          <button type="button" className="btn-small" disabled={checkingBetaKey}
+            onClick={loadBetaKeyStatus}>Retry key status</button>
+        </div>
+      )}
+      {isBeta && betaKeyStatus?.enabled && (
+        <div className="blur-beta-key">
+          {betaKeyStatus.configured && !replacingBetaKey ? <>
+            <p role="status">Beta key saved on this device.</p>
+            <button type="button" className="btn-small" onClick={() => setReplacingBetaKey(true)}>Replace beta key</button>
+          </> : (
+            <>
+              <label htmlFor="blur-beta-key">Blur beta key</label>
+              <p>Enter the key provided for this beta before starting analysis.</p>
+              <div className="blur-beta-key-controls">
+                <input id="blur-beta-key" type="password" autoComplete="off"
+                  value={betaKey} onChange={e => setBetaKey(e.target.value)}
+                  disabled={savingBetaKey} aria-describedby="blur-beta-key-help" />
+                <button type="button" className="btn-small" disabled={!betaKey.trim() || savingBetaKey}
+                  onClick={saveBetaKey}>{savingBetaKey ? 'Saving...' : 'Save beta key'}</button>
+              </div>
+              <span id="blur-beta-key-help">Stored securely on this device.</span>
+              {betaKeyError && <p role="alert">{betaKeyError}</p>}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Blur Detection — feature-flagged off for release; toggle stays visible but disabled */}
       <div className="setting-row blur-detection-row">
         <label>
@@ -417,7 +488,7 @@ function SettingsPanel({
             type="checkbox"
             checked={blurDetectionEnabled}
             onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
-            disabled={!blurFeatureAvailable}
+            disabled={!blurFeatureAvailable || (isBeta && !betaKeyStatus?.configured)}
             role="switch"
             aria-checked={blurDetectionEnabled}
           />

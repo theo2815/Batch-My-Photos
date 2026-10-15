@@ -308,14 +308,14 @@ const PERSONAS = [
 
 // ─── FAQ ────────────────────────────────────────────────────────────────────
 const FAQ_ITEMS = [
-  { q: 'Are my photos uploaded anywhere?', a: "No. Photos are processed on your computer and are never uploaded. There's no cloud step and no third-party access." },
+  { q: 'Are my photos uploaded anywhere?', a: "No. Photos are processed on your computer and are never uploaded. The only exception is the opt-in blur detection beta, which sends resized copies to our blur service for analysis." },
   { q: 'How accurate is the live demo compared to the real app?', a: 'The demo runs the same workflow as the desktop app, on sample photos instead of your own. Download the app to use it on your real files.' },
   { q: 'Can it handle very large folders (10,000+ photos)?', a: "Yes. It's built for 5,000 to 20,000+ photos and processes files directly on your drive, so speed depends on your hardware, not a server." },
   { q: "What if I don't like the result? Can I undo?", a: 'Yes. Every batch is reversible. Undo puts files back where they were, and you can re-batch with different settings as often as you want.' },
   { q: 'Where can I upload my batches after processing?', a: 'Anywhere. Sorted folders work with Google Photos, Drive, Dropbox, WeTransfer, or a client gallery, any service that takes standard folders.' },
   { q: 'Is it safe? Will it corrupt or delete my photos?', a: 'Your photos are never edited. The app only moves or copies files into new folders. Use Copy mode to keep originals, and Undo is always one click away.' },
   { q: 'What if the app crashes or I accidentally close it?', a: 'Your progress is saved automatically. Reopen the app and pick up where you left off. Processed files stay put, and Undo still works after a restart.' },
-  { q: 'Is it really free?', a: 'Yes. The free plan includes unlimited batches and needs an internet connection. Pro adds offline batching and a second device for ₱299 a month, cancel anytime.' },
+  { q: 'Is it really free?', a: 'Yes. Everything is free: unlimited batches, offline batching, and up to 3 devices. There are no paid plans. Blur detection is a free beta you can ask to join from the Pricing page.' },
 ]
 
 const FaqItem = ({ item, isOpen, onToggle }) => (

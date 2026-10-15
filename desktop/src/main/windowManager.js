@@ -50,7 +50,7 @@ function createWindow() {
   // 2. npm run electron with dist build → Use dist build  
   // 3. npm run start (Vite dev server) → Use localhost:5173
   const isPackaged = config.isProduction;
-  const shouldUseDistBuild = isPackaged || hasDistBuild;
+  const shouldUseDistBuild = isPackaged || (hasDistBuild && process.env.npm_lifecycle_event !== 'start');
   
   if (shouldUseDistBuild) {
     // Production mode or npm run electron with dist: Load built files

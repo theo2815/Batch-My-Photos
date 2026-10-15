@@ -35,7 +35,8 @@ const {
   BLUR_CONCURRENCY, BLUR_RESIZE_WIDTH, BLUR_THRESHOLDS, BLUR_EDGE_THRESHOLDS,
   BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_TIMEOUT_MS,
   BLUR_AI_MAX_DIMENSION, BLUR_AI_JPEG_QUALITY, BLUR_AI_RESIZE_CONCURRENCY,
-  BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_CONCURRENCY, BLUR_AI_STREAM_TIMEOUT_MS,
+  BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_MAX_BYTES, BLUR_AI_STREAM_CONCURRENCY,
+  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
@@ -49,11 +50,15 @@ sharp.concurrency(1);
 // ============================================================================
 
 /**
- * Cache entry: { cacheKey: string, blurMap: Object }
+ * Cache entry: { cacheKey, folderPath, mode, blurMap }
  * Only one folder is cached at a time (the current working folder).
  * Cleared automatically when the folder or file list changes.
  */
-let blurCache = { cacheKey: null, blurMap: null };
+// Keep content fingerprints in main only; blurMap crosses the renderer boundary.
+let analyzedImageHashes = new WeakMap();
+let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
+let cacheGeneration = 0;
+let aiAnalysisInFlight = false;
 
 /**
  * Extensions that can be analyzed for blur (JPEG/PNG only — fast to decode).
@@ -189,7 +194,21 @@ async function computeBlurScore(filePath) {
  * Clear the blur cache (e.g. when switching folders).
  */
 function clearCache() {
-  blurCache = { cacheKey: null, blurMap: null };
+  cacheGeneration++;
+  analyzedImageHashes = new WeakMap();
+  blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
+}
+
+function getCachedBlurResult(folderPath, fileName, jpeg = null) {
+  if (blurCache.folderPath !== folderPath || blurCache.mode !== 'ai') return null;
+  const result = Object.values(blurCache.blurMap || {}).find(
+    result => result.analyzedFile === fileName && result.score >= 0 && result.predictedClass
+  ) || null;
+  if (jpeg && analyzedImageHashes.get(result) !== crypto.createHash('sha256').update(jpeg).digest('hex')) {
+    clearCache();
+    return null;
+  }
+  return result;
 }
 
 // ============================================================================
@@ -245,10 +264,19 @@ async function runPool(items, concurrency, fn) {
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile, confidence, predictedClass, bestBlurClass, bestBlurProbability }
  * @throws {Error} If the ai-api classifier is unavailable or returns an error
  */
-const SENSITIVITY_TO_THRESHOLD = { strict: 0.30, moderate: 0.45, lenient: 0.65 };
+const SENSITIVITY_TO_THRESHOLD = { strict: 0.60, moderate: 0.70, lenient: 0.90 };
 
 // The non-blur class in the trained 4-class model.
 const SHARP_CLASS = 'sharp';
+const CLASS_NAMES = ['sharp', 'defocused_blurred', 'defocused_object_portrait', 'motion_blurred'];
+const validProbability = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+function validClassification(obj) {
+  const probs = obj?.probabilities;
+  return CLASS_NAMES.includes(obj?.predicted_class) && validProbability(obj.confidence) &&
+    probs && typeof probs === 'object' && !Array.isArray(probs) &&
+    Object.keys(probs).length === CLASS_NAMES.length &&
+    CLASS_NAMES.every(name => Object.hasOwn(probs, name) && validProbability(probs[name]));
+}
 
 /**
  * Map an ai-api /blur/classify `data` payload into BatchMyPhotos' blurMap shape.
@@ -298,10 +326,10 @@ function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
  * caller fails loud. Returns an un-analyzable marker for per-image decode/size
  * rejections (400/413/422) so one bad file does not abort the whole scan.
  */
-async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile) {
+async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer) {
   let buffer;
   try {
-    buffer = fs.readFileSync(filePath);
+    buffer = preparedBuffer || fs.readFileSync(filePath);
   } catch (err) {
     logger.warn(`⚠️ [BLUR-AI] Failed to read ${analyzedFile}: ${err.message}`);
     return { score: -1, isBlurry: false, analyzedFile, confidence: 0 };
@@ -311,7 +339,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_TIMEOUT_MS);
   try {
     const form = new FormData();
-    form.append('file', new Blob([buffer]), analyzedFile);
+    form.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
 
     const headers = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
@@ -328,6 +356,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
       if (!envelope || envelope.success !== true || !envelope.data) {
         throw new Error(`AI service error: ${envelope?.error?.message || 'unexpected response shape'}`);
       }
+      if (!validClassification(envelope.data)) throw new Error('AI service returned invalid classification');
       return mapClassification(envelope.data, threshold, categoriesFilter, analyzedFile);
     }
 
@@ -367,7 +396,8 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
  */
 async function prepareImageForUpload(filePath) {
   try {
-    return await sharp(filePath, { sequentialRead: true })
+    // Read fresh bytes so libvips cannot reuse a stale filename-based decode.
+    return await sharp(await fs.promises.readFile(filePath), { sequentialRead: true })
       .rotate()                       // auto-orient from EXIF before re-encode
       .resize(BLUR_AI_MAX_DIMENSION, BLUR_AI_MAX_DIMENSION, {
         fit: 'inside',
@@ -376,7 +406,7 @@ async function prepareImageForUpload(filePath) {
       .jpeg({ quality: BLUR_AI_JPEG_QUALITY })
       .toBuffer();
   } catch (err) {
-    logger.warn(`⚠️ [BLUR-AI] Failed to resize ${path.basename(filePath)}: ${err.message}`);
+    logger.warn('[BLUR-AI] Image preparation failed:', err.code || 'IMAGE_DECODE_FAILED');
     return null;
   }
 }
@@ -441,61 +471,111 @@ function streamLineToResult(obj, threshold, categoriesFilter, analyzedFile) {
  * @param {Function} onOne - (baseName, result) => void, called once per result
  * @returns {Promise<number[]>} indices (into `chunk`) the stream did NOT return
  * @throws {Error} `.code='STREAM_UNSUPPORTED'` on 404/405; "AI service ..." on
- *                 503 / auth / 5xx / timeout / connection failure (loud-fail)
+ *                 incomplete summary / auth / exhausted retry / connection failure
  */
 async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_STREAM_TIMEOUT_MS);
   try {
     const form = new FormData();
-    chunk.forEach((item, i) => {
-      // filename = local index → unambiguous result mapping (base names can
-      // collide across extensions; the index cannot).
-      form.append('files', new Blob([item.buffer]), String(i));
-    });
-
+    chunk.forEach((item, i) => form.append('files', new Blob([item.buffer], { type: 'image/jpeg' }), String(i)));
     const headers = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
 
-    const response = await net.fetch(streamUrl, {
-      method: 'POST', headers, body: form, signal: controller.signal,
-    });
-
-    // Older server without the streaming endpoint → caller falls back per-image.
+    let response;
+    try {
+      response = await net.fetch(streamUrl, {
+        method: 'POST', headers, body: form, signal: controller.signal,
+      });
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
     if (response.status === 404 || response.status === 405) {
-      const e = new Error('AI service: /blur/classify/stream not available');
-      e.code = 'STREAM_UNSUPPORTED';
-      throw e;
+      const err = new Error('AI service: /blur/classify/stream not available');
+      err.code = 'STREAM_UNSUPPORTED';
+      throw err;
     }
-    // 503 (model) / 401-403 (auth) / 429 (rate) / 5xx — fail loud.
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`AI service returned ${response.status}: ${errText.slice(0, 200)}`);
+      const body = await response.text().catch(() => '');
+      const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
+      err.retryable = response.status === 503 || response.status === 429;
+      if (err.retryable) {
+        const retryAfter = response.headers.get('Retry-After')?.trim();
+        const seconds = Number(retryAfter);
+        if (/^\d+(?:\.\d+)?$/.test(retryAfter) && Number.isFinite(seconds)) err.retryDelayMs = seconds * 1000;
+      }
+      throw err;
     }
 
-    const seen = new Set();
-    for await (const line of ndjsonLines(response)) {
-      let obj;
-      try { obj = JSON.parse(line); } catch (_e) { continue; }
-      if (obj._summary) continue;
-      const idx = typeof obj.index === 'number' ? obj.index : parseInt(obj.filename, 10);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= chunk.length || seen.has(idx)) continue;
+    const pendingRows = new Map();
+    let summary;
+    let summaryCount = 0;
+    let invalidRows = false;
+    try {
+      for await (const line of ndjsonLines(response)) {
+        if (summaryCount) { invalidRows = true; continue; }
+        let obj;
+        try { obj = JSON.parse(line); } catch (_err) { invalidRows = true; continue; }
+        if (obj && Object.hasOwn(obj, '_summary')) {
+          summary = obj;
+          summaryCount++;
+          continue;
+        }
+        const idx = obj && (typeof obj.index === 'number' ? obj.index : Number(obj.filename));
+        if (!Number.isInteger(idx) || idx < 0 || idx >= chunk.length ||
+            obj.filename !== String(idx) || pendingRows.has(idx)) {
+          invalidRows = true;
+          continue;
+        }
+        if (Object.hasOwn(obj, 'error')) {
+          if (typeof obj.error !== 'string' || !obj.error.trim()) {
+            invalidRows = true;
+            continue;
+          }
+        } else {
+          if (!validClassification(obj)) {
+            invalidRows = true;
+            continue;
+          }
+        }
+        pendingRows.set(idx, obj);
+      }
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
+
+    const rowErrors = [...pendingRows.values()].filter(row => Object.hasOwn(row, 'error')).length;
+    if (summaryCount !== 1 || summary._summary !== true || summary.complete !== true ||
+        !Number.isInteger(summary.total) || summary.total !== chunk.length ||
+        !Number.isInteger(summary.successful) || !Number.isInteger(summary.errors) ||
+        summary.successful < 0 || summary.errors < 0 ||
+        summary.successful + summary.errors !== chunk.length ||
+        rowErrors > summary.errors || pendingRows.size - rowErrors > summary.successful || invalidRows) {
+      const err = new Error('AI service incomplete stream');
+      err.code = 'STREAM_INVALID';
+      throw err;
+    }
+
+    for (const [idx, row] of pendingRows) {
       const item = chunk[idx];
-      onOne(item.baseName, streamLineToResult(obj, threshold, categoriesFilter, item.analyzableFile));
-      seen.add(idx);
+      onOne(item.baseName, streamLineToResult(row, threshold, categoriesFilter, item.analyzableFile));
     }
-
-    // Completeness: any index not returned (truncated/dropped stream) is reported
-    // so the caller can recover it via the per-image fallback.
     const missing = [];
-    for (let i = 0; i < chunk.length; i++) if (!seen.has(i)) missing.push(i);
+    for (let i = 0; i < chunk.length; i++) if (!pendingRows.has(i)) missing.push(i);
     return missing;
   } catch (err) {
-    if (err.code === 'STREAM_UNSUPPORTED') throw err;
+    if (err.code === 'STREAM_UNSUPPORTED' || err.code === 'STREAM_INVALID') throw err;
     if (err.name === 'AbortError') {
-      throw new Error(`AI service timed out after ${BLUR_AI_STREAM_TIMEOUT_MS}ms`);
+      const timeout = new Error('AI service timed out after ' + BLUR_AI_STREAM_TIMEOUT_MS + 'ms');
+      timeout.retryable = true;
+      throw timeout;
     }
-    throw new Error(err.message?.includes('AI service') ? err.message : `AI service error: ${err.message}`);
+    const failure = new Error(err.message?.includes('AI service') ? err.message : 'AI service error: ' + err.message);
+    failure.retryable = err.retryable === true;
+    failure.retryDelayMs = err.retryDelayMs;
+    throw failure;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -522,7 +602,8 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   const base = (config.features.BLUR_AI_URL || '').replace(/\/+$/, '');
   const streamUrl = `${base}/api/v1/blur/classify/stream`;
   const classifyUrl = `${base}/api/v1/blur/classify`;
-  const apiKey = config.features.BLUR_AI_API_KEY;
+  const apiKey = config.isProduction && config.features.BLUR_BETA_ENABLED
+    ? require('./blurBetaKeyStore').get() : config.features.BLUR_AI_API_KEY;
   const threshold = SENSITIVITY_TO_THRESHOLD[sensitivity] ?? SENSITIVITY_TO_THRESHOLD.moderate;
   const categoriesFilter = Array.isArray(categories) && categories.length > 0
     ? new Set(categories)
@@ -536,10 +617,14 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   };
 
   // Per-image fallback (single /classify) for one work item.
-  const classifyItemSingle = (item) => classifyOne(
+  const rememberImage = (item, result) => {
+    analyzedImageHashes.set(result, crypto.createHash('sha256').update(item.buffer).digest('hex'));
+    return result;
+  };
+  const classifyItemSingle = async (item) => rememberImage(item, await classifyOne(
     classifyUrl, apiKey, path.join(folderPath, item.analyzableFile),
-    threshold, categoriesFilter, item.analyzableFile,
-  );
+    threshold, categoriesFilter, item.analyzableFile, item.buffer,
+  ));
 
   // Split the work list into streaming chunks.
   const chunks = [];
@@ -567,38 +652,72 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     }
     if (sendable.length === 0) return;
 
-    // Phase 2 — STREAM the chunk (unless the server already proved it lacks it).
-    if (!streamUnsupported) {
-      try {
-        const missing = await classifyChunkStream(
-          streamUrl, apiKey, sendable, threshold, categoriesFilter,
-          (baseName, result) => { blurMap[baseName] = result; tick(); },
-        );
-        // Recover items a stream dropped (truncation) via per-image classify.
-        for (const idx of missing) {
-          const item = sendable[idx];
-          blurMap[item.baseName] = await classifyItemSingle(item);
-          tick();
-        }
-        for (const item of sendable) item.buffer = null;   // release memory
-        return;
-      } catch (err) {
-        if (err.code === 'STREAM_UNSUPPORTED') {
-          logger.warn('⚠️ [BLUR-AI] /blur/classify/stream unavailable — falling back to per-image /classify');
-          streamUnsupported = true;
-          // fall through to the per-image path below
-        } else {
-          throw err;   // loud-fail (503 / auth / 5xx / timeout / connection)
+    const requests = [];
+    let request = [];
+    let bytes = 0;
+    for (const item of sendable) {
+      if (item.buffer.length > BLUR_AI_STREAM_MAX_BYTES) {
+        throw new Error('AI service prepared JPEG exceeds request byte budget');
+      }
+      if (bytes + item.buffer.length > BLUR_AI_STREAM_MAX_BYTES) {
+        requests.push(request);
+        request = [];
+        bytes = 0;
+      }
+      request.push(item);
+      bytes += item.buffer.length;
+    }
+    if (request.length) requests.push(request);
+
+    for (const group of requests) {
+      // Phase 2 — STREAM the request (unless the server already proved it lacks it).
+      if (!streamUnsupported) {
+        try {
+          const classifyStream = () => classifyChunkStream(
+            streamUrl, apiKey, group, threshold, categoriesFilter,
+            (baseName, result) => { blurMap[baseName] = result; tick(); },
+          );
+          let missing;
+          try {
+            missing = await classifyStream();
+          } catch (err) {
+            if (!err.retryable) throw err;
+            const delay = err.retryDelayMs ?? 2000;
+            if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) {
+              throw new Error('AI service temporarily unavailable; retry manually after server backoff');
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            missing = await classifyStream();
+          }
+          // Recover omitted rows only after the server commits a valid summary.
+          for (const idx of missing) {
+            const item = group[idx];
+            blurMap[item.baseName] = await classifyItemSingle(item);
+            tick();
+          }
+          for (const item of group) {
+            rememberImage(item, blurMap[item.baseName]);
+            item.buffer = null;   // release memory
+          }
+          continue;
+        } catch (err) {
+          if (err.code === 'STREAM_UNSUPPORTED') {
+            logger.warn('⚠️ [BLUR-AI] /blur/classify/stream unavailable — falling back to per-image /classify');
+            streamUnsupported = true;
+            // fall through to the per-image path below
+          } else {
+            throw err;   // loud-fail (503 / auth / 5xx / timeout / connection)
+          }
         }
       }
-    }
 
-    // Per-image fallback path (server lacks the streaming endpoint).
-    await runPool(sendable, BLUR_CONCURRENCY, async (item) => {
-      blurMap[item.baseName] = await classifyItemSingle(item);
-      item.buffer = null;
-      tick();
-    });
+      // Per-image fallback path (server lacks the streaming endpoint).
+      for (const item of group) {
+        blurMap[item.baseName] = await classifyItemSingle(item);
+        item.buffer = null;
+        tick();
+      }
+    }
   };
 
   await runPool(chunks, BLUR_AI_STREAM_CONCURRENCY, processChunk);
@@ -692,7 +811,7 @@ async function analyzeBlurLegacy(fileGroups, folderPath, threshold = 'moderate',
  * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
  */
-async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null) {
+async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false) {
   const groupNames = Object.keys(fileGroups);
   const mode = config.features.BLUR_AI_ENABLED ? 'ai' : 'legacy';
 
@@ -701,22 +820,31 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
     ? `ai:${threshold}:${(categories || []).slice().sort().join(',')}`
     : threshold;
   const cacheKey = buildCacheKey(folderPath, groupNames, cacheDiscriminator);
-  if (blurCache.cacheKey === cacheKey && blurCache.blurMap) {
+  if (force) clearCache();
+  if (mode === 'ai' && aiAnalysisInFlight) throw new Error('AI service analysis already in progress. Try again.');
+  if (!force && blurCache.cacheKey === cacheKey && blurCache.blurMap) {
     logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results (${mode})`);
     return blurCache.blurMap;
   }
 
   logger.log(`🔍 [BLUR] Starting analysis — mode: ${mode}, groups: ${groupNames.length}`);
 
+  if (!force) clearCache();
+  const generation = cacheGeneration;
   let blurMap;
-  if (mode === 'ai') {
-    blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
-  } else {
-    blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
+  if (mode === 'ai') aiAnalysisInFlight = true;
+  try {
+    if (mode === 'ai') {
+      blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
+    } else {
+      blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
+    }
+  } finally {
+    if (mode === 'ai') aiAnalysisInFlight = false;
   }
 
   // Store in cache
-  blurCache = { cacheKey, blurMap };
+  if (generation === cacheGeneration) blurCache = { cacheKey, folderPath, mode, blurMap };
 
   return blurMap;
 }
@@ -724,5 +852,11 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
 module.exports = {
   analyzeBlur,
   clearCache,
+  getCachedBlurResult,
+  prepareImageForUpload,
   computeBlurScore,
+  mapClassification,
+  validClassification,
+  SENSITIVITY_TO_THRESHOLD,
+  CLASS_NAMES,
 };

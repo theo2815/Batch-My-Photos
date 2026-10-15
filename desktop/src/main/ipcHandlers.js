@@ -12,6 +12,7 @@
 
 const { dialog, shell } = require('electron');
 const path = require('path');
+const crypto = require('crypto');
 const fsPromises = require('fs').promises;
 
 // Import logic modules
@@ -69,6 +70,7 @@ function registerIpcHandlers(ipcInstance, storeInstance, getMainWindow, appState
   registerBatchHandlers(ipcInstance, storeInstance, getMainWindow, appState);
   registerRollbackHandlers(ipcInstance, getMainWindow, appState);
   registerHistoryHandlers(ipcInstance, getMainWindow, appState);
+  registerQuickPitikHandlers(ipcInstance, getMainWindow);
 
 }
 
@@ -507,7 +509,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         logger.warn('🔒 [IPC] Batch execution blocked by subscription limit');
         return {
           success: false,
-          error: limitCheck.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.',
+          error: limitCheck.error || 'Could not verify your account. Connect to the internet and try again.',
           code: 'BATCH_LIMIT_EXCEEDED',
           usage: limitCheck.usage || null,
           subscriptionExpired: !!limitCheck.subscriptionExpired,
@@ -558,7 +560,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // Group files and separate blurry groups if provided
       const fileGroups = await groupFilesByBaseName(files);
       const MAX_BLURRY_GROUPS = 10000;
-      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
+      const blurryGroupSet = new Set(config.features.BLUR_BETA_ENABLED
+        ? [] : Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
       const blurryFiles = [];
       
       if (blurryGroupSet.size > 0) {
@@ -733,10 +736,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         completedAt: new Date().toISOString(),
       };
       
-      // Save rollback manifest for successful move operations (non-blocking)
-      // Fire-and-forget: don't delay returning results to the user
+      // Save rollback manifest before the renderer refreshes History on completion.
       if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
-        rollbackManager.saveRollbackManifest({
+        await rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
@@ -860,7 +862,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
    * When AI mode is enabled, sends images to the Python FastAPI server.
    * If the AI service is unavailable, returns an error (no fallback).
    */
-  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null }) => {
+  handle(ipcMain, 'analyze-blur', async (event, { folderPath, threshold = 'moderate', categories = null, requestId = null }) => {
     try {
       // Feature gate (config.features.BLUR_DETECTION_ENABLED, default false): blur
       // detection is disabled for release. Backstop for the disabled UI toggle —
@@ -869,10 +871,14 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       if (!config.features.BLUR_DETECTION_ENABLED) {
         return { success: false, error: 'Blur detection is currently unavailable.' };
       }
+      // Packaged beta: no photo leaves the device before the user saves a beta key.
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && !require('./blurBetaKeyStore').get()) {
+        return { success: false, error: 'Save your blur beta key before starting analysis.' };
+      }
 
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
-        logger.warn('🔒 [SECURITY] Blocked analyze-blur on unregistered path:', folderPath);
+        logger.warn('[SECURITY] Blocked analyze-blur on unregistered folder');
         return { success: false, error: 'Access denied: folder not selected through dialog' };
       }
 
@@ -898,8 +904,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         safeThreshold,
         safeCategories,
         (progress) => {
-          event.sender.send('blur-progress', progress);
-        }
+          event.sender.send('blur-progress', { ...progress, requestId });
+        },
+        config.features.BLUR_BETA_ENABLED
       );
 
       // Count blurry groups
@@ -920,7 +927,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         success: false,
         error: isAiError
           ? 'Blur analysis service is currently unavailable. Please try again later.'
-          : sanitizeError(error, 'analyze-blur'),
+          : sanitizeError({ code: error.code }, 'analyze-blur'),
         aiUnavailable: isAiError,
       };
     }
@@ -1104,10 +1111,36 @@ function registerPreferenceHandlers(ipcMain, store) {
 
   handle(ipcMain, 'get-theme', async () => store.get('theme', 'light'));
 
+  handle(ipcMain, 'submit-blur-example', async (_event, input) => {
+    try {
+      await require('./blurFeedbackService').submitBlurExample(input);
+      return { success: true };
+    } catch (_error) {
+      return {
+        success: false,
+        error: 'Could not submit this example. Check your sign-in and analyze the image again. ' +
+          'If this continues, contact the beta coordinator.',
+      };
+    }
+  });
+
+  handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
+    if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
+    const keyStore = require('./blurBetaKeyStore');
+    if (key !== undefined) keyStore.set(key);
+    return { enabled: true, configured: !!keyStore.get() };
+  });
+
   // Whether the blur-detection feature is available (disabled for release —
   // config.features.BLUR_DETECTION_ENABLED). The renderer uses this to disable
   // the "Detect Blurry Photos" toggle without hiding it.
-  handle(ipcMain, 'get-blur-detection-enabled', async () => config.features.BLUR_DETECTION_ENABLED);
+  handle(ipcMain, 'get-blur-detection-enabled', async (_event, includeBeta = false) => includeBeta
+    ? { enabled: config.features.BLUR_DETECTION_ENABLED, betaEnabled: config.features.BLUR_BETA_ENABLED }
+    : config.features.BLUR_DETECTION_ENABLED);
+
+  // Whether the QuickPitik Upload view is available
+  // (config.features.QUICKPITIK_UPLOAD_ENABLED; off in packaged builds).
+  handle(ipcMain, 'get-quickpitik-upload-enabled', async () => config.features.QUICKPITIK_UPLOAD_ENABLED);
 
   handle(ipcMain, 'set-theme', async (event, theme) => {
     // Validate theme value - only allow 'dark' or 'light'
@@ -1579,7 +1612,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
 
   /**
    * Simple LRU cache for preview images.
-   * Maps filePath -> { dataUrl, width, height }
+   * Maps filePath -> { contentHash, dataUrl, width, height }
    * Evicts oldest entry when size exceeds PREVIEW_CACHE_SIZE.
    */
   const previewCache = new Map();
@@ -1609,17 +1642,20 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
 
     const filePath = path.join(folderPath, fileName);
 
-    // Check LRU cache
-    if (previewCache.has(filePath)) {
-      const cached = previewCache.get(filePath);
-      // Move to end (most recently used)
-      previewCache.delete(filePath);
-      previewCache.set(filePath, cached);
-      return { success: true, ...cached };
-    }
-
     try {
-      const { data, info } = await sharp(filePath)
+      // Beta previews use the exact JPEG prepared for inference and feedback.
+      const source = config.features.BLUR_BETA_ENABLED
+        ? await blurDetectionService.prepareImageForUpload(filePath)
+        : await fsPromises.readFile(filePath);
+      if (!source) throw new Error('Image preparation failed');
+      const contentHash = crypto.createHash('sha256').update(source).digest('hex');
+      const cached = previewCache.get(filePath);
+      if (cached?.contentHash === contentHash) {
+        previewCache.delete(filePath);
+        previewCache.set(filePath, cached);
+        return { success: true, ...cached };
+      }
+      const { data, info } = await sharp(source)
         .rotate() // Auto-rotate based on EXIF
         .resize(PREVIEW_MAX_DIMENSION, PREVIEW_MAX_DIMENSION, {
           fit: 'inside',
@@ -1632,6 +1668,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         dataUrl: `data:image/jpeg;base64,${data.toString('base64')}`,
         width: info.width,
         height: info.height,
+        contentHash,
       };
 
       // Add to LRU cache, evict oldest if full
@@ -1764,6 +1801,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
+    if (config.blurBetaEnvironment === 'staging') return { updateAvailable: false, currentVersion };
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;
@@ -1814,7 +1852,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: 'Only HTTPS URLs are allowed' };
     }
     // Restrict to known domains for security
-    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com'];
+    const ALLOWED_EXTERNAL_HOSTS = ['batchmyphotos.com', 'www.batchmyphotos.com', 'quickpitik.com'];
     try {
       const parsed = new URL(url);
       const isAllowed = ALLOWED_EXTERNAL_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
@@ -1979,6 +2017,92 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       return { success: false, error: sanitizeError(error, 'export-history-report') };
     }
   });
+}
+
+// ============================================================================
+// GROUP 11: QUICKPITIK UPLOAD — connect, scan, list events, upload
+// (feature-flagged Upload view; spec desktop/docs/superpowers/specs/
+// 2026-10-10-quickpitik-upload-workflow-design.md). Owner-approved channels.
+// ============================================================================
+
+/**
+ * The two QuickPitik services are required lazily, inside the handlers, so
+ * registering the group never opens the encrypted session store or touches
+ * Electron `net` (the vm-based tests load this file with stub services).
+ */
+function registerQuickPitikHandlers(ipcMain, getMainWindow) {
+  if (!config.features.QUICKPITIK_UPLOAD_ENABLED) return;
+  const qpAuth = () => require('./quickpitikAuthService');
+  const qpUpload = () => require('./quickpitikUploadService');
+  const send = (channel, payload) => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  };
+
+  /** Opens quickpitik.com/connect/desktop in the browser; the result arrives as a qp-connect-result event. */
+  handle(ipcMain, 'qp-connect-start', async () => {
+    try {
+      return await qpAuth().startConnect();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-connect-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-connect-start') };
+    }
+  });
+
+  /** { connected, email, name } — never a token. */
+  handle(ipcMain, 'qp-session-status', async () => {
+    try {
+      return qpAuth().getStatus();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-session-status failed:', error);
+      return { connected: false, email: null, name: null };
+    }
+  });
+
+  handle(ipcMain, 'qp-disconnect', async () => {
+    try {
+      await qpAuth().disconnect();
+      return { success: true };
+    } catch (error) {
+      logger.error('❌ [IPC] qp-disconnect failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-disconnect') };
+    }
+  });
+
+  /** Read-only walk of a dropped folder; the path must have been registered through the dialog or a drop. */
+  handle(ipcMain, 'qp-scan-folder', async (_event, folderPath) => {
+    try {
+      return await qpUpload().scanFolder(folderPath);
+    } catch (error) {
+      logger.error('❌ [IPC] qp-scan-folder failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-scan-folder') };
+    }
+  });
+
+  /** Events open for upload: public (race day + 3 days) plus the photographer's own. */
+  handle(ipcMain, 'qp-list-events', async () => {
+    try {
+      return { success: true, events: await qpUpload().listEvents() };
+    } catch (error) {
+      if (error instanceof qpAuth().QpAuthError) {
+        return { success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' };
+      }
+      logger.error('❌ [IPC] qp-list-events failed:', error);
+      return { success: false, error: error instanceof qpAuth().QpApiError ? error.message : sanitizeError(error, 'qp-list-events') };
+    }
+  });
+
+  /** Starts the background upload; results arrive as qp-upload-progress events. */
+  handle(ipcMain, 'qp-upload-start', async (_event, request) => {
+    try {
+      return await qpUpload().startUpload(request, (payload) => send('qp-upload-progress', payload));
+    } catch (error) {
+      logger.error('❌ [IPC] qp-upload-start failed:', error);
+      return { success: false, error: sanitizeError(error, 'qp-upload-start') };
+    }
+  });
+
+  handle(ipcMain, 'qp-upload-cancel', async () => qpUpload().cancelUpload());
 }
 
 /**
