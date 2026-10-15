@@ -34,7 +34,8 @@ function configFor(manifest, packaged = true, env = {}) {
   });
 }
 const validManifest = JSON.stringify({ environment: 'staging', blurApiUrl: 'https://blur-staging.example.test' });
-function ipcFor(config, keyStore = {}) {
+const storeManifest = JSON.stringify({ environment: 'production', blurApiUrl: 'https://blur.example.test' });
+function ipcFor(config, keyStore = {}, extraMocks = {}) {
   const handlers = new Map();
   const net = { fetch: vi.fn(async () => ({ ok: false })) };
   const electron = { app: { getVersion: () => '1.0.6-beta.1' }, net, dialog: {}, shell: {} };
@@ -49,6 +50,7 @@ function ipcFor(config, keyStore = {}) {
     'batchEngine', 'exifService', 'blurDetectionService', 'batchExecutor', 'securityManager', 'fileUtils']) {
     mocks[`./${name}`] = {};
   }
+  Object.assign(mocks, extraMocks);
   load('src/main/ipcHandlers.js', mocks).registerIpcHandlers(
     { handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {});
   return { handlers, net };
@@ -134,12 +136,15 @@ describe('packaged beta configuration', () => {
     const publicApp = startupPaths(undefined);
     expect(publicApp.userData).toBe(path.join(publicApp.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
 
+    const storeApp = startupPaths(storeManifest);
+    expect(storeApp.userData).toBe(path.join(storeApp.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
+
     const sourceBeta = startupPaths(validManifest, false, { BATCH_BLUR_BETA_ENABLED: 'true' });
     expect(sourceBeta.userData).toBe(path.join(sourceBeta.temp, 'BatchMyPhotos-cache', 'batchmyphotos'));
   });
 
   it.each([undefined, '{broken', 'null', '{}',
-    JSON.stringify({ environment: 'production', blurApiUrl: 'https://blur.example.test' }),
+    JSON.stringify({ environment: 'development', blurApiUrl: 'https://blur.example.test' }),
     ...['http://staging.test', 'https://user:secret@staging.test', 'https://staging.test/api',
       'https://staging.test/?key=secret', 'https://staging.test/#key'].map(blurApiUrl =>
       JSON.stringify({ environment: 'staging', blurApiUrl })),
@@ -158,6 +163,13 @@ describe('packaged beta configuration', () => {
     expect(config.features).toMatchObject({
       BLUR_BETA_ENABLED: true, BLUR_DETECTION_ENABLED: true, BLUR_AI_ENABLED: true,
       BLUR_AI_URL: 'https://blur-staging.example.test', BLUR_AI_API_KEY: '',
+    });
+  });
+  it('enables the packaged Store UI from the production manifest', () => {
+    const config = configFor(storeManifest, true, { BATCH_BLUR_AI_URL: 'https://wrong.test' });
+    expect(config.features).toMatchObject({
+      BLUR_BETA_ENABLED: true, BLUR_DETECTION_ENABLED: true, BLUR_AI_ENABLED: true,
+      BLUR_AI_URL: 'https://blur.example.test', BLUR_AI_API_KEY: '',
     });
   });
   it('preserves source environment settings and ignores a packaged manifest', () => {
@@ -231,6 +243,30 @@ describe('beta key setup', () => {
       await blur.analyzeBlur({ photo: ['photo.jpg'] }, folder, 'moderate');
       expect(fetch.mock.lastCall[1].headers['X-API-Key']).toBe(key);
     }
+  });
+});
+
+describe('analysis needs a beta key', () => {
+  it('refuses blur analysis before a beta key is saved and sends nothing', async () => {
+    const analyzeBlur = vi.fn();
+    const { handlers } = ipcFor(configFor(storeManifest), { get: () => '' },
+      { './blurDetectionService': { analyzeBlur } });
+    const result = await handlers.get('analyze-blur')({}, { folderPath: 'C:/fixture' });
+    expect(result).toMatchObject({ success: false });
+    expect(result.error).toMatch(/beta key/i);
+    expect(analyzeBlur).not.toHaveBeenCalled();
+  });
+});
+
+describe('Microsoft Store build settings', () => {
+  it('packs the production manifest as blur-beta.json into an appx package', () => {
+    const builder = createRequire(import.meta.url)(path.join(root, 'electron-builder.store.cjs'));
+    expect(builder.extraResources).toEqual([{ from: 'blur-store.json', to: 'blur-beta.json' }]);
+    expect(builder.win.target).toEqual(['appx']);
+    const manifest = fs.readFileSync(path.join(root, 'blur-store.json'), 'utf8');
+    expect(JSON.parse(manifest)).toEqual({ environment: 'production',
+      blurApiUrl: 'https://ai-api-blur-production.up.railway.app' });
+    expect(configFor(manifest).features.BLUR_AI_URL).toBe('https://ai-api-blur-production.up.railway.app');
   });
 });
 

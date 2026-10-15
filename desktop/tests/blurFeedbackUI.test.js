@@ -156,6 +156,16 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith();
   });
 
+  it('keeps the blur switch off until a beta key is saved', async () => {
+    const blurSwitch = tree => nodes(tree).find(n => n.type === 'input' && n.props.role === 'switch');
+    render(SettingsPanel, { isBeta: true }); await effects();
+    expect(blurSwitch(render(SettingsPanel, { isBeta: true })).props.disabled).toBe(true);
+    hooks.values = []; hooks.deps = []; hooks.effects = [];
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    render(SettingsPanel, { isBeta: true }); await effects();
+    expect(blurSwitch(render(SettingsPanel, { isBeta: true })).props.disabled).toBe(false);
+  });
+
   it('hides key setup outside beta', async () => {
     globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: false, configured: false });
     render(SettingsPanel, {}); await effects();

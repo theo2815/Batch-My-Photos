@@ -73,15 +73,16 @@ const isDevelopment = !app.isPackaged;
 /** True when running as a packaged/distributed application */
 const isProduction = app.isPackaged;
 
-// Only the private beta artifact contains this nonsecret staging manifest.
+// Only the private beta artifact (staging) and the Microsoft Store package (production)
+// contain this nonsecret manifest.
 function readBetaManifest() {
   if (!isProduction) return null;
   try {
     const manifest = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, 'blur-beta.json'), 'utf8'));
     const url = new URL(manifest.blurApiUrl);
-    if (manifest.environment !== 'staging' || url.protocol !== 'https:' ||
+    if (!['staging', 'production'].includes(manifest.environment) || url.protocol !== 'https:' ||
         url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
-    return { blurApiUrl: url.origin };
+    return { environment: manifest.environment, blurApiUrl: url.origin };
   } catch { return null; }
 }
 const betaManifest = readBetaManifest();
@@ -266,6 +267,8 @@ const urls = {
 const config = {
   isDevelopment,
   isProduction,
+  /** 'staging' (private beta installer), 'production' (Store), or null. */
+  blurBetaEnvironment: betaManifest?.environment || null,
   features: Object.freeze(features),
   limits: Object.freeze(limits),
   urls: Object.freeze(urls),
