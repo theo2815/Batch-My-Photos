@@ -509,7 +509,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         logger.warn('🔒 [IPC] Batch execution blocked by subscription limit');
         return {
           success: false,
-          error: limitCheck.error || 'Batch limit reached. Upgrade to Pro for unlimited batches.',
+          error: limitCheck.error || 'Could not verify your account. Connect to the internet and try again.',
           code: 'BATCH_LIMIT_EXCEEDED',
           usage: limitCheck.usage || null,
           subscriptionExpired: !!limitCheck.subscriptionExpired,

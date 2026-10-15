@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { User, LogOut, Crown, ExternalLink, Monitor, Download } from 'lucide-react'
+import { User, LogOut, ExternalLink, Monitor, Download } from 'lucide-react'
 import './ProfileDropdown.css'
 
-export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, onUpgrade, onManageDevices, updateAvailable, latestVersion, onUpdateClick }) {
+export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, onManageDevices, updateAvailable, latestVersion, onUpdateClick }) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
-  const isPro = subscription?.plan === 'pro' && subscription?.status === 'active'
   const usageText = subscription?.usage
     ? `${subscription.usage.used} / ${subscription.usage.limit === null || subscription.usage.limit === undefined ? '∞' : subscription.usage.limit} batches`
     : ''
@@ -49,12 +48,6 @@ export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, o
           <div className="dropdown-header">
             <div className="header-label">Signed in as</div>
             <div className="header-email">{user.email}</div>
-            {isPro && (
-              <div className="header-plan">
-                <Crown className="plan-icon" />
-                Pro
-              </div>
-            )}
             {usageText && (
               <div className="header-usage">{usageText} used</div>
             )}
@@ -75,7 +68,7 @@ export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, o
               <ExternalLink className="item-icon-right" />
             </button>
 
-            {isPro && onManageDevices && (
+            {onManageDevices && (
               <button
                 onClick={() => {
                   onManageDevices()
@@ -99,20 +92,6 @@ export function ProfileDropdown({ user, subscription, onLogout, onViewProfile, o
                 <Download className="item-icon" />
                 Update Available
                 <span className="update-version-badge">v{latestVersion}</span>
-              </button>
-            )}
-
-            {!isPro && (
-              <button
-                onClick={() => {
-                  onUpgrade()
-                  setIsOpen(false)
-                }}
-                className="dropdown-item upgrade-item"
-              >
-                <Crown className="item-icon" />
-                Upgrade to Pro
-                <ExternalLink className="item-icon-right" />
               </button>
             )}
 
