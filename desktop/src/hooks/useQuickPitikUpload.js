@@ -23,7 +23,12 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
 
   const loadEvents = useCallback(async () => {
     const result = await ask(window.electronAPI.qpListEvents());
-    if (result.success) { setEvents(result.events); setError(null); return; }
+    if (result.success) {
+      setEvents(result.events); setError(null);
+      // The only open event needs no click; a choice already made is kept.
+      if (result.events.length === 1) setEventId(current => current || result.events[0].id);
+      return;
+    }
     if (result.authRejected) { setSession(null); setStatus('disconnected'); }
     setError({ code: result.authRejected ? 'SESSION_EXPIRED' : 'EVENTS', message: result.error });
   }, []);

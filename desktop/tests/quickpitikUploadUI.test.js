@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Node-only React: hooks keep state across re-renders, createElement returns plain trees.
 const hooks = vi.hoisted(() => ({ values: [], cursor: 0, effects: [], deps: [], cleanups: [] }));
@@ -25,6 +25,7 @@ import ReviewTable from '../src/components/Upload/ReviewTable.jsx';
 import UploadSummary from '../src/components/Upload/UploadSummary.jsx';
 import UploadView from '../src/components/Upload/UploadView.jsx';
 import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
+import EventPicker from '../src/components/Upload/EventPicker.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
 
 function render(component, props) { hooks.cursor = 0; return component(props); }
@@ -43,6 +44,87 @@ const event = { id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', locati
 const noop = () => {};
 
 beforeEach(() => { hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = []; });
+
+describe('EventPicker', () => {
+  // Manila-today is 2026-10-10 in these tests.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-10T12:00:00+08:00')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const own = { id: 'o1', name: 'My Fun Run', date: '2026-09-25', location: '', ownedByMe: true, state: 'open', closesOn: '2026-10-25' };
+  const open = { ...event, closesOn: '2026-10-13' };
+  const lastDay = { id: 'e2', name: 'Mandaue Dash', date: '2026-10-07', location: 'Mandaue', ownedByMe: false, state: 'live', closesOn: '2026-10-10' };
+  const picker = (props) => render(EventPicker, { events: [own, open, lastDay], value: '', onChange: noop, onRefresh: noop, disabled: false, ...props });
+  const rows = (tree) => nodes(tree).filter(n => n.type === 'button' && 'aria-pressed' in n.props);
+
+  it('asks which event the photos are for and says what the choice means', () => {
+    const shown = text(picker());
+    expect(shown).toContain('Which event are these photos for?');
+    expect(shown).toContain("Runners will find these photos on that event's page.");
+  });
+
+  it('puts own events under "Your events" and public ones under "Open public events"', () => {
+    const shown = text(picker());
+    const at = label => shown.indexOf(label);
+    expect(at('Your events')).toBeGreaterThan(-1);
+    expect(at('Your events')).toBeLessThan(at('My Fun Run'));
+    expect(at('My Fun Run')).toBeLessThan(at('Open public events'));
+    expect(at('Open public events')).toBeLessThan(at('Cebu Marathon 2026'));
+    expect(at('Cebu Marathon 2026')).toBeLessThan(at('Mandaue Dash'));
+  });
+
+  it('shows no heading for a group with no event', () => {
+    expect(text(picker({ events: [open] }))).not.toContain('Your events');
+    expect(text(picker({ events: [own] }))).not.toContain('Open public events');
+  });
+
+  it('a row shows the date and place, whose event it is and how long it takes uploads', () => {
+    const [ownRow, openRow, lastDayRow] = rows(picker()).map(text);
+    expect(openRow).toContain('Cebu Marathon 2026');
+    expect(openRow).toContain('10 Oct 2026 · Cebu City');
+    expect(openRow).toContain('Public event');
+    expect(openRow).toContain('Uploads close in 3 days');
+    expect(ownRow).toContain('Your event');
+    expect(ownRow).toContain('25 Sep 2026');
+    expect(ownRow).not.toContain('·'); // no location: the date stands alone
+    expect(ownRow).toContain('Uploads close in 15 days');
+    expect(lastDayRow).toContain('Uploads close today');
+  });
+
+  it('says "1 day" on the day before the last', () => {
+    const [row] = rows(picker({ events: [{ ...lastDay, closesOn: '2026-10-11' }] })).map(text);
+    expect(row).toContain('Uploads close in 1 day');
+    expect(row).not.toContain('1 days');
+  });
+
+  it('counts the days in Manila, not in UTC', () => {
+    vi.setSystemTime(new Date('2026-10-10T16:30:00Z')); // already the 11th in Manila
+    const [row] = rows(picker({ events: [{ ...lastDay, closesOn: '2026-10-11' }] })).map(text);
+    expect(row).toContain('Uploads close today');
+  });
+
+  it('clicking a row chooses that event, and the chosen row is marked pressed', () => {
+    const onChange = vi.fn();
+    const tree = picker({ value: 'e1', onChange });
+    expect(rows(tree).map(row => row.props['aria-pressed'])).toEqual([false, true, false]);
+    rows(tree)[2].props.onClick();
+    expect(onChange).toHaveBeenCalledWith('e2');
+  });
+
+  it('explains when events open if none is open, and keeps Refresh', () => {
+    const onRefresh = vi.fn();
+    const tree = picker({ events: [], onRefresh });
+    expect(text(tree)).toContain('No event is open for upload right now. Public events take photos on race day and for 3 days after; your own events for one month.');
+    expect(rows(tree)).toEqual([]);
+    button(tree, 'Refresh').props.onClick();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('cannot be used while the view is busy', () => {
+    const tree = picker({ disabled: true });
+    expect(rows(tree).map(row => row.props.disabled)).toEqual([true, true, true]);
+    expect(button(tree, 'Refresh').props.disabled).toBe(true);
+  });
+});
 
 describe('ReviewTable', () => {
   it('shows the counts and skip reasons, unticks a _Blurry folder and names the event on the button', () => {
@@ -257,6 +339,27 @@ describe('useQuickPitikUpload', () => {
     await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
     expect(qp.error).toBeNull();
     expect(qp.events).toEqual([event]);
+  });
+
+  const other = { ...event, id: 'e2', name: 'Mandaue Dash' };
+
+  it('chooses the event when it is the only one open', async () => {
+    connectedApi();
+    expect((await mounted()).eventId).toBe('e1');
+  });
+
+  it('leaves the choice to the photographer when two events are open', async () => {
+    connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    expect((await mounted()).eventId).toBe('');
+  });
+
+  it('keeps an event the photographer already chose when a Refresh leaves one event', async () => {
+    const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    let qp = await mounted();
+    qp.setEventId('e2');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [event] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('e2');
   });
 });
 

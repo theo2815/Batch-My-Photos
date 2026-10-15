@@ -192,9 +192,18 @@ describe('listEvents', () => {
     expect(authStub.fetchJson).toHaveBeenCalledWith(expect.stringMatching(/\/events\?limit=200$/));
     expect(authStub.authorizedFetch).toHaveBeenCalledWith('/me/photographer/events?limit=200');
     expect(events).toEqual([
-      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', ownedByMe: true, state: 'open' },
-      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live' },
+      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', ownedByMe: true, state: 'open', closesOn: '2026-10-20' },
+      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live', closesOn: '2026-10-12' },
     ]);
+  });
+
+  it('tells the last upload day: a month after race day for an own event, the third day after for a public one', async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [{ id: 'P', name: 'Public Race', date: '2026-10-10', location: 'Cebu City' }] } });
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [
+      { id: 'O', name: 'My Run', date: '2026-09-25', location: 'Talisay', state: 'open', ownedByMe: true },
+    ] } });
+    const events = await service.listEvents(now);
+    expect(events.map(event => [event.id, event.closesOn])).toEqual([['O', '2026-10-25'], ['P', '2026-10-13']]);
   });
 
   it('leaves out events the server would refuse: own events not approved yet, and archived ones', async () => {
