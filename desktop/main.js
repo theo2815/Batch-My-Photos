@@ -35,7 +35,8 @@ if (process.defaultApp) {
 const fs = require('fs');
 const os = require('os');
 const config = require('./src/main/config');
-if (config.isProduction && config.features.BLUR_BETA_ENABLED) {
+// The private beta installer keeps its own profile; the Store app keeps the user's.
+if (config.isProduction && config.blurBetaEnvironment === 'staging') {
   const betaDataPath = path.join(app.getPath('appData'), 'batchmyphotos-blur-beta');
   fs.mkdirSync(betaDataPath, { recursive: true });
   app.setPath('userData', betaDataPath);

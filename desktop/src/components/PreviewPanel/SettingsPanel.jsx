@@ -488,7 +488,7 @@ function SettingsPanel({
             type="checkbox"
             checked={blurDetectionEnabled}
             onChange={(e) => onChange('blurDetectionEnabled', e.target.checked)}
-            disabled={!blurFeatureAvailable}
+            disabled={!blurFeatureAvailable || (isBeta && !betaKeyStatus?.configured)}
             role="switch"
             aria-checked={blurDetectionEnabled}
           />

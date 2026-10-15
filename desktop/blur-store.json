@@ -1,0 +1,4 @@
+{
+  "environment": "production",
+  "blurApiUrl": "https://ai-api-blur-production.up.railway.app"
+}

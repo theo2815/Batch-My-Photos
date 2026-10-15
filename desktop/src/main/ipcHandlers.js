@@ -871,6 +871,10 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       if (!config.features.BLUR_DETECTION_ENABLED) {
         return { success: false, error: 'Blur detection is currently unavailable.' };
       }
+      // Packaged beta: no photo leaves the device before the user saves a beta key.
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && !require('./blurBetaKeyStore').get()) {
+        return { success: false, error: 'Save your blur beta key before starting analysis.' };
+      }
 
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
@@ -1797,7 +1801,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
   handle(ipcMain, 'check-app-version', async () => {
     const { app, net } = require('electron');
     const currentVersion = app.getVersion();
-    if (config.features.BLUR_BETA_ENABLED) return { updateAvailable: false, currentVersion };
+    if (config.blurBetaEnvironment === 'staging') return { updateAvailable: false, currentVersion };
 
     try {
       const url = `${config.urls.FRONTEND_URL}/api/version`;
