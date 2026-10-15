@@ -37,9 +37,9 @@ const PrivacyPolicy = () => {
             <div>
               <h4 className="text-sm font-display font-semibold mb-2 text-text-primary">What we collect</h4>
               <ul className="space-y-1.5 text-sm text-text-secondary">
-                <li>• <strong className="text-text-secondary">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
-                <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce per-plan device limits. We do not collect your device name, model, or operating system.</li>
-                <li>• <strong className="text-text-secondary">Subscription & payment data</strong> — Plan type, payment status, and PayMongo transaction references. We never store full card numbers.</li>
+                <li>• <strong className="text-text-secondary">Account info</strong> — When you create an account, we store your email and plan.</li>
+                <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce the per-account device limit. We do not collect your device name, model, or operating system.</li>
+                <li>• <strong className="text-text-secondary">Blur beta requests</strong> — If you ask to join the blur detection beta, we store your name, what you shoot, your photos per event, and your note, so we can choose testers and email your key.</li>
                 <li>• <strong className="text-text-secondary">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity, batch counts) to improve the app. This never includes file names, photo content, or personal data.</li>
                 <li>• <strong className="text-text-secondary">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
               </ul>

@@ -315,7 +315,7 @@ const FAQ_ITEMS = [
   { q: 'Where can I upload my batches after processing?', a: 'Anywhere. Sorted folders work with Google Photos, Drive, Dropbox, WeTransfer, or a client gallery, any service that takes standard folders.' },
   { q: 'Is it safe? Will it corrupt or delete my photos?', a: 'Your photos are never edited. The app only moves or copies files into new folders. Use Copy mode to keep originals, and Undo is always one click away.' },
   { q: 'What if the app crashes or I accidentally close it?', a: 'Your progress is saved automatically. Reopen the app and pick up where you left off. Processed files stay put, and Undo still works after a restart.' },
-  { q: 'Is it really free?', a: 'Yes. The free plan includes unlimited batches and needs an internet connection. Pro adds offline batching and a second device for ₱299 a month, cancel anytime.' },
+  { q: 'Is it really free?', a: 'Yes. Everything is free: unlimited batches, offline batching, and up to 3 devices. There are no paid plans. Blur detection is a free beta you can ask to join from the Pricing page.' },
 ]
 
 const FaqItem = ({ item, isOpen, onToggle }) => (

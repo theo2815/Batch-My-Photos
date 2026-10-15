@@ -125,9 +125,9 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we collect</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• <strong className="text-text-secondary">Account info</strong> — If you create an account (for Pro features), we store your email and subscription status.</li>
-            <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce per-plan device limits. We do not collect your device name, model, or operating system.</li>
-            <li>• <strong className="text-text-secondary">Subscription & payment data</strong> — Plan type, payment status, and PayMongo transaction references. We never store full card numbers.</li>
+            <li>• <strong className="text-text-secondary">Account info</strong> — When you create an account, we store your email and plan.</li>
+            <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce the per-account device limit. We do not collect your device name, model, or operating system.</li>
+            <li>• <strong className="text-text-secondary">Blur beta requests</strong> — If you ask to join the blur detection beta, we store your name, what you shoot, your photos per event, and your note, so we can choose testers and email your key.</li>
             <li>• <strong className="text-text-secondary">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity, batch counts) to improve the app. This never includes file names, photo content, or personal data.</li>
             <li>• <strong className="text-text-secondary">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
           </ul>
@@ -186,10 +186,10 @@ const MODAL_CONTENT = {
           <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos is a desktop application for organizing photos on your local machine. You may use it for personal and commercial purposes. You are responsible for the content you process we don't monitor, review, or access your files.</p>
         </div>
         <div>
-          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Free &amp; Pro plans</h4>
+          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Free to use</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• The <strong className="text-text-secondary">Free plan</strong> lets you process unlimited batches and requires an internet connection.</li>
-            <li>• The <strong className="text-text-secondary">Pro plan</strong> adds offline batching and additional devices. Monthly billing. Cancel anytime.</li>
+            <li>• Batch My Photos is <strong className="text-text-secondary">free</strong>: unlimited batches, offline batching, and up to 3 devices per account. There are no paid plans.</li>
+            <li>• <strong className="text-text-secondary">Blur detection</strong> is a free, invite-only beta. Its suggestions may be wrong; check them before you move or delete photos.</li>
           </ul>
         </div>
         <div>

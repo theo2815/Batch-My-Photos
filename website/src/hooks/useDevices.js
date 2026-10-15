@@ -15,7 +15,7 @@ import { supabase } from '../lib/supabase'
 
 export function useDevices() {
   const [devices, setDevices] = useState([])
-  const [deviceLimit, setDeviceLimit] = useState(1)
+  const [deviceLimit, setDeviceLimit] = useState(3) // every account gets at least 3 (server: _device_limit)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -46,7 +46,7 @@ export function useDevices() {
       }
 
       setDevices(data.devices || [])
-      setDeviceLimit(data.device_limit || 1)
+      setDeviceLimit(data.device_limit || 3)
 
       // Removal-limit metadata
       setRemovalsUsed(data.removals_used ?? 0)
