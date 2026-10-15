@@ -1,6 +1,6 @@
 {
   "name": "batchmyphotos",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Desktop utility for photographers to batch-split image folders",
   "main": "main.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "dist:blur-beta": "node scripts/write-blur-beta-config.cjs && npm run build && electron-builder --config electron-builder.blur-beta.cjs --win nsis --publish never",
     "pack:blur-beta": "node scripts/write-blur-beta-config.cjs && npm run build && electron-builder --config electron-builder.blur-beta.cjs --win --dir --publish never",
     "dist:appx": "npm run build && electron-builder --win appx --publish never",
+    "dist:store": "npm run build && electron-builder --config electron-builder.store.cjs --win appx --publish never",
     "pack": "electron-builder --dir",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
