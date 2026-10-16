@@ -71,7 +71,10 @@ function createWindow() {
   // 3. npm run start (Vite dev server) → Use localhost:5173
   const isPackaged = config.isProduction;
   const shouldUseDistBuild = isPackaged || (hasDistBuild && process.env.npm_lifecycle_event !== 'start');
-  appUrl = shouldUseDistBuild ? pathToFileURL(distPath).href : 'http://localhost:5173/';
+  // Chromium reports the drive letter in upper case; a shell started on "c:\" gives a lowercase one
+  appUrl = shouldUseDistBuild
+    ? pathToFileURL(distPath.replace(/^[a-z]:/, (drive) => drive.toUpperCase())).href
+    : 'http://localhost:5173/';
   
   if (shouldUseDistBuild) {
     // Production mode or npm run electron with dist: Load built files

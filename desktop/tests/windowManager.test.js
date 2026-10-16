@@ -105,4 +105,10 @@ describe('window navigation guard', () => {
     expect(api.isAppUrl('file:///C:/Users/Zo%C3%AB/Batch%20My%20Photos/dist/index.html#/x')).toBe(true);
     expect(api.isAppUrl('file:///C:/Users/Zo%C3%AB/Batch%20My%20Photos/dist/evil.html')).toBe(false);
   });
+
+  it.runIf(process.platform === 'win32')('isAppUrl accepts the page when the app was started from a lowercase drive', () => {
+    const { api } = loadWindow({ packaged: true, npmScript: 'start', dirname: 'c:\\Users\\x\\Batch My Photos\\src\\main' });
+    // Chromium always reports the drive letter in upper case
+    expect(api.isAppUrl('file:///C:/Users/x/Batch%20My%20Photos/dist/index.html')).toBe(true);
+  });
 });
