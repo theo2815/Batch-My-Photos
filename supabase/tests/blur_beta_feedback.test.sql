@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(32);
+SELECT plan(40);
 SELECT has_table('public', 'blur_beta_feedback', 'feedback table exists');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.blur_beta_feedback')), 'feedback RLS enabled');
 SELECT is((SELECT public FROM storage.buckets WHERE id = 'blur-beta-feedback'), false, 'feedback bucket is private');
@@ -8,7 +8,13 @@ SELECT is((SELECT allowed_mime_types FROM storage.buckets WHERE id = 'blur-beta-
 
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password)
 VALUES ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'beta-a@example.test', 'test'),
-       ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'beta-b@example.test', 'test');
+       ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'beta-b@example.test', 'test'),
+       ('00000000-0000-0000-0000-000000000033', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'no-request@example.test', 'test'),
+       ('00000000-0000-0000-0000-000000000044', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'key-not-sent@example.test', 'test');
+-- Uploads need a sent beta key: …0011 is an invited tester, …0044 asked but has no key yet, …0033 never asked.
+INSERT INTO public.blur_beta_requests (user_id, email, full_name, photography_type, photos_per_event, key_sent_at)
+VALUES ('00000000-0000-0000-0000-000000000011', 'beta-a@example.test', 'Beta A', 'Sports', 'under-500', now()),
+       ('00000000-0000-0000-0000-000000000044', 'key-not-sent@example.test', 'Beta C', 'Sports', 'under-500', NULL);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000011', true);
@@ -65,6 +71,36 @@ SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id = 'blur-beta-fee
 WITH removed AS (DELETE FROM public.blur_beta_feedback RETURNING id) SELECT is((SELECT count(*) FROM removed), 0::bigint, 'admin review does not grant deletion');
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000011', true);
 WITH removed AS (DELETE FROM public.blur_beta_feedback RETURNING id) SELECT is((SELECT count(*) FROM removed), 1::bigint, 'owner deletes own feedback');
+
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000033', true);
+SELECT throws_ok($$INSERT INTO public.blur_beta_feedback (object_name, predicted_class, score, human_label, beta_version, source_environment)
+  VALUES ('00000000-0000-0000-0000-000000000033/example.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging')$$, '42501', NULL, 'no beta request: metadata refused');
+SELECT throws_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
+  VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000033/example.jpg', '00000000-0000-0000-0000-000000000033')$$, '42501', NULL, 'no beta request: Storage object refused');
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000044', true);
+SELECT throws_ok($$INSERT INTO public.blur_beta_feedback (object_name, predicted_class, score, human_label, beta_version, source_environment)
+  VALUES ('00000000-0000-0000-0000-000000000044/example.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging')$$, '42501', NULL, 'key not sent: metadata refused');
+SELECT throws_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
+  VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000044/example.jpg', '00000000-0000-0000-0000-000000000044')$$, '42501', NULL, 'key not sent: Storage object refused');
+
+-- Cap: fill …0011 up to 499 examples of each kind, then the 500th fits and the 501st does not.
+RESET ROLE;
+INSERT INTO public.blur_beta_feedback (user_id, object_name, predicted_class, score, human_label, beta_version, source_environment)
+  SELECT '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000011/cap-' || i || '.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging'
+  FROM generate_series(1, 499 - (SELECT count(*) FROM public.blur_beta_feedback WHERE user_id = '00000000-0000-0000-0000-000000000011')) i;
+INSERT INTO storage.objects (bucket_id, name, owner_id)
+  SELECT 'blur-beta-feedback', '00000000-0000-0000-0000-000000000011/cap-' || i || '.jpg', '00000000-0000-0000-0000-000000000011'
+  FROM generate_series(1, 499 - (SELECT count(*) FROM storage.objects WHERE bucket_id = 'blur-beta-feedback' AND owner_id = '00000000-0000-0000-0000-000000000011')) i;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000011', true);
+SELECT lives_ok($$INSERT INTO public.blur_beta_feedback (object_name, predicted_class, score, human_label, beta_version, source_environment)
+  VALUES ('00000000-0000-0000-0000-000000000011/last.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging')$$, '500th metadata row accepted');
+SELECT throws_ok($$INSERT INTO public.blur_beta_feedback (object_name, predicted_class, score, human_label, beta_version, source_environment)
+  VALUES ('00000000-0000-0000-0000-000000000011/over.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging')$$, '42501', NULL, '501st metadata row refused');
+SELECT lives_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
+  VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000011/last.jpg', '00000000-0000-0000-0000-000000000011')$$, '500th Storage object accepted');
+SELECT throws_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
+  VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000011/over.jpg', '00000000-0000-0000-0000-000000000011')$$, '42501', NULL, '501st Storage object refused');
 
 RESET ROLE;
 SET LOCAL ROLE anon;
