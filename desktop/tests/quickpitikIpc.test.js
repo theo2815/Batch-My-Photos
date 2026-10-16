@@ -191,3 +191,14 @@ describe('QuickPitik upload channels', () => {
     expect(openExternal).toHaveBeenCalledTimes(1);
   });
 });
+
+// C-14: no screen downloads or installs updates, so the page gets no way to.
+describe('update bridge', () => {
+  it('offers no download or install, but keeps the update check and status listener', () => {
+    const { api } = preloadFor(new Map());
+    expect(api.downloadUpdate).toBeUndefined();
+    expect(api.installUpdate).toBeUndefined();
+    expect(typeof api.checkForUpdates).toBe('function');
+    expect(typeof api.onUpdateStatus).toBe('function');
+  });
+});

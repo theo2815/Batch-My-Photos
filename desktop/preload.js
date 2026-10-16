@@ -574,16 +574,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
 
   /**
-   * Start downloading the available update
-   */
-  downloadUpdate: () => ipcRenderer.invoke('download-update'),
-
-  /**
-   * Install the downloaded update (restarts app)
-   */
-  installUpdate: () => ipcRenderer.invoke('install-update'),
-
-  /**
    * Listen for update status changes
    * @param {Function} callback - Called with status object
    * @returns {Function} Cleanup function
