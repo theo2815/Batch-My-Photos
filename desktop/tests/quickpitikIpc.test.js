@@ -204,4 +204,8 @@ describe('preload getPathForFile', () => {
     expect(api.getPathForFile(fakeFile)).toBe('C:\\Shoots\\Race');
     expect(getPathForFile).toHaveBeenCalledWith(fakeFile);
   });
+
+  it('runs on Electron 33, past the File.path removal in 32', () => {
+    expect(createRequire(import.meta.url)('electron/package.json').version).toMatch(/^33\./);
+  });
 });
