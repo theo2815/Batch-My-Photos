@@ -2,10 +2,10 @@
 // A fake Supabase client that keeps the rows it is given, so a replayed
 // checkout sees the transaction the first call wrote.
 
-import { strictEqual } from 'node:assert'
+import { rejects, strictEqual } from 'node:assert'
 import { activateSubscription } from './paymongo.ts'
 
-function fakeSupabase() {
+function fakeSupabase({ failTxInsert = false } = {}) {
   const calls: string[] = []
   const transactions: { paymongo_checkout_id: string }[] = []
   let subscription: { expires_at: string } | null = null
@@ -31,6 +31,7 @@ function fakeSupabase() {
       },
       insert: async (row: { paymongo_checkout_id: string }) => {
         calls.push(`${table}.insert`)
+        if (table === 'transactions' && failTxInsert) return { error: { message: 'insert failed' } }
         if (table === 'transactions') transactions.push(row)
         return { error: null }
       },
@@ -51,4 +52,9 @@ Deno.test('a replayed checkout does not grant Pro again', async () => {
   strictEqual(first.txCreated, true)
   strictEqual(second.txCreated, false)
   strictEqual(second.expiresAt, first.expiresAt)
+})
+
+Deno.test('a failed transaction insert is an error, not a silent grant', async () => {
+  const db = fakeSupabase({ failTxInsert: true })
+  await rejects(activateSubscription(db.client, { userId: 'user-1', checkoutId: 'cs_lost', couponCode: null }))
 })

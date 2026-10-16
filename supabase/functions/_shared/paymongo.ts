@@ -105,7 +105,8 @@ export async function activateSubscription(supabase: SupabaseClient, opts: {
   }, { onConflict: 'user_id' })
   if (upsertError) throw new Error(`subscriptions upsert failed: ${upsertError.message}`)
 
-  await supabase.from('transactions').insert({
+  // This row is what stops a replay, so a failed insert must not pass silently.
+  const { error: txInsertError } = await supabase.from('transactions').insert({
     user_id: userId,
     amount,
     currency: PLAN_CURRENCY,
@@ -115,6 +116,7 @@ export async function activateSubscription(supabase: SupabaseClient, opts: {
     coupon_code: couponCode,
     created_at: paidAt.toISOString(),
   })
+  if (txInsertError) throw new Error(`transactions insert failed: ${txInsertError.message}`)
 
   if (couponCode && couponDef?.isReferral) {
     await recordReferralUsage(supabase, couponCode, userId)
