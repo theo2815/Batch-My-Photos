@@ -10,6 +10,14 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// A login link that starts the app is refused before the login screen
+// listens; keep the last answer nobody heard for the next listener.
+let unheardAuthCallback = null;
+let authCallbackListeners = 0;
+ipcRenderer.on('auth-callback', (_event, data) => {
+  if (authCallbackListeners === 0) unheardAuthCallback = data;
+});
+
 // Expose protected methods to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   /**
@@ -145,7 +153,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAuthCallback: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('auth-callback', listener);
+    authCallbackListeners++;
+    if (unheardAuthCallback) {
+      const data = unheardAuthCallback;
+      unheardAuthCallback = null;
+      callback(data);
+    }
     return () => {
+      authCallbackListeners--;
       ipcRenderer.removeListener('auth-callback', listener);
     };
   },

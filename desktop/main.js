@@ -148,7 +148,7 @@ async function handleDeepLink(url) {
       logger.warn('[DEEP-LINK] Auth callback refused: not started from this app');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('auth-callback', { success: false, error: 'This sign-in link was not started from this app. Press Log In again.' });
+        mainWindow.webContents.send('auth-callback', { success: false, error: 'This sign-in link was not started from this app. Press Sign in with Browser again.' });
       }
       return;
     }

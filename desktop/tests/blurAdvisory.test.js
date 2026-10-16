@@ -146,7 +146,7 @@ describe('blur beta flag bridge', () => {
     let api;
     const electron = {
       contextBridge: { exposeInMainWorld: (_name, exposed) => { api = exposed; } },
-      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args) },
+      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args), on() {} },
     };
     const original = Module._load;
     Module._load = function (request, ...rest) {

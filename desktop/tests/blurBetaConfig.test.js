@@ -190,7 +190,7 @@ describe('beta key setup', () => {
     let api;
     load('preload.js', { electron: {
       contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
-      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args) },
+      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args), on() {} },
     } });
     expect(typeof api.blurBetaKey).toBe('function');
     expect(await api.blurBetaKey()).toEqual({ enabled: true, configured: false });

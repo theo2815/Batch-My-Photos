@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -70,9 +71,20 @@ describe('auth callback deep link', () => {
 
     expect(auth.consumeLoginState).toHaveBeenCalledWith('forged');
     expect(channel).toBe('auth-callback');
-    expect(payload).toEqual({ success: false, error: 'This sign-in link was not started from this app. Press Log In again.' });
+    expect(payload).toEqual({ success: false, error: 'This sign-in link was not started from this app. Press Sign in with Browser again.' });
     expect(auth.verifySession).not.toHaveBeenCalled();
     expect(auth.fetchUserProfile).not.toHaveBeenCalled();
+    expect(auth.saveSession).not.toHaveBeenCalled();
+  });
+
+  it('a link with no state is checked too, and refused', async () => {
+    const auth = fakeAuth({ stateOk: false });
+    const { openLink } = startApp(auth);
+
+    const [, payload] = await openLink('batchmyphotos://auth/callback?token=x');
+
+    expect(auth.consumeLoginState).toHaveBeenCalledWith(null);
+    expect(payload.success).toBe(false);
     expect(auth.saveSession).not.toHaveBeenCalled();
   });
 
@@ -107,5 +119,48 @@ describe('auth callback deep link', () => {
 
     expect(payload).toEqual({ success: false, error: 'Could not verify your login — check your connection and try again' });
     expect(auth.saveSession).not.toHaveBeenCalled();
+  });
+});
+
+// A link that starts the app is refused (no login is pending after a start)
+// before the login screen listens; preload must keep that answer for it.
+describe('auth-callback before the login screen listens', () => {
+  function loadPreload() {
+    const ipcRenderer = new EventEmitter();
+    let api;
+    const filename = path.join(root, 'preload.js');
+    vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
+      require: () => ({ contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } }, ipcRenderer }),
+      process, console,
+    }, { filename });
+    return { api, ipcRenderer };
+  }
+  const refusal = { success: false, error: 'refused' };
+
+  it('hands a message nobody heard to the next listener, once', () => {
+    const { api, ipcRenderer } = loadPreload();
+    ipcRenderer.emit('auth-callback', {}, refusal);
+
+    const first = [];
+    const stop = api.onAuthCallback((data) => first.push(data));
+    stop();
+    const second = [];
+    api.onAuthCallback((data) => second.push(data));
+
+    expect(first).toEqual([refusal]);
+    expect(second).toEqual([]);
+  });
+
+  it('does not replay a message a listener already heard', () => {
+    const { api, ipcRenderer } = loadPreload();
+    const heard = [];
+    const stop = api.onAuthCallback((data) => heard.push(data));
+    ipcRenderer.emit('auth-callback', {}, refusal);
+    stop();
+    const later = [];
+    api.onAuthCallback((data) => later.push(data));
+
+    expect(heard).toEqual([refusal]);
+    expect(later).toEqual([]);
   });
 });

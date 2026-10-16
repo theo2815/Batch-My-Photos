@@ -286,7 +286,7 @@ describe('feedback IPC boundary', () => {
     let api;
     load('preload.js', { electron: {
       contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
-      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args) },
+      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args), on() {} },
     } });
     const result = await api.submitBlurExample({ ...input(), score: 0, predictedClass: 'sharp' });
     expect(call).toHaveBeenCalledWith(input());
