@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { desktopCallbackUrl, tabStorage } from '../lib/desktopLoginState'
 import { CheckCircle2, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
 
 /**
@@ -37,7 +38,7 @@ export default function DesktopCallback() {
         const name = session.user?.user_metadata?.full_name || session.user?.user_metadata?.name || ''
 
         // Build deep link URL (includes refresh_token for persistent sessions)
-        const url = `batchmyphotos://auth/callback?token=${encodeURIComponent(token)}&refresh_token=${encodeURIComponent(refreshToken)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`
+        const url = desktopCallbackUrl({ token, refreshToken, email, name }, tabStorage())
         setDeepLinkUrl(url)
         setStatus('redirecting')
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import { rememberDesktopState, tabStorage } from '../lib/desktopLoginState'
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
 import GoogleAuthButton from '../components/GoogleAuthButton'
 import InfoModal from '../components/modals/InfoModal'
@@ -30,6 +31,8 @@ export default function Login() {
       setSessionChecked(true) // skip check for non-desktop
       return
     }
+
+    rememberDesktopState(window.location.search, tabStorage())
 
     async function checkExistingSession() {
       try {
