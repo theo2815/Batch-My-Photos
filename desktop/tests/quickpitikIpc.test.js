@@ -205,7 +205,7 @@ describe('preload getPathForFile', () => {
     expect(getPathForFile).toHaveBeenCalledWith(fakeFile);
   });
 
-  it('runs on Electron 33, past the File.path removal in 32', () => {
-    expect(createRequire(import.meta.url)('electron/package.json').version).toMatch(/^33\./);
+  it('runs on Electron 38', () => {
+    expect(createRequire(import.meta.url)('electron/package.json').version).toMatch(/^38\./);
   });
 });
