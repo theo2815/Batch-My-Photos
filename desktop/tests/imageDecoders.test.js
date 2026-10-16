@@ -55,6 +55,11 @@ describe('image decoders refused for files from received folders', () => {
     expect(Buffer.isBuffer(await blur.prepareImageForUpload(tiff))).toBe(true);
     expect(Buffer.isBuffer(await blur.prepareImageForUpload(gif))).toBe(true);
   });
+
+  it('runs sharp 0.35.5 or newer, which bundles the fixed decoders', () => {
+    const [major, minor, patch] = sharp.versions.sharp.split('.').map(Number);
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThanOrEqual(35_005);
+  });
 });
 
 const { SHARP_MAX_INPUT_PIXELS } = createRequire(import.meta.url)('../src/main/constants.js');
