@@ -14,6 +14,13 @@ VALUES ('00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-000000000314', '00000000-0000-0000-0000-000000000301', 'norow-device-000004', 'A4'),
        ('00000000-0000-0000-0000-000000000321', '00000000-0000-0000-0000-000000000302', 'withrow-device-0001', 'B1'),
        ('00000000-0000-0000-0000-000000000322', '00000000-0000-0000-0000-000000000302', 'withrow-device-0002', 'B2');
+-- A's 31-day-old removals have rolled out. B's 25-day-old ones are inside a rolling
+-- 30 days but before B's stored period began (now() - 20 days), so they do not count.
+INSERT INTO public.device_removals (user_id, removed_hwid, removed_at)
+SELECT u, 'old-removal-' || u || i, now() - d
+FROM (VALUES ('00000000-0000-0000-0000-000000000301'::uuid, interval '31 days'),
+             ('00000000-0000-0000-0000-000000000302'::uuid, interval '25 days')) AS v(u, d),
+     generate_series(1, 3) AS i;
 
 -- ── No subscriptions row: 3 removals per rolling 30 days ────────────────────
 SET LOCAL ROLE authenticated;
