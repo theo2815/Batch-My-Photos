@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(40);
+SELECT plan(41);
 SELECT has_table('public', 'blur_beta_feedback', 'feedback table exists');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.blur_beta_feedback')), 'feedback RLS enabled');
 SELECT is((SELECT public FROM storage.buckets WHERE id = 'blur-beta-feedback'), false, 'feedback bucket is private');
@@ -101,6 +101,11 @@ SELECT lives_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
   VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000011/last.jpg', '00000000-0000-0000-0000-000000000011')$$, '500th Storage object accepted');
 SELECT throws_ok($$INSERT INTO storage.objects (bucket_id, name, owner_id)
   VALUES ('blur-beta-feedback', '00000000-0000-0000-0000-000000000011/over.jpg', '00000000-0000-0000-0000-000000000011')$$, '42501', NULL, '501st Storage object refused');
+-- One REST call with a JSON array is one multi-row INSERT: at 499 it must not add two.
+DELETE FROM public.blur_beta_feedback WHERE object_name = '00000000-0000-0000-0000-000000000011/last.jpg';
+SELECT throws_ok($$INSERT INTO public.blur_beta_feedback (object_name, predicted_class, score, human_label, beta_version, source_environment)
+  VALUES ('00000000-0000-0000-0000-000000000011/bulk-1.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging'),
+         ('00000000-0000-0000-0000-000000000011/bulk-2.jpg', 'sharp', 0.1, 'blurry', 'beta.1', 'staging')$$, '42501', NULL, 'one multi-row insert cannot pass 500 metadata rows');
 
 RESET ROLE;
 SET LOCAL ROLE anon;
