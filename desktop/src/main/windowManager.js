@@ -72,8 +72,9 @@ function createWindow() {
   const isPackaged = config.isProduction;
   const shouldUseDistBuild = isPackaged || (hasDistBuild && process.env.npm_lifecycle_event !== 'start');
   // Chromium reports the drive letter in upper case; a shell started on "c:\" gives a lowercase one
+  // Chromium also sends ^ as %5E, which Electron 28's Node 18 leaves raw.
   appUrl = shouldUseDistBuild
-    ? pathToFileURL(distPath.replace(/^[a-z]:/, (drive) => drive.toUpperCase())).href
+    ? pathToFileURL(distPath.replace(/^[a-z]:/, (drive) => drive.toUpperCase())).href.replace(/\^/g, '%5E')
     : 'http://localhost:5173/';
   
   if (shouldUseDistBuild) {

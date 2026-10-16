@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const filename = path.resolve(import.meta.dirname, '../src/main/windowManager.js');
 
-function loadWindow({ packaged, npmScript, dirname = path.dirname(filename) }) {
+function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), urlModule = url }) {
   const loads = [];
   const handlers = {};
   class BrowserWindow {
@@ -33,7 +33,7 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename) }) {
     require(name) {
       if (name === 'electron') return { BrowserWindow, Menu: { setApplicationMenu() {} } };
       if (name === 'path') return path;
-      if (name === 'url') return url;
+      if (name === 'url') return urlModule;
       if (name === 'fs') return { existsSync: () => true };
       if (name === '../utils/logger') return { log() {}, warn() {} };
       if (name === './config') return { isProduction: packaged };
@@ -110,5 +110,14 @@ describe('window navigation guard', () => {
     const { api } = loadWindow({ packaged: true, npmScript: 'start', dirname: 'c:\\Users\\x\\Batch My Photos\\src\\main' });
     // Chromium always reports the drive letter in upper case
     expect(api.isAppUrl('file:///C:/Users/x/Batch%20My%20Photos/dist/index.html')).toBe(true);
+  });
+  it.runIf(process.platform === 'win32')('isAppUrl accepts an install path with a ^ under Electron 28 (Node 18)', () => {
+    // Electron 28's Node 18 leaves ^ raw in pathToFileURL; the host Node may already encode it
+    const node18Url = { pathToFileURL: (p) => ({ href: url.pathToFileURL(p).href.replace(/%5E/g, '^') }) };
+    const { api } = loadWindow({
+      packaged: true, npmScript: 'start', dirname: 'C:\\Users\\a^b\\Batch My Photos\\src\\main', urlModule: node18Url,
+    });
+    // Chromium reports ^ as %5E
+    expect(api.isAppUrl('file:///C:/Users/a%5Eb/Batch%20My%20Photos/dist/index.html')).toBe(true);
   });
 });
