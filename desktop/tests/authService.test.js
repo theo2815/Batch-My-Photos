@@ -224,6 +224,23 @@ describe('fetchUserProfile', () => {
   });
 });
 
+describe('refreshAccessToken', () => {
+  beforeEach(() => { memory.clear(); fetchMock.mockReset(); });
+
+  it('a renewal that finishes after a logout stores no tokens', async () => {
+    memory.set('refresh_token', 'old-account');
+    let resolveFetch;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveFetch = resolve; }));
+    const renewing = authService.refreshAccessToken();
+    authService.clearSession();
+    resolveFetch(json(200, { access_token: 'old-jwt', refresh_token: 'old-refresh' }));
+    const result = await renewing;
+
+    expect(result.refreshed).toBe(false);
+    expect(memory.size).toBe(0);
+  });
+});
+
 // A QuickPitik connection must not outlive the BatchMyPhotos sign-in: on a
 // shared PC the next person would upload into the first person's events.
 describe('clearSession', () => {

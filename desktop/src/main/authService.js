@@ -34,6 +34,8 @@ const FRONTEND_URL = config.urls.FRONTEND_URL
 
 // Prevent concurrent refresh attempts from racing
 let _refreshPromise = null
+// Bumped by clearSession: a refresh started before it must not save its tokens
+let _sessionGen = 0
 
 // The one Log In the browser may answer: { state, createdAt }. Memory only,
 // so after a restart the user presses Log In again.
@@ -93,6 +95,7 @@ function getStoredRefreshToken() {
  */
 function clearSession() {
   store.clear()
+  _sessionGen++
   _refreshPromise = null
   // A QuickPitik connection must not outlive this sign-in (shared PCs).
   // Required here, not at the top: its store must open after main.js sets the data folder.
@@ -170,6 +173,7 @@ async function refreshAccessToken() {
  * @returns {Promise<{refreshed: boolean, accessToken?: string}>}
  */
 async function _doRefresh(refreshToken) {
+  const generation = _sessionGen
   try {
     logger.log('🔄 [AUTH] Refreshing access token via Supabase...')
 
@@ -201,6 +205,11 @@ async function _doRefresh(refreshToken) {
 
     if (!newAccessToken) {
       logger.error('❌ [AUTH] Refresh response missing access_token')
+      return { refreshed: false }
+    }
+
+    if (generation !== _sessionGen) {
+      logger.warn('⚠️ [AUTH] Refresh dropped: the session was cleared meanwhile')
       return { refreshed: false }
     }
 
