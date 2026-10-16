@@ -44,6 +44,9 @@ const logger = require('../utils/logger');
 // Batch processing optimization: limit libvips to 1 thread per Sharp call.
 // ---------------------------------------------------------------------------
 sharp.concurrency(1);
+// Folders come from other people; sharp 0.34.5 has memory-corruption advisories in its SVG and
+// HEIF decoders (GHSA-wq5f-xc86-pv6w, GHSA-rgj7-g3m4-5g8c). TIFF/GIF stay open: preview, blur and thumbnails use them.
+sharp.block({ operation: ['VipsForeignLoadSvg', 'VipsForeignLoadHeif'] });
 
 // ============================================================================
 // IN-MEMORY CACHE
