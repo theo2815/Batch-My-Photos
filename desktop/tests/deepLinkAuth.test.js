@@ -58,6 +58,7 @@ function fakeAuth({ stateOk = true, profile = { email: 'a@b.test', name: 'Ana' }
     consumeLoginState: vi.fn(() => stateOk),
     verifySession: vi.fn(async () => ({ valid: true, subscription: {} })),
     fetchUserProfile: vi.fn(async () => profile),
+    clearSession: vi.fn(),
     saveSession: vi.fn(),
     saveRefreshToken: vi.fn(),
     getStoredSession: () => 'jwt',
@@ -112,6 +113,27 @@ describe('auth callback deep link', () => {
     expect(auth.saveSession).toHaveBeenCalledWith('jwt1', { email: 'a@b.test', name: 'Ana' });
     expect(auth.saveRefreshToken).toHaveBeenCalledWith('r1');
     expect(payload).toEqual({ success: true, email: 'a@b.test', name: 'Ana' });
+  });
+
+  // The login screen can show with an old session still stored (a failed status
+  // check); the new account must not inherit it, nor its QuickPitik connection.
+  it('ends any stored session before saving the new one', async () => {
+    const auth = fakeAuth();
+    const { openLink } = startApp(auth);
+
+    await openLink('batchmyphotos://auth/callback?token=jwt1&state=s');
+
+    expect(auth.clearSession).toHaveBeenCalledTimes(1);
+    expect(auth.clearSession.mock.invocationCallOrder[0]).toBeLessThan(auth.saveSession.mock.invocationCallOrder[0]);
+  });
+
+  it('a refused link leaves the stored session alone', async () => {
+    const auth = fakeAuth({ stateOk: false });
+    const { openLink } = startApp(auth);
+
+    await openLink('batchmyphotos://auth/callback?token=jwt1&state=forged');
+
+    expect(auth.clearSession).not.toHaveBeenCalled();
   });
 
   it('accepts a link that carries no email', async () => {

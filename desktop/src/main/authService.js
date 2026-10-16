@@ -96,7 +96,13 @@ function clearSession() {
   _refreshPromise = null
   // A QuickPitik connection must not outlive this sign-in (shared PCs).
   // Required here, not at the top: its store must open after main.js sets the data folder.
-  require('./quickpitikAuthService').disconnect()
+  if (config.features.QUICKPITIK_UPLOAD_ENABLED) {
+    try {
+      require('./quickpitikAuthService').disconnect()
+    } catch (err) {
+      logger.warn('⚠️ [AUTH] Could not disconnect QuickPitik:', err.message)
+    }
+  }
   logger.log('🚪 [AUTH] Session cleared (logout)')
 }
 

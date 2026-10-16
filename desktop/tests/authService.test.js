@@ -23,12 +23,19 @@ const stubs = {
   },
 };
 const quickpitik = { disconnect: vi.fn() };
+// config.features is frozen; authService gets a copy whose flags a test can flip
+let authConfig;
 const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (stubs[request]) return stubs[request];
   if (request.endsWith('/secureStore')) return FakeStore;
   if (request.endsWith('/deviceService')) return { bindDevice: async () => ({ bound: true }) };
   if (request.endsWith('/quickpitikAuthService')) return quickpitik;
+  if (request === './config') {
+    const real = origLoad.call(this, request, ...rest);
+    authConfig ??= { ...real, features: { ...real.features } };
+    return authConfig;
+  }
   return origLoad.call(this, request, ...rest);
 };
 
@@ -180,11 +187,28 @@ describe('fetchUserProfile', () => {
 // A QuickPitik connection must not outlive the BatchMyPhotos sign-in: on a
 // shared PC the next person would upload into the first person's events.
 describe('clearSession', () => {
-  beforeEach(() => { memory.clear(); quickpitik.disconnect.mockReset(); });
+  beforeEach(() => {
+    memory.clear();
+    quickpitik.disconnect.mockReset();
+    authConfig.features.QUICKPITIK_UPLOAD_ENABLED = true;
+  });
 
   it('also disconnects QuickPitik', () => {
     memory.set('session_token', 'jwt');
     authService.clearSession();
     expect(quickpitik.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves QuickPitik alone (and writes no file for it) while the Upload view is off', () => {
+    authConfig.features.QUICKPITIK_UPLOAD_ENABLED = false;
+    authService.clearSession();
+    expect(quickpitik.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('still signs out of BatchMyPhotos when QuickPitik cannot be reached', () => {
+    memory.set('session_token', 'jwt');
+    quickpitik.disconnect.mockImplementation(() => { throw new Error('store locked'); });
+    expect(() => authService.clearSession()).not.toThrow();
+    expect(memory.has('session_token')).toBe(false);
   });
 });
