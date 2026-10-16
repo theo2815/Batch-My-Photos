@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 const root = path.resolve(import.meta.dirname, '..');
 const logger = { log() {}, warn() {}, error() {} };
 
-function startApp(authService) {
+function startApp(authService, { features = {}, quickpitik } = {}) {
   const events = {};
   const send = vi.fn();
   const win = { isDestroyed: () => false, isMinimized: () => false, focus() {}, webContents: { send } };
@@ -27,11 +27,12 @@ function startApp(authService) {
   const mocks = {
     electron: { app, ipcMain: {} }, os: { tmpdir: () => os.tmpdir() },
     './src/main/constants': { UV_THREADPOOL_SIZE: 4 },
-    './src/main/config': { isProduction: false, features: {} },
+    './src/main/config': { isProduction: false, features },
     './src/main/secureStore': class {},
     './src/main/windowManager': { createWindow() {}, getMainWindow: () => win },
     './src/main/ipcHandlers': { registerIpcHandlers() {} },
     './src/main/authService': authService,
+    './src/main/quickpitikAuthService': quickpitik,
     './src/main/deviceService': { startHeartbeat() {}, stopHeartbeat() {} },
     './src/main/updateManager': { initAutoUpdater() {} },
     './src/utils/logger': logger,
@@ -48,7 +49,8 @@ function startApp(authService) {
     await vi.waitFor(() => expect(send).toHaveBeenCalled());
     return send.mock.calls[0];
   };
-  return { openLink };
+  const fire = (url) => events['second-instance']({}, [url]);
+  return { openLink, fire };
 }
 
 function fakeAuth({ stateOk = true, profile = { email: 'a@b.test', name: 'Ana' } } = {}) {
@@ -63,6 +65,17 @@ function fakeAuth({ stateOk = true, profile = { email: 'a@b.test', name: 'Ana' }
 }
 
 describe('auth callback deep link', () => {
+  it('a QuickPitik connect link goes to QuickPitik and never to the login-state check', async () => {
+    const auth = fakeAuth();
+    const completeConnect = vi.fn(async () => {});
+    const { fire } = startApp(auth, { features: { QUICKPITIK_UPLOAD_ENABLED: true }, quickpitik: { completeConnect } });
+
+    fire('batchmyphotos://quickpitik/callback?code=c1&state=s1');
+
+    await vi.waitFor(() => expect(completeConnect).toHaveBeenCalledWith('c1', 's1'));
+    expect(auth.consumeLoginState).not.toHaveBeenCalled();
+  });
+
   it('refuses a link without the current state before any network call', async () => {
     const auth = fakeAuth({ stateOk: false });
     const { openLink } = startApp(auth);
