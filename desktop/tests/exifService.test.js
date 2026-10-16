@@ -63,32 +63,24 @@ describe('extractExifDates', () => {
     expect(dates['IMG_0001.jpg']).not.toBe(exifDate.getTime());
   });
 
-  it('real HEIC photos (ftyp then meta) still get their EXIF date', async () => {
+  it('HEIC files, real or crafted, never reach exifr; they get their file time', async () => {
     const parse = vi.fn(async () => ({ DateTimeOriginal: exifDate }));
     const { extractExifDates } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
-    const realHeic = Buffer.concat([ftypHeic, box('meta', Buffer.alloc(4)), Buffer.alloc(64)]);
-    const folder = folderWith({ 'IMG_1234.HEIC': realHeic });
-
-    const dates = await extractExifDates(['IMG_1234.HEIC'], folder);
-
-    expect(parse).toHaveBeenCalledTimes(1);
-    expect(dates['IMG_1234.HEIC']).toBe(exifDate.getTime());
-  });
-
-  it('HEIF-like files whose boxes jump past the end before meta get their file time', async () => {
-    const parse = vi.fn(async () => ({ DateTimeOriginal: exifDate }));
-    const { extractExifDates } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
-    const farBox = Buffer.concat([Buffer.from('000f4240', 'hex'), Buffer.from('mdat', 'latin1')]);
+    // exifr reads a 64-bit box size of 00000000 FFFFFFF8 as -8, so its walk inside 'meta' runs backwards forever.
+    const backwardsBox = Buffer.from('00000001' + '66726565' + '00000000fffffff8', 'hex'); // [1]['free'][-8]
+    const meta = box('meta', Buffer.concat([Buffer.alloc(4), box('free'), backwardsBox]));
+    const crafted = Buffer.concat([ftypHeic, meta, Buffer.alloc(64)]);
     const folder = folderWith({
-      'far.heic': Buffer.concat([ftypHeic, farBox, Buffer.alloc(32)]),
+      'IMG_1234.HEIC': Buffer.concat([ftypHeic, box('meta', Buffer.alloc(4)), Buffer.alloc(64)]),
+      'crafted.heic': crafted,
       'short.heic': Buffer.from([0, 0, 0]),
     });
 
-    const dates = await extractExifDates(['far.heic', 'short.heic'], folder);
+    const dates = await extractExifDates(['IMG_1234.HEIC', 'crafted.heic', 'short.heic'], folder);
 
+    expect(crafted.readUInt32BE(24)).toBe(36);
     expect(parse).not.toHaveBeenCalled();
-    expect(dates['far.heic']).toBeGreaterThan(0);
-    expect(dates['short.heic']).toBeGreaterThan(0);
+    for (const name of ['IMG_1234.HEIC', 'crafted.heic', 'short.heic']) expect(dates[name]).toBeGreaterThan(0);
   });
 
   it('a 1-byte file and an empty file fall back to file time without error', async () => {
