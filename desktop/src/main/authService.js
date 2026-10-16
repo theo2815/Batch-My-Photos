@@ -94,6 +94,9 @@ function getStoredRefreshToken() {
 function clearSession() {
   store.clear()
   _refreshPromise = null
+  // A QuickPitik connection must not outlive this sign-in (shared PCs).
+  // Required here, not at the top: its store must open after main.js sets the data folder.
+  require('./quickpitikAuthService').disconnect()
   logger.log('🚪 [AUTH] Session cleared (logout)')
 }
 

@@ -22,11 +22,13 @@ const stubs = {
     shell: { openExternal: vi.fn() },
   },
 };
+const quickpitik = { disconnect: vi.fn() };
 const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (stubs[request]) return stubs[request];
   if (request.endsWith('/secureStore')) return FakeStore;
   if (request.endsWith('/deviceService')) return { bindDevice: async () => ({ bound: true }) };
+  if (request.endsWith('/quickpitikAuthService')) return quickpitik;
   return origLoad.call(this, request, ...rest);
 };
 
@@ -172,5 +174,17 @@ describe('fetchUserProfile', () => {
   it('returns null when the request throws', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
     expect(await authService.fetchUserProfile('jwt')).toBeNull();
+  });
+});
+
+// A QuickPitik connection must not outlive the BatchMyPhotos sign-in: on a
+// shared PC the next person would upload into the first person's events.
+describe('clearSession', () => {
+  beforeEach(() => { memory.clear(); quickpitik.disconnect.mockReset(); });
+
+  it('also disconnects QuickPitik', () => {
+    memory.set('session_token', 'jwt');
+    authService.clearSession();
+    expect(quickpitik.disconnect).toHaveBeenCalledTimes(1);
   });
 });
