@@ -40,7 +40,7 @@ It is a sibling product of **QuickPitik** — the marathon photography ecosystem
 
 | Layer            | Technology                                              |
 |------------------|---------------------------------------------------------|
-| Desktop shell    | Electron 28 · Node.js 20 · CommonJS main process        |
+| Desktop shell    | Electron (version in `desktop/package.json`) · CommonJS main process |
 | Renderer (UI)    | React 18 · Vite · Lucide icons · custom hooks (no Redux) |
 | Image handling   | Sharp · Exifr (EXIF parsing)                            |
 | Storage          | electron-store + OS encryption (Windows DPAPI)          |
@@ -91,7 +91,7 @@ React 18 with hooks-based state management — no Redux. Each feature has a dedi
 ### Prerequisites
 
 - **Windows 10 or 11** (the app ships Windows-only)
-- **Node.js 20+** and npm
+- **Node.js 22.12+** and npm (Electron's installer needs it; `npm ci` fails on older Node)
 - For backend/website development: a Supabase project (or `npx supabase start` with Docker), PayMongo test keys, and a Resend API key — see `website/.env.example` for the full environment reference
 
 ### Install
