@@ -63,3 +63,15 @@ test('when the browser blocks storage the old link still works', () => {
     delete globalThis.window
   }
 })
+
+test('the tab storage carries the state from login to the app link', () => {
+  const storage = fakeStorage()
+  globalThis.window = { sessionStorage: storage }
+  try {
+    assert.equal(tabStorage(), storage)
+    rememberDesktopState(`?desktop=true&state=${STATE}`, tabStorage())
+    assert.equal(desktopCallbackUrl(SESSION, tabStorage()), `${todaysUrl(SESSION)}&state=${STATE}`)
+  } finally {
+    delete globalThis.window
+  }
+})
