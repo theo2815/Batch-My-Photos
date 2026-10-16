@@ -260,6 +260,8 @@ async function verifySession(sessionToken, { allowRefresh = true } = {}) {
               logger.log('✅ [AUTH] Token refreshed — re-verifying with new token...')
               return verifySession(refreshResult.accessToken, { allowRefresh: false })
             }
+            // Could not reach the server to renew: keep the session, as offline
+            if (refreshResult.networkError) return { valid: false, networkError: true }
           }
           logger.warn(`⚠️ [AUTH] Session explicitly rejected: ${status}`)
           return { valid: false }

@@ -84,6 +84,30 @@ describe('verifySession', () => {
 
     expect(result).toEqual({ valid: false, networkError: true });
   }, 10_000);
+
+  it('reports networkError when the renewal itself cannot reach the server', async () => {
+    memory.set('refresh_token', 'r1');
+    fetchMock
+      .mockResolvedValueOnce(json(401, {}))
+      .mockResolvedValueOnce(json(401, {}))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED')); // refresh
+
+    const result = await authService.verifySession('expired');
+
+    expect(result).toEqual({ valid: false, networkError: true });
+  }, 10_000);
+
+  it('stays invalid when the server rejects the renewal', async () => {
+    memory.set('refresh_token', 'r1');
+    fetchMock
+      .mockResolvedValueOnce(json(401, {}))
+      .mockResolvedValueOnce(json(401, {}))
+      .mockResolvedValueOnce(json(400, { error: 'invalid_grant' })); // refresh
+
+    const result = await authService.verifySession('expired');
+
+    expect(result).toEqual({ valid: false });
+  }, 10_000);
 });
 
 describe('checkAuthStatus', () => {
@@ -100,6 +124,22 @@ describe('checkAuthStatus', () => {
     expect(status.sessionExpired).toBe(true);
     expect(memory.has('session_token')).toBe(false);
     expect(stubs.electron.shell.openExternal).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it('keeps the session offline when an expired token cannot be renewed for lack of network', async () => {
+    memory.set('session_token', 'expired');
+    memory.set('refresh_token', 'r1');
+    memory.set('user_profile', { email: 'a@b.c' });
+    fetchMock
+      .mockResolvedValueOnce(json(401, {}))
+      .mockResolvedValueOnce(json(401, {}))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED')); // refresh
+
+    const status = await authService.checkAuthStatus();
+
+    expect(status.isAuthenticated).toBe(true);
+    expect(status.offline).toBe(true);
+    expect(memory.get('session_token')).toBe('expired');
   }, 10_000);
 });
 
