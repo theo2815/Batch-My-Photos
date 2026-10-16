@@ -8,7 +8,7 @@
  * The renderer can access these functions via window.electronAPI
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // A login link that starts the app is refused before the login screen
 // listens; keep the last answer nobody heard for the next listener.
@@ -76,6 +76,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Result with success status
    */
   registerDroppedFolder: (folderPath) => ipcRenderer.invoke('register-dropped-folder', folderPath),
+  
+  /**
+   * Path of a dropped File (replaces File.path, which Electron 32 removes)
+   * @param {File} file - From a drop event's dataTransfer.files
+   * @returns {string} Absolute path, or '' if the file has none
+   */
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   
   /**
    * Listen for batch progress updates during execution
@@ -274,8 +281,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBlurDetectionEnabled: (includeBeta = false) => ipcRenderer.invoke('get-blur-detection-enabled', includeBeta),
 
   /**
-   * Whether the QuickPitik Upload view is available (feature-flagged; off in
-   * packaged builds until it ships).
+   * Whether the QuickPitik Upload view is available (on in packaged builds;
+   * source runs opt in with BATCH_QUICKPITIK_UPLOAD_ENABLED).
    * @returns {Promise<boolean>}
    */
   getQuickPitikUploadEnabled: () => ipcRenderer.invoke('get-quickpitik-upload-enabled'),

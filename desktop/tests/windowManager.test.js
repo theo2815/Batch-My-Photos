@@ -120,4 +120,12 @@ describe('window navigation guard', () => {
     // Chromium reports ^ as %5E
     expect(api.isAppUrl('file:///C:/Users/a%5Eb/Batch%20My%20Photos/dist/index.html')).toBe(true);
   });
+
+  it.runIf(process.platform === 'win32')('isAppUrl accepts an install path with ~ or [ ] under Electron 33 (Node 20.18+)', () => {
+    // Node 20.18+ encodes ~ [ ] in pathToFileURL (as the host Node does); Chromium reports them raw
+    const { api } = loadWindow({ packaged: true, npmScript: 'start', dirname: 'C:\\Users\\THEOCE~1\\[work]\\Batch My Photos\\src\\main' });
+    expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html#/x')).toBe(true);
+    expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/evil.html')).toBe(false);
+    expect(api.isAppUrl('http://localhost:5173/C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html')).toBe(false);
+  });
 });

@@ -49,6 +49,12 @@ const {
 // Kept in main process memory to avoid sending large arrays through IPC.
 let lastBatchOperations = null;
 
+// Last folder each dialog returned, in memory only. Electron 43+ opens a dialog with no
+// defaultPath in Downloads instead of the folder Windows remembered.
+let lastSourceFolder;
+let lastOutputFolder;
+let lastExportFolder = '';
+
 /**
  * Main export: Register all IPC handlers
  * @param {Object} ipcInstance - Electron's ipcMain object
@@ -309,6 +315,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
     const result = await dialog.showOpenDialog(getMainWindow(), {
       properties: ['openDirectory'],
       title: 'Select Source Folder',
+      defaultPath: lastSourceFolder,
     });
     
     if (result.canceled || result.filePaths.length === 0) {
@@ -317,6 +324,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
     
     // Register this user-selected path as allowed
     registerAllowedPath(result.filePaths[0]);
+    lastSourceFolder = result.filePaths[0];
     
     return result.filePaths[0];
   });
@@ -325,6 +333,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
     const result = await dialog.showOpenDialog(getMainWindow(), {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Select Output Folder for Batches',
+      defaultPath: lastOutputFolder,
     });
     
     if (result.canceled || result.filePaths.length === 0) {
@@ -333,6 +342,7 @@ function registerFolderHandlers(ipcMain, store, getMainWindow) {
     
     // Register this user-selected path as allowed
     registerAllowedPath(result.filePaths[0]);
+    lastOutputFolder = result.filePaths[0];
     
     return result.filePaths[0];
   });
@@ -1140,7 +1150,7 @@ function registerPreferenceHandlers(ipcMain, store) {
     : config.features.BLUR_DETECTION_ENABLED);
 
   // Whether the QuickPitik Upload view is available
-  // (config.features.QUICKPITIK_UPLOAD_ENABLED; off in packaged builds).
+  // (config.features.QUICKPITIK_UPLOAD_ENABLED; on in packaged builds).
   handle(ipcMain, 'get-quickpitik-upload-enabled', async () => config.features.QUICKPITIK_UPLOAD_ENABLED);
 
   handle(ipcMain, 'set-theme', async (event, theme) => {
@@ -1913,13 +1923,14 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 
       const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
         title: 'Export Batch Report',
-        defaultPath: defaultName,
+        defaultPath: path.join(lastExportFolder, defaultName),
         filters: [{ name: 'CSV Files', extensions: ['csv'] }],
       });
 
       if (canceled || !savePath) {
         return { success: false, cancelled: true };
       }
+      lastExportFolder = path.dirname(savePath);
 
       // Build error lookup for status column
       const errorMap = new Map();
@@ -1983,13 +1994,14 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
 
       const { canceled, filePath: savePath } = await dialog.showSaveDialog(getMainWindow(), {
         title: 'Export History Report',
-        defaultPath: defaultName,
+        defaultPath: path.join(lastExportFolder, defaultName),
         filters: [{ name: 'CSV Files', extensions: ['csv'] }],
       });
 
       if (canceled || !savePath) {
         return { success: false, cancelled: true };
       }
+      lastExportFolder = path.dirname(savePath);
 
       const BOM = '\uFEFF';
       const header = 'Date,Source Folder,Output Folder,Mode,Files Processed,Batches Created,Output Prefix,Sort By';

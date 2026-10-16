@@ -82,11 +82,12 @@ export function useFolderSelection({ setAppState, setError, scanFolder }) {
 
       if (entry && entry.isDirectory) {
         const file = e.dataTransfer.files[0];
-        if (file && file.path) {
+        const folderPath = file && window.electronAPI.getPathForFile(file);
+        if (folderPath) {
           try {
-            const registerResult = await window.electronAPI.registerDroppedFolder(file.path);
+            const registerResult = await window.electronAPI.registerDroppedFolder(folderPath);
             if (registerResult.success) {
-              await scanFolder(file.path);
+              await scanFolder(folderPath);
             } else {
               setError(registerResult.error || 'Failed to access the dropped folder');
               setAppState(STATES.ERROR);

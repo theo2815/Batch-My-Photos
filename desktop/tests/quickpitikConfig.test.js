@@ -60,12 +60,19 @@ function preloadFor(handlers) {
 afterEach(() => { for (const folder of folders.splice(0)) fs.rmSync(folder, { recursive: true, force: true }); });
 
 describe('QuickPitik upload configuration', () => {
-  it('stays off in packaged builds whatever the environment says', () => {
-    const config = configFor(true, { BATCH_QUICKPITIK_UPLOAD_ENABLED: 'true', BATCH_QUICKPITIK_API_URL: 'http://wrong.test' });
-    expect(config.features.QUICKPITIK_UPLOAD_ENABLED).toBe(false);
-    expect(config.urls.QUICKPITIK_API_URL).toBe('https://api.quickpitik.com/api/v1');
-    expect(config.urls.QUICKPITIK_WEB_URL).toBe('https://quickpitik.com');
-    expect(typeof config.urls.QUICKPITIK_UPLOAD_ORIGIN).toBe('string');
+  it('is on in packaged builds and ignores the environment', () => {
+    // Vercel production NEXT_PUBLIC_R2_UPLOAD_ORIGIN, given by Theo on 2026-10-16.
+    const PROD_UPLOAD_ORIGIN = 'https://277f145551e9715f57bc8e8f70182d5d.r2.cloudflarestorage.com';
+    const config = configFor(true, {
+      BATCH_QUICKPITIK_UPLOAD_ENABLED: 'false', BATCH_QUICKPITIK_API_URL: 'http://wrong.test',
+      BATCH_QUICKPITIK_WEB_URL: 'http://wrong.test', BATCH_QUICKPITIK_UPLOAD_ORIGIN: 'https://wrong.test',
+    });
+    expect({ enabled: config.features.QUICKPITIK_UPLOAD_ENABLED, ...config.urls }).toMatchObject({
+      enabled: true, QUICKPITIK_API_URL: 'https://api.quickpitik.com/api/v1',
+      QUICKPITIK_WEB_URL: 'https://quickpitik.com', QUICKPITIK_UPLOAD_ORIGIN: PROD_UPLOAD_ORIGIN,
+    });
+    const { protocol, origin } = new URL(config.urls.QUICKPITIK_UPLOAD_ORIGIN);
+    expect({ protocol, origin }).toEqual({ protocol: 'https:', origin: config.urls.QUICKPITIK_UPLOAD_ORIGIN });
   });
 
   it('turns on from source with BATCH_QUICKPITIK_UPLOAD_ENABLED and honours the URL overrides', () => {
@@ -95,7 +102,7 @@ describe('QuickPitik upload configuration', () => {
   it('exposes the flag to the renderer through preload', async () => {
     const on = preloadFor(ipcFor(configFor(false, { BATCH_QUICKPITIK_UPLOAD_ENABLED: 'true' })).handlers);
     expect(await on.getQuickPitikUploadEnabled()).toBe(true);
-    const off = preloadFor(ipcFor(configFor(true)).handlers);
-    expect(await off.getQuickPitikUploadEnabled()).toBe(false);
+    const packaged = preloadFor(ipcFor(configFor(true)).handlers);
+    expect(await packaged.getQuickPitikUploadEnabled()).toBe(true);
   });
 });

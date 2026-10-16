@@ -111,7 +111,8 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
     const item = e.dataTransfer?.items?.[0];
     const entry = item?.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
     const file = e.dataTransfer?.files?.[0];
-    if (entry?.isDirectory && file?.path) await dropFolder(file.path);
+    const folderPath = file && window.electronAPI.getPathForFile(file);
+    if (entry?.isDirectory && folderPath) await dropFolder(folderPath);
     else setError({ code: 'SCAN', message: 'Please drop a folder, not a file.' });
   }, [dropFolder]);
 

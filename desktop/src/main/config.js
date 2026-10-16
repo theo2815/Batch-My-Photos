@@ -176,11 +176,11 @@ const features = {
 
   /**
    * QuickPitik Upload view (spec: desktop/docs/superpowers/specs/
-   * 2026-10-10-quickpitik-upload-workflow-design.md). Off in every packaged
-   * build until the release that ships the feature changes this literal;
-   * source runs opt in with BATCH_QUICKPITIK_UPLOAD_ENABLED=true.
+   * 2026-10-10-quickpitik-upload-workflow-design.md). On in every packaged
+   * build from this release; source runs opt in with
+   * BATCH_QUICKPITIK_UPLOAD_ENABLED=true.
    */
-  QUICKPITIK_UPLOAD_ENABLED: isProduction ? false : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', false),
+  QUICKPITIK_UPLOAD_ENABLED: isProduction ? true : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', false),
 };
 
 // ============================================================================
@@ -224,12 +224,11 @@ const limits = {
 const PROD_URL = 'https://www.batchmyphotos.com'
 
 // Production storage upload origin for the QuickPitik Upload view: the host
-// every presigned upload URL must match (the website's
-// NEXT_PUBLIC_R2_UPLOAD_ORIGIN). Taken from the monorepo
-// docs/desktop-upload-integration-guide.md § 4 with the owner's go — never
-// guessed. '' means direct uploads are refused until it is filled in; the
-// packaged flag is off, so nothing reaches this value yet.
-const QUICKPITIK_PROD_UPLOAD_ORIGIN = '';
+// every presigned upload URL must match. It is the website's Vercel production
+// NEXT_PUBLIC_R2_UPLOAD_ORIGIN, given by the owner on 2026-10-16 — never
+// guessed. Keep it an exact origin (https:// + host, no slash at the end):
+// upload URLs are compared to it character for character.
+const QUICKPITIK_PROD_UPLOAD_ORIGIN = 'https://277f145551e9715f57bc8e8f70182d5d.r2.cloudflarestorage.com';
 const urls = {
   /** Supabase project base URL (no trailing slash) */
   SUPABASE_URL: (!isProduction && process.env.BATCH_SUPABASE_URL)

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
@@ -200,5 +201,60 @@ describe('update bridge', () => {
     expect(api.installUpdate).toBeUndefined();
     expect(typeof api.checkForUpdates).toBe('function');
     expect(typeof api.onUpdateStatus).toBe('function');
+  });
+});
+
+describe('preload getPathForFile', () => {
+  it('reads a dropped file path through webUtils', () => {
+    let api;
+    const getPathForFile = vi.fn(() => 'C:\\Shoots\\Race');
+    load('preload.js', { electron: {
+      contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
+      ipcRenderer: { on() {} }, webUtils: { getPathForFile },
+    } });
+    const fakeFile = { name: 'Race' };
+    expect(api.getPathForFile(fakeFile)).toBe('C:\\Shoots\\Race');
+    expect(getPathForFile).toHaveBeenCalledWith(fakeFile);
+  });
+
+  it('runs on Electron 44', () => {
+    expect(createRequire(import.meta.url)('electron/package.json').version).toMatch(/^44\./);
+  });
+});
+
+describe('dialogs remember the last folder (Electron 43+ would open Downloads)', () => {
+  it('opens each dialog in the folder it last returned', async () => {
+    const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmp-dialog-'));
+    try {
+      const showOpenDialog = vi.fn()
+        .mockResolvedValueOnce({ canceled: false, filePaths: ['C:\\Shoots\\Race'] })
+        .mockResolvedValueOnce({ canceled: true, filePaths: [] })
+        .mockResolvedValueOnce({ canceled: false, filePaths: ['D:\\Batches'] })
+        .mockResolvedValueOnce({ canceled: true, filePaths: [] })
+        .mockResolvedValueOnce({ canceled: true, filePaths: [] });
+      const showSaveDialog = vi.fn(async () => ({ canceled: false, filePath: path.join(reportDir, 'report.csv') }));
+      const { api } = preloadFor(ipcFor({
+        electron: { app: { getVersion: () => '1.0.6' }, net: {}, shell: {}, dialog: { showOpenDialog, showSaveDialog } },
+        './securityManager': { registerAllowedPath: vi.fn() },
+        './rollbackManager': { init() {}, getOperationHistory: () => [{ createdAt: 0 }] },
+      }).handlers);
+
+      await api.selectFolder();
+      await api.selectFolder();
+      await api.selectOutputFolder();
+      await api.selectOutputFolder();
+      await api.selectFolder(); // a cancelled pick keeps the remembered folder
+      expect(showOpenDialog.mock.calls.map(([, options]) => options.defaultPath))
+        .toEqual([undefined, 'C:\\Shoots\\Race', undefined, 'D:\\Batches', 'C:\\Shoots\\Race']);
+
+      await api.exportBatchReport({ operations: [{ fileName: 'a.jpg' }] });
+      await api.exportHistoryReport();
+      const [first, second] = showSaveDialog.mock.calls.map(([, options]) => options.defaultPath);
+      expect(first).toMatch(/^BatchMyPhotos_Report_[\d-]+\.csv$/);
+      expect(path.dirname(second)).toBe(reportDir);
+      expect(path.basename(second)).toMatch(/^BatchMyPhotos_History_[\d-]+\.csv$/);
+    } finally {
+      fs.rmSync(reportDir, { recursive: true, force: true });
+    }
   });
 });

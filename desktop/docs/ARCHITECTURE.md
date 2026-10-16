@@ -333,8 +333,8 @@ Requires Electron `app` module. Supports `process.env` overrides (prefix: `BATCH
 | `features.EXIF_SORTING_ENABLED`      | `BATCH_EXIF_SORTING_ENABLED` | `true`  | Toggle EXIF sorting        |
 | `limits.MAX_PRESETS`                 | `BATCH_MAX_PRESETS`          | 20      | Preset storage cap         |
 | `limits.MAX_FILES_PER_BATCH_CEILING` | —                            | 10000   | DoS prevention             |
-| `features.QUICKPITIK_UPLOAD_ENABLED` | `BATCH_QUICKPITIK_UPLOAD_ENABLED` | `false` | Upload view (always off when packaged) |
-| `urls.QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_QUICKPITIK_*` | localhost from source, production when packaged; origin `''` | QuickPitik API, website, storage origin (env overrides apply to source runs only) |
+| `features.QUICKPITIK_UPLOAD_ENABLED` | `BATCH_QUICKPITIK_UPLOAD_ENABLED` | `false` from source | Upload view (always on when packaged) |
+| `urls.QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_QUICKPITIK_*` | localhost from source, production when packaged; origin `''` from source | QuickPitik API, website, storage origin (env overrides apply to source runs only) |
 
 All config objects are `Object.freeze()`d to prevent accidental mutation.
 
