@@ -234,7 +234,7 @@ export default function Dashboard() {
 
             {/* Trust strip */}
             <div className="relative px-6 sm:px-8 py-3 border-t border-border-subtle flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-text-muted">
-              <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> 100% offline processing</span>
+              <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Processed on your device</span>
               <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Uploads only when you choose</span>
               <span className="inline-flex items-center gap-1"><Monitor className="w-3 h-3" /> Runs on your device</span>
             </div>

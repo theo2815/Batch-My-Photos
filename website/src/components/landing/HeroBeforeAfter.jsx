@@ -58,7 +58,7 @@ export default function HeroBeforeAfter() {
               <span className="race-stripe" aria-hidden="true">
                 <span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" />
               </span>
-              <span className="kicker">Windows desktop app · 100% local</span>
+              <span className="kicker">Windows desktop app · Processed on your PC</span>
             </div>
 
             <h1 className="font-hero text-[2.5rem] leading-[0.95] sm:text-6xl lg:text-[3.9rem] text-text-primary text-balance">
