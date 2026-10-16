@@ -2,6 +2,7 @@ const { autoUpdater } = require("electron-updater");
 const { ipcMain, app } = require("electron");
 const logger = require("../utils/logger");
 const config = require("./config");
+const { isAppUrl } = require("./windowManager");
 
 // Configure logging
 autoUpdater.logger = logger;
@@ -14,7 +15,10 @@ autoUpdater.autoDownload = false; // Let user decide, or set to true for backgro
 function initAutoUpdater(getMainWindow) {
   if (config.features.BLUR_BETA_ENABLED) {
     for (const channel of ['check-for-updates', 'download-update', 'install-update']) {
-      ipcMain.handle(channel, async () => ({ status: 'disabled-beta' }));
+      ipcMain.handle(channel, async (event) => {
+        if (!isAppUrl(event?.senderFrame?.url)) throw new Error("FORBIDDEN: IPC from an unknown page");
+        return { status: 'disabled-beta' };
+      });
     }
     return;
   }
@@ -79,7 +83,8 @@ function initAutoUpdater(getMainWindow) {
   // 3. SETUP IPC HANDLERS
   
   // User manually triggering check
-  ipcMain.handle("check-for-updates", async () => {
+  ipcMain.handle("check-for-updates", async (event) => {
+    if (!isAppUrl(event?.senderFrame?.url)) throw new Error("FORBIDDEN: IPC from an unknown page");
     if (process.windowsStore) return { status: "disabled-store" };
     
     try {
@@ -93,13 +98,15 @@ function initAutoUpdater(getMainWindow) {
   });
 
   // User triggering download
-  ipcMain.handle("download-update", async () => {
+  ipcMain.handle("download-update", async (event) => {
+    if (!isAppUrl(event?.senderFrame?.url)) throw new Error("FORBIDDEN: IPC from an unknown page");
     if (process.windowsStore) return;
     autoUpdater.downloadUpdate();
   });
 
   // User triggering install
-  ipcMain.handle("install-update", () => {
+  ipcMain.handle("install-update", (event) => {
+    if (!isAppUrl(event?.senderFrame?.url)) throw new Error("FORBIDDEN: IPC from an unknown page");
     if (process.windowsStore) return;
     autoUpdater.quitAndInstall();
   });

@@ -23,7 +23,7 @@ function ipcFor(services = {}, config = { ...baseConfig }) {
   const handlers = new Map();
   const win = { isDestroyed: () => false, webContents: { send: vi.fn() } };
   const electron = { app: { getVersion: () => '1.0.6' }, net: { fetch: async () => ({ ok: false }) }, dialog: {}, shell: {} };
-  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
+  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
   const mocks = {
     electron, './config': config, '../utils/logger': logger, './ipcRateLimiter': limiter,
     './rollbackManager': { init() {} },
@@ -107,7 +107,7 @@ describe('QuickPitik connect channels', () => {
   });
 
   it('limits Connect to the strict tier, because every call opens a browser tab', () => {
-    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
+    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
     expect(limiter.CHANNEL_TIERS['qp-connect-start']).toBe('STRICT');
   });
 

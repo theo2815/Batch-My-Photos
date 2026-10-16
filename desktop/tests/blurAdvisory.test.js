@@ -27,6 +27,7 @@ const stubs = {
   },
   './rollbackManager': { init: noop },
   './blurDetectionService': {},
+  './windowManager': { isAppUrl: () => true },
 };
 
 process.env.BATCH_BLUR_BETA_ENABLED = 'true';
