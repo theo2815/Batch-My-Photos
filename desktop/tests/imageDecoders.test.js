@@ -56,3 +56,31 @@ describe('image decoders refused for files from received folders', () => {
     expect(Buffer.isBuffer(await blur.prepareImageForUpload(gif))).toBe(true);
   });
 });
+
+const { SHARP_MAX_INPUT_PIXELS } = createRequire(import.meta.url)('../src/main/constants.js');
+
+describe('pixel cap on every sharp call', () => {
+  it('lets a 102 MP camera through but stays below sharp\'s default', () => {
+    expect(SHARP_MAX_INPUT_PIXELS).toBeGreaterThanOrEqual(101_800_000);
+    expect(SHARP_MAX_INPUT_PIXELS).toBeLessThan(268_402_689);
+  });
+
+  it('refuses a tiny file that claims 256 million pixels', async () => {
+    const jpeg = await red().jpeg().toBuffer();
+    const sof0 = jpeg.indexOf(Buffer.from([0xff, 0xc0]));
+    expect(sof0).toBeGreaterThan(0);
+    jpeg.writeUInt16BE(16000, sof0 + 5); // height
+    jpeg.writeUInt16BE(16000, sof0 + 7); // width
+    const bomb = await fixture('bomb.jpg', jpeg);
+    await expect(sharp(bomb, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).toBuffer()).rejects.toThrow(/pixel limit/i);
+  });
+
+  it('caps every sharp() call in the main process', () => {
+    const dir = path.join(root, 'src/main');
+    const uncapped = fs.readdirSync(dir).filter(f => f.endsWith('.js')).flatMap(f =>
+      fs.readFileSync(path.join(dir, f), 'utf8').split('\n')
+        .map((line, i) => `${f}:${i + 1}: ${line.trim()}`)
+        .filter(line => line.includes('sharp(') && !line.includes('limitInputPixels')));
+    expect(uncapped).toEqual([]);
+  });
+});

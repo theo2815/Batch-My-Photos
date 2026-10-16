@@ -102,6 +102,13 @@ const PREVIEW_JPEG_QUALITY = 85;
  */
 const PREVIEW_CACHE_SIZE = 10;
 
+/**
+ * Largest image (width × height) sharp may decode for thumbnails, preview and blur scoring.
+ * Covers every common camera up to 102 MP (Fujifilm GFX100: 11648 × 8736 ≈ 101.8 M); a larger
+ * file only loses its thumbnail, preview or blur score — batching still works.
+ */
+const SHARP_MAX_INPUT_PIXELS = 120_000_000;
+
 // ============================================================================
 // EXIF
 // ============================================================================
@@ -342,6 +349,7 @@ module.exports = {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  SHARP_MAX_INPUT_PIXELS,
   EXIF_CONCURRENCY,
   BLUR_CONCURRENCY,
   BLUR_RESIZE_WIDTH,
