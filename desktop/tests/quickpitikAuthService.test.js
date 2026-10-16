@@ -209,6 +209,20 @@ describe('connect', () => {
     await qp.completeConnect(CODE, second.state);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('a Connect that finishes after a logout stores no tokens', async () => {
+    const { state } = await connect();
+    let resolveFetch;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveFetch = resolve; }));
+    const finishing = qp.completeConnect(CODE, state);
+    qp.clearSession();
+    resolveFetch(pair('a1', 'r1'));
+    await finishing;
+
+    expect(memory.size).toBe(0);
+    expect(qp.getStatus().connected).toBe(false);
+    expect(sent().at(-1)).toEqual({ success: false, error: 'Could not finish connecting. Press Connect again.' });
+  });
 });
 
 describe('refreshAccessToken', () => {
