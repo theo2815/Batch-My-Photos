@@ -350,7 +350,7 @@ export default function Settings() {
         {/* ── Privacy footer ── */}
         <div className="auth-card-in flex items-center justify-center gap-2 text-xs text-text-muted mt-8" style={{ animationDelay: '0.25s' }}>
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Your photos never leave your device — we only store your email &amp; plan.</span>
+          <span>Your photos stay on your device unless you upload them — we only store your email &amp; plan.</span>
         </div>
       </div>
     </div>

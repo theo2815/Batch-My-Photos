@@ -119,8 +119,8 @@ const MODAL_CONTENT = {
       <div className="space-y-5">
         <p className="text-text-secondary leading-relaxed">Exactly how Batch My Photos handles your data.</p>
         <div>
-          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your photos stay on your device</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are not uploaded, transmitted, or shared with any server, cloud service, or third party. The one exception is the opt-in blur detection beta, described below.</p>
+          <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your photos stay on your device unless you send them</h4>
+          <p className="text-sm text-text-secondary leading-relaxed">Batch My Photos processes everything locally on your computer. Your photos are not sent to any server, cloud service, or third party unless you choose to: the opt-in blur detection beta and the QuickPitik upload, both described below.</p>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we collect</h4>
@@ -129,6 +129,7 @@ const MODAL_CONTENT = {
             <li>• <strong className="text-text-secondary">Device identifiers</strong> — We store a hashed hardware ID to enforce the per-account device limit. We do not collect your device name, model, or operating system.</li>
             <li>• <strong className="text-text-secondary">Blur beta requests</strong> — If you ask to join the blur detection beta, we store your name, what you shoot, your photos per event, and your note, so we can choose testers and email your key.</li>
             <li>• <strong className="text-text-secondary">Blur beta photos</strong> — If you are a blur beta tester and run blur detection, resized copies of those photos are sent to the QuickPitik blur service for analysis. If you press &quot;Submit this example&quot; on a photo, that resized photo and your Sharp/Blurry label are stored privately so we can improve the detector. Only our team can see them.</li>
+            <li>• <strong className="text-text-secondary">QuickPitik upload</strong> — If you connect a QuickPitik photographer account and press Upload, the photos you choose are sent to QuickPitik at full size, with their file names and the details stored inside each file (such as camera settings and the time taken). QuickPitik keeps them in your photographer account under the event you pick, and reads faces and bib numbers in them so runners can find their photos. Nothing is sent until you press Upload, and you can disconnect at any time.</li>
             <li>• <strong className="text-text-secondary">Usage analytics</strong> — We may collect anonymous, aggregated usage data (e.g., feature popularity, batch counts) to improve the app. This never includes file names, photo content, or personal data.</li>
             <li>• <strong className="text-text-secondary">Crash reports</strong> — Optional anonymous crash reports help us fix bugs faster.</li>
           </ul>
@@ -136,15 +137,15 @@ const MODAL_CONTENT = {
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">What we don't collect</h4>
           <ul className="space-y-1 text-sm text-text-secondary">
-            <li>• Photo content, metadata, or file names (except the blur beta photos above)</li>
+            <li>• Photo content, metadata, or file names (except the blur beta photos and the QuickPitik uploads above)</li>
             <li>• File system paths or folder structures</li>
-            <li>• Any data from your local machine</li>
+            <li>• Any other data from your local machine</li>
           </ul>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Data handling & retention</h4>
           <ul className="space-y-1.5 text-sm text-text-secondary">
-            <li>• <strong className="text-text-secondary">Photos</strong> — Outside the blur beta, all photo processing happens on your device and no images are uploaded. Beta examples you submit are kept until we no longer need them to improve the detector. They are not removed automatically when you delete your account; ask us and we will delete them.</li>
+            <li>• <strong className="text-text-secondary">Photos</strong> — Outside the blur beta and the QuickPitik uploads you start, all photo processing happens on your device and no photos leave it. Beta examples you submit are kept until we no longer need them to improve the detector. They are not removed automatically when you delete your account; ask us and we will delete them. Photos you upload to QuickPitik stay there until you delete them on quickpitik.com.</li>
             <li>• <strong className="text-text-secondary">Account data</strong> — Your email, usage counts, and device bindings are stored securely in our database (hosted by Supabase) for as long as your account is active.</li>
             <li>• <strong className="text-text-secondary">Payment records</strong> — References for payments made while BatchMyPhotos had paid plans are retained for accounting and dispute resolution purposes.</li>
             <li>• <strong className="text-text-secondary">Deletion</strong> — When you delete your account, all associated data (account info, device bindings, usage history, and transaction records) is permanently removed from our systems.</li>
@@ -156,7 +157,7 @@ const MODAL_CONTENT = {
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Third-party services</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">We use Supabase for sign-in, our database, and private file storage. PayMongo processed payments while BatchMyPhotos had paid plans; we no longer take payments. Both handle only the minimum data required and are GDPR-compliant.</p>
+          <p className="text-sm text-text-secondary leading-relaxed">We use Supabase for sign-in, our database, and private file storage. PayMongo processed payments while BatchMyPhotos had paid plans; we no longer take payments. Both handle only the minimum data required and are GDPR-compliant. QuickPitik, made by the same team, receives the photos you choose to upload to it.</p>
         </div>
         <div>
           <h4 className="text-sm font-display font-semibold text-text-primary mb-2">Your rights</h4>

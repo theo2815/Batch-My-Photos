@@ -202,7 +202,7 @@ export default function Dashboard() {
                 <h2 className="text-lg sm:text-xl font-display font-bold text-text-primary mb-1">Download BatchMyPhotos</h2>
                 <p className="text-sm text-text-secondary leading-relaxed max-w-lg">
                   Organize, rename, and batch-process thousands of photos in seconds.
-                  Everything runs locally, your files never leave your machine.
+                  Everything runs locally; your files stay on your machine unless you choose to upload them to QuickPitik.
                 </p>
               </div>
 
@@ -235,7 +235,7 @@ export default function Dashboard() {
             {/* Trust strip */}
             <div className="relative px-6 sm:px-8 py-3 border-t border-border-subtle flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-text-muted">
               <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> 100% offline processing</span>
-              <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> No cloud uploads</span>
+              <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Uploads only when you choose</span>
               <span className="inline-flex items-center gap-1"><Monitor className="w-3 h-3" /> Runs on your device</span>
             </div>
           </div>
