@@ -27,6 +27,7 @@ import UploadView from '../src/components/Upload/UploadView.jsx';
 import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
 import EventPicker from '../src/components/Upload/EventPicker.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
+import { useFolderSelection } from '../src/hooks/useFolderSelection.js';
 
 function render(component, props) { hooks.cursor = 0; return component(props); }
 async function effects() { const pending = hooks.effects.splice(0); pending.forEach(fn => fn()); for (let i = 0; i < 6; i++) await Promise.resolve(); }
@@ -379,5 +380,29 @@ describe('UploadView', () => {
     nodes(tree).find(n => n.type === FolderDrop).props.onClick(); await effects();
     tree = render(UploadView, {});
     expect(button(tree, 'Disconnect').props.disabled).toBe(true);
+  });
+});
+
+describe('dropped folders get their path from webUtils (File.path is gone in Electron 32)', () => {
+  const folder = { name: 'Race' };
+  const dropEvent = () => ({ preventDefault() {}, stopPropagation() {},
+    dataTransfer: { items: [{ webkitGetAsEntry: () => ({ isDirectory: true }) }], files: [folder] } });
+  const bridge = () => ({ getPathForFile: vi.fn(() => 'D:\\Shoots\\Race'),
+    registerDroppedFolder: vi.fn().mockResolvedValue({ success: false, error: 'stop here' }) });
+
+  it('the Upload view registers the dropped folder by its webUtils path', async () => {
+    const api = { ...bridge(), onQpConnectResult: () => () => {}, onQpUploadProgress: () => () => {} };
+    vi.stubGlobal('window', { electronAPI: api });
+    await render(useQuickPitikUpload, {}).handleDrop(dropEvent());
+    expect(api.getPathForFile).toHaveBeenCalledWith(folder);
+    expect(api.registerDroppedFolder).toHaveBeenCalledWith('D:\\Shoots\\Race');
+  });
+
+  it('the Idle screen registers the dropped folder by its webUtils path', async () => {
+    const api = bridge();
+    vi.stubGlobal('window', { electronAPI: api });
+    await render(useFolderSelection, { setAppState() {}, setError() {}, scanFolder: vi.fn() }).handleDrop(dropEvent());
+    expect(api.getPathForFile).toHaveBeenCalledWith(folder);
+    expect(api.registerDroppedFolder).toHaveBeenCalledWith('D:\\Shoots\\Race');
   });
 });

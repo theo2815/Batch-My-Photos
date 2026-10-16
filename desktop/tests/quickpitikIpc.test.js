@@ -191,3 +191,17 @@ describe('QuickPitik upload channels', () => {
     expect(openExternal).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('preload getPathForFile', () => {
+  it('reads a dropped file path through webUtils', () => {
+    let api;
+    const getPathForFile = vi.fn(() => 'C:\\Shoots\\Race');
+    load('preload.js', { electron: {
+      contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
+      ipcRenderer: {}, webUtils: { getPathForFile },
+    } });
+    const fakeFile = { name: 'Race' };
+    expect(api.getPathForFile(fakeFile)).toBe('C:\\Shoots\\Race');
+    expect(getPathForFile).toHaveBeenCalledWith(fakeFile);
+  });
+});

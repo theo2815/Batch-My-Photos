@@ -8,7 +8,7 @@
  * The renderer can access these functions via window.electronAPI
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // Expose protected methods to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -68,6 +68,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Result with success status
    */
   registerDroppedFolder: (folderPath) => ipcRenderer.invoke('register-dropped-folder', folderPath),
+  
+  /**
+   * Path of a dropped File (replaces File.path, which Electron 32 removes)
+   * @param {File} file - From a drop event's dataTransfer.files
+   * @returns {string} Absolute path, or '' if the file has none
+   */
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   
   /**
    * Listen for batch progress updates during execution
