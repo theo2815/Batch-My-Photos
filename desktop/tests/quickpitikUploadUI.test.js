@@ -405,4 +405,16 @@ describe('dropped folders get their path from webUtils (File.path is gone in Ele
     expect(api.getPathForFile).toHaveBeenCalledWith(folder);
     expect(api.registerDroppedFolder).toHaveBeenCalledWith('D:\\Shoots\\Race');
   });
+
+  it('an empty path (a File with no file behind it) is treated like a missing path', async () => {
+    const api = { ...bridge(), onQpConnectResult: () => () => {}, onQpUploadProgress: () => () => {} };
+    api.getPathForFile.mockReturnValue('');
+    vi.stubGlobal('window', { electronAPI: api });
+    await render(useQuickPitikUpload, {}).handleDrop(dropEvent());
+    expect(render(useQuickPitikUpload, {}).error.code).toBe('SCAN');
+    const setError = vi.fn();
+    await render(useFolderSelection, { setAppState() {}, setError, scanFolder: vi.fn() }).handleDrop(dropEvent());
+    expect(setError).not.toHaveBeenCalled();
+    expect(api.registerDroppedFolder).not.toHaveBeenCalled();
+  });
 });
