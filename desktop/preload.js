@@ -266,8 +266,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBlurDetectionEnabled: (includeBeta = false) => ipcRenderer.invoke('get-blur-detection-enabled', includeBeta),
 
   /**
-   * Whether the QuickPitik Upload view is available (feature-flagged; off in
-   * packaged builds until it ships).
+   * Whether the QuickPitik Upload view is available (on in packaged builds;
+   * source runs opt in with BATCH_QUICKPITIK_UPLOAD_ENABLED).
    * @returns {Promise<boolean>}
    */
   getQuickPitikUploadEnabled: () => ipcRenderer.invoke('get-quickpitik-upload-enabled'),
