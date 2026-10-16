@@ -332,6 +332,9 @@ const QP_MAX_RETRIES_PER_PHASE = 3;
 /** A Connect the browser has not answered within this time is forgotten. */
 const QP_CONNECT_PENDING_TTL_MS = 600000;
 
+/** A Log In the browser has not answered within this time is forgotten. */
+const LOGIN_PENDING_TTL_MS = 600000;
+
 /** Minimum gap between qp-upload-progress events. */
 const QP_PROGRESS_INTERVAL_MS = 250;
 
@@ -381,5 +384,6 @@ module.exports = {
   QP_COMMIT_BUSY_WINDOW_MS,
   QP_MAX_RETRIES_PER_PHASE,
   QP_CONNECT_PENDING_TTL_MS,
+  LOGIN_PENDING_TTL_MS,
   QP_PROGRESS_INTERVAL_MS,
 };
