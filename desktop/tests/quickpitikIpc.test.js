@@ -199,7 +199,7 @@ describe('preload getPathForFile', () => {
     const getPathForFile = vi.fn(() => 'C:\\Shoots\\Race');
     load('preload.js', { electron: {
       contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
-      ipcRenderer: {}, webUtils: { getPathForFile },
+      ipcRenderer: { on() {} }, webUtils: { getPathForFile },
     } });
     const fakeFile = { name: 'Race' };
     expect(api.getPathForFile(fakeFile)).toBe('C:\\Shoots\\Race');
