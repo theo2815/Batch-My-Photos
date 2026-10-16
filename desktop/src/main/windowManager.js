@@ -5,6 +5,7 @@
 
 const { BrowserWindow, Menu } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 const logger = require('../utils/logger');
 const config = require('./config');
@@ -12,8 +13,27 @@ const config = require('./config');
 // Keep a global reference of the window to prevent garbage collection
 let mainWindow = null;
 
+// The only page the window may show: the bundled index.html, or the Vite dev server
+let appUrl = null;
+
 // The root of the project (assuming we are in src/main)
 const PROJECT_ROOT = path.resolve(__dirname, '../../');
+
+/**
+ * Is this the app's own page (any hash or query)?
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    parsed.search = '';
+    return appUrl !== null && parsed.href === appUrl;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Create the main application window
@@ -51,6 +71,7 @@ function createWindow() {
   // 3. npm run start (Vite dev server) → Use localhost:5173
   const isPackaged = config.isProduction;
   const shouldUseDistBuild = isPackaged || (hasDistBuild && process.env.npm_lifecycle_event !== 'start');
+  appUrl = shouldUseDistBuild ? pathToFileURL(distPath).href : 'http://localhost:5173/';
   
   if (shouldUseDistBuild) {
     // Production mode or npm run electron with dist: Load built files
@@ -95,7 +116,7 @@ function createWindow() {
   // SECURITY: no popups, and never leave the bundle (dev server in dev)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowed = shouldUseDistBuild ? url.startsWith('file://') : url.startsWith('http://localhost:');
+    const allowed = shouldUseDistBuild ? isAppUrl(url) : url.startsWith('http://localhost:');
     if (!allowed) {
       event.preventDefault();
       logger.warn('🔒 [SECURITY] Blocked navigation to:', url);
@@ -123,5 +144,6 @@ function getMainWindow() {
 
 module.exports = {
   createWindow,
-  getMainWindow
+  getMainWindow,
+  isAppUrl
 };
