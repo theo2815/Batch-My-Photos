@@ -48,6 +48,28 @@ function clearCache() {
   exifCache = { cacheKey: null, dateMap: null };
 }
 
+// ponytail: real HEIC/AVIF put 'meta' right after 'ftyp'; a file whose 'meta' starts
+// past this head loses its EXIF date (file time instead). Raise it if that shows up.
+const HEIF_HEAD_BYTES = 4096;
+
+/**
+ * Walk the top-level boxes the way exifr's HEIF parser does (from the end of
+ * 'ftyp' to 'meta'). True only if 'meta' is reached inside `head` and every box
+ * before it is at least 8 bytes long, so exifr's walk always moves forward.
+ *
+ * @param {Buffer} head - First bytes of the file
+ * @returns {boolean}
+ */
+function reachesHeifMeta(head) {
+  for (let offset = 0; offset + 8 <= head.length; ) {
+    if (offset > 0 && head.toString('latin1', offset + 4, offset + 8) === 'meta') return true;
+    const length = head.readUInt32BE(offset);
+    if (length < 8) return false;
+    offset += length;
+  }
+  return false;
+}
+
 // ============================================================================
 // MAIN EXTRACTION
 // ============================================================================
@@ -84,16 +106,16 @@ async function extractExifDates(files, folderPath) {
       const filePath = path.join(folderPath, fileName);
       
       try {
-        // C-22: exifr treats a file starting 00 00 as HEIF and can loop forever on it.
-        // The app never needs HEIF dates, so such files go straight to the file time.
+        // C-22: exifr treats a file starting 00 00 as HEIF and loops forever on a bad box chain.
+        // Only HEIF files whose chain safely reaches 'meta' go to exifr; the rest use the file time.
         const handle = await fs.open(filePath, 'r');
-        let head;
-        try {
-          head = await handle.read(Buffer.alloc(2), 0, 2, 0);
-        } finally {
-          await handle.close();
+        const head = await handle
+          .read(Buffer.alloc(HEIF_HEAD_BYTES), 0, HEIF_HEAD_BYTES, 0)
+          .finally(() => handle.close());
+        const bytes = head.buffer.subarray(0, head.bytesRead);
+        if (bytes.length >= 2 && bytes[0] === 0 && bytes[1] === 0 && !reachesHeifMeta(bytes)) {
+          throw new Error('HEIF-like');
         }
-        if (head.bytesRead === 2 && head.buffer[0] === 0 && head.buffer[1] === 0) throw new Error('HEIF-like');
 
         // 1. Try to read EXIF DateTimeOriginal
         // Only read the necessary segment for speed (first few KB usually)
