@@ -87,7 +87,7 @@ export default function Footer() {
             </div>
             <div className={`flex items-center gap-1.5 text-xs text-text-muted`}>
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Your photos never leave your device</span>
+              <span>Your photos stay on your device unless you upload them</span>
             </div>
           </div>
         </div>

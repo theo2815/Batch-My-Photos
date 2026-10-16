@@ -102,6 +102,13 @@ const PREVIEW_JPEG_QUALITY = 85;
  */
 const PREVIEW_CACHE_SIZE = 10;
 
+/**
+ * Largest image (width × height) sharp may decode for thumbnails, preview and blur scoring.
+ * Covers every common camera up to 102 MP (Fujifilm GFX100: 11648 × 8736 ≈ 101.8 M); a larger
+ * file only loses its thumbnail, preview or blur score — batching still works.
+ */
+const SHARP_MAX_INPUT_PIXELS = 120_000_000;
+
 // ============================================================================
 // EXIF
 // ============================================================================
@@ -325,6 +332,9 @@ const QP_MAX_RETRIES_PER_PHASE = 3;
 /** A Connect the browser has not answered within this time is forgotten. */
 const QP_CONNECT_PENDING_TTL_MS = 600000;
 
+/** A Log In the browser has not answered within this time is forgotten. */
+const LOGIN_PENDING_TTL_MS = 600000;
+
 /** Minimum gap between qp-upload-progress events. */
 const QP_PROGRESS_INTERVAL_MS = 250;
 
@@ -342,6 +352,7 @@ module.exports = {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  SHARP_MAX_INPUT_PIXELS,
   EXIF_CONCURRENCY,
   BLUR_CONCURRENCY,
   BLUR_RESIZE_WIDTH,
@@ -373,5 +384,6 @@ module.exports = {
   QP_COMMIT_BUSY_WINDOW_MS,
   QP_MAX_RETRIES_PER_PHASE,
   QP_CONNECT_PENDING_TTL_MS,
+  LOGIN_PENDING_TTL_MS,
   QP_PROGRESS_INTERVAL_MS,
 };

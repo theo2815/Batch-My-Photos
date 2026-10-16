@@ -39,7 +39,7 @@ function ipcFor(config, keyStore = {}, extraMocks = {}) {
   const handlers = new Map();
   const net = { fetch: vi.fn(async () => ({ ok: false })) };
   const electron = { app: { getVersion: () => '1.0.6-beta.1' }, net, dialog: {}, shell: {} };
-  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
+  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
   const mocks = {
     electron, './config': config, '../utils/logger': logger,
     './blurBetaKeyStore': keyStore, './ipcRateLimiter': limiter,
@@ -190,7 +190,7 @@ describe('beta key setup', () => {
     let api;
     load('preload.js', { electron: {
       contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
-      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args) },
+      ipcRenderer: { invoke: (name, ...args) => handlers.get(name)({}, ...args), on() {} },
     } });
     expect(typeof api.blurBetaKey).toBe('function');
     expect(await api.blurBetaKey()).toEqual({ enabled: true, configured: false });
@@ -287,7 +287,7 @@ describe('beta public updater suppression', () => {
     const updater = { on: vi.fn(), checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn() };
     load('src/main/updateManager.js', {
       './config': configFor(validManifest), '../utils/logger': logger,
-      'electron-updater': { autoUpdater: updater },
+      'electron-updater': { autoUpdater: updater }, './windowManager': { isAppUrl: () => true },
       electron: { app: { isPackaged: true }, ipcMain: { handle: (name, fn) => handlers.set(name, fn) } },
     }).initAutoUpdater(() => null);
     await vi.advanceTimersByTimeAsync(10000);

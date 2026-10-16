@@ -41,6 +41,7 @@ const {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  SHARP_MAX_INPUT_PIXELS,
   VERSION_CHECK_TIMEOUT_MS,
 } = require('./constants');
 
@@ -1586,7 +1587,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
           const filePath = path.join(folderPath, fileName);
           
           // Sharp automatically rotates based on EXIF orientation
-          const buffer = await sharp(filePath)
+          const buffer = await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS })
             .rotate() // Auto-rotate based on EXIF
             .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
               fit: 'cover',
@@ -1655,7 +1656,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         previewCache.set(filePath, cached);
         return { success: true, ...cached };
       }
-      const { data, info } = await sharp(source)
+      const { data, info } = await sharp(source, { limitInputPixels: SHARP_MAX_INPUT_PIXELS })
         .rotate() // Auto-rotate based on EXIF
         .resize(PREVIEW_MAX_DIMENSION, PREVIEW_MAX_DIMENSION, {
           fit: 'inside',

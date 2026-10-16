@@ -35,7 +35,7 @@ function configFor(packaged, env = {}) {
 function ipcFor(config) {
   const handlers = new Map();
   const electron = { app: { getVersion: () => '1.0.6' }, net: { fetch: async () => ({ ok: false }) }, dialog: {}, shell: {} };
-  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger });
+  const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
   const mocks = {
     electron, './config': config, '../utils/logger': logger, './ipcRateLimiter': limiter,
     './rollbackManager': { init() {} },
