@@ -98,6 +98,8 @@ function clearSession() {
   // Required here, not at the top: its store must open after main.js sets the data folder.
   if (config.features.QUICKPITIK_UPLOAD_ENABLED) {
     try {
+      // Stop a running upload too, but only if it is already loaded: a logout must not load or write anything new
+      require.cache[require.resolve('./quickpitikUploadService')]?.exports.cancelUpload()
       require('./quickpitikAuthService').disconnect()
     } catch (err) {
       logger.warn('⚠️ [AUTH] Could not disconnect QuickPitik:', err.message)

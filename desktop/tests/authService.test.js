@@ -5,8 +5,8 @@
  * (same pattern as supabaseApi.test.js) so no DPAPI, no network, no OS calls.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import Module from 'node:module';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import Module, { createRequire } from 'node:module';
 
 const fetchMock = vi.fn();
 const memory = new Map();
@@ -210,5 +210,34 @@ describe('clearSession', () => {
     quickpitik.disconnect.mockImplementation(() => { throw new Error('store locked'); });
     expect(() => authService.clearSession()).not.toThrow();
     expect(memory.has('session_token')).toBe(false);
+  });
+
+  // The upload service is never loaded just for a logout; one that is already running is stopped.
+  describe('a running upload', () => {
+    const nodeRequire = createRequire(import.meta.url);
+    const uploadPath = nodeRequire.resolve('../src/main/quickpitikUploadService.js');
+    const upload = { cancelUpload: vi.fn() };
+    beforeEach(() => {
+      upload.cancelUpload.mockReset();
+      nodeRequire.cache[uploadPath] = { id: uploadPath, filename: uploadPath, loaded: true, exports: upload };
+    });
+    afterEach(() => { delete nodeRequire.cache[uploadPath]; });
+
+    it('is cancelled when the upload service is already loaded', () => {
+      authService.clearSession();
+      expect(upload.cancelUpload).toHaveBeenCalledTimes(1);
+    });
+
+    it('is left alone, and the service not loaded, while the Upload view is off', () => {
+      authConfig.features.QUICKPITIK_UPLOAD_ENABLED = false;
+      authService.clearSession();
+      expect(upload.cancelUpload).not.toHaveBeenCalled();
+    });
+
+    it('does not load the upload service when it was not loaded', () => {
+      delete nodeRequire.cache[uploadPath];
+      authService.clearSession();
+      expect(nodeRequire.cache[uploadPath]).toBeUndefined();
+    });
   });
 });
