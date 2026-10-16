@@ -12,6 +12,10 @@ import { sendPaymentConfirmation } from '../_shared/emails.ts'
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // BatchMyPhotos is free since 2026-10-15 — no new payments are taken. The code
+  // below is kept (unreachable) so payments can be restored by deleting this line.
+  return corsJson({ error: 'BatchMyPhotos is free. There is nothing to buy.' }, 410)
+
   try {
     const authHeader = req.headers.get('Authorization') ?? ''
     const userClient = createClient(
@@ -44,7 +48,7 @@ Deno.serve(async (req) => {
     }
 
     const metaUserId = attrs?.metadata?.user_id
-    if (metaUserId && metaUserId !== user.id) {
+    if (metaUserId !== user.id) {
       return corsJson({ error: 'Payment does not belong to this user' }, 403)
     }
 

@@ -73,6 +73,17 @@ export async function activateSubscription(supabase: SupabaseClient, opts: {
   const couponDef = couponCode ? await lookupReferralCoupon(supabase, couponCode) : null
   const amount = couponDef ? couponDef.discountedPriceCentavos : PLAN_PRICE_CENTAVOS
 
+  // Duplicate check first: a replayed checkout must not extend Pro again.
+  // limit(1), not single(): the column has no unique constraint.
+  const { data: existingTx, error: txLookupError } = await supabase
+    .from('transactions').select('id').eq('paymongo_checkout_id', checkoutId).limit(1)
+  if (txLookupError) throw new Error(`transactions lookup failed: ${txLookupError.message}`)
+  if (existingTx?.length) {
+    const { data: sub } = await supabase
+      .from('subscriptions').select('expires_at').eq('user_id', userId).single()
+    return { expiresAt: sub?.expires_at, amount, txCreated: false }
+  }
+
   const paidAt = new Date()
   const expiresAt = new Date(paidAt)
   expiresAt.setDate(expiresAt.getDate() + 30)
@@ -94,27 +105,20 @@ export async function activateSubscription(supabase: SupabaseClient, opts: {
   }, { onConflict: 'user_id' })
   if (upsertError) throw new Error(`subscriptions upsert failed: ${upsertError.message}`)
 
-  const { data: existingTx } = await supabase
-    .from('transactions').select('id').eq('paymongo_checkout_id', checkoutId).single()
-
-  let txCreated = false
-  if (!existingTx) {
-    await supabase.from('transactions').insert({
-      user_id: userId,
-      amount,
-      currency: PLAN_CURRENCY,
-      status: 'paid',
-      description: couponCode ? `${PLAN_DESCRIPTION} (${couponCode})` : PLAN_DESCRIPTION,
-      paymongo_checkout_id: checkoutId,
-      coupon_code: couponCode,
-      created_at: paidAt.toISOString(),
-    })
-    txCreated = true
-  }
+  await supabase.from('transactions').insert({
+    user_id: userId,
+    amount,
+    currency: PLAN_CURRENCY,
+    status: 'paid',
+    description: couponCode ? `${PLAN_DESCRIPTION} (${couponCode})` : PLAN_DESCRIPTION,
+    paymongo_checkout_id: checkoutId,
+    coupon_code: couponCode,
+    created_at: paidAt.toISOString(),
+  })
 
   if (couponCode && couponDef?.isReferral) {
     await recordReferralUsage(supabase, couponCode, userId)
   }
 
-  return { expiresAt: expiresAt.toISOString(), amount, txCreated }
+  return { expiresAt: expiresAt.toISOString(), amount, txCreated: true }
 }
