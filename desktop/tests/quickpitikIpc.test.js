@@ -219,6 +219,7 @@ describe('dialogs remember the last folder (Electron 43+ would open Downloads)',
         .mockResolvedValueOnce({ canceled: false, filePaths: ['C:\\Shoots\\Race'] })
         .mockResolvedValueOnce({ canceled: true, filePaths: [] })
         .mockResolvedValueOnce({ canceled: false, filePaths: ['D:\\Batches'] })
+        .mockResolvedValueOnce({ canceled: true, filePaths: [] })
         .mockResolvedValueOnce({ canceled: true, filePaths: [] });
       const showSaveDialog = vi.fn(async () => ({ canceled: false, filePath: path.join(reportDir, 'report.csv') }));
       const { api } = preloadFor(ipcFor({
@@ -231,8 +232,9 @@ describe('dialogs remember the last folder (Electron 43+ would open Downloads)',
       await api.selectFolder();
       await api.selectOutputFolder();
       await api.selectOutputFolder();
+      await api.selectFolder(); // a cancelled pick keeps the remembered folder
       expect(showOpenDialog.mock.calls.map(([, options]) => options.defaultPath))
-        .toEqual([undefined, 'C:\\Shoots\\Race', undefined, 'D:\\Batches']);
+        .toEqual([undefined, 'C:\\Shoots\\Race', undefined, 'D:\\Batches', 'C:\\Shoots\\Race']);
 
       await api.exportBatchReport({ operations: [{ fileName: 'a.jpg' }] });
       await api.exportHistoryReport();
