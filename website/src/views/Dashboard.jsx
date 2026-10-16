@@ -360,7 +360,7 @@ export default function Dashboard() {
                 <div className="flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-500/70 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-text-muted leading-relaxed">
-                    We only store your email &amp; plan — never your photos, file names, or anything from your device.
+                    We only store your email &amp; plan — never your photos, file names, or anything from your device unless you upload them to QuickPitik.
                   </p>
                 </div>
               </div>
