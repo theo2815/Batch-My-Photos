@@ -183,6 +183,11 @@
   justify-content: center;
 }
 
+/* ConfirmDialog: a plain question, so the title is ink, not a warning colour. */
+.confirm-dialog h3 {
+  color: var(--text-primary);
+}
+
 /* Cancel Confirmation Specifics */
 .warning-text {
   font-size: 1.1rem;

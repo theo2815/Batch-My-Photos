@@ -176,7 +176,7 @@ describe('listEvents', () => {
     expect(canUploadOwned('2026-11-01', now)).toBe(true); // not run yet: the owner may stage photos ahead
   });
 
-  it("merges the public catalog with the photographer's events, owned first, no duplicates", async () => {
+  it("merges the public catalog with the photographer's events: open ones newest first, then closed, no duplicates", async () => {
     authStub.fetchJson.mockResolvedValue({ data: { items: [
       { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City' },
       { id: 'B', name: 'Old Race', date: '2026-10-01', location: 'Mandaue' },
@@ -192,8 +192,9 @@ describe('listEvents', () => {
     expect(authStub.fetchJson).toHaveBeenCalledWith(expect.stringMatching(/\/events\?limit=200$/));
     expect(authStub.authorizedFetch).toHaveBeenCalledWith('/me/photographer/events?limit=200');
     expect(events).toEqual([
-      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', ownedByMe: true, state: 'open', closesOn: '2026-10-20' },
-      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live', closesOn: '2026-10-12' },
+      { id: 'A', name: 'Cebu Marathon 2026', date: '2026-10-09', location: 'Cebu City', ownedByMe: false, state: 'live', uploadWindow: 'open', closesOn: '2026-10-12' },
+      { id: 'C', name: 'My Fun Run', date: '2026-09-20', location: 'Talisay', ownedByMe: true, state: 'open', uploadWindow: 'open', closesOn: '2026-10-20' },
+      { id: 'D', name: 'My Old Run', date: '2026-08-01', location: 'Talisay', ownedByMe: true, state: 'open', uploadWindow: 'closed', closesOn: '2026-09-01' },
     ]);
   });
 
@@ -203,10 +204,41 @@ describe('listEvents', () => {
       { id: 'O', name: 'My Run', date: '2026-09-25', location: 'Talisay', state: 'open', ownedByMe: true },
     ] } });
     const events = await service.listEvents(now);
-    expect(events.map(event => [event.id, event.closesOn])).toEqual([['O', '2026-10-25'], ['P', '2026-10-13']]);
+    expect(events.map(event => [event.id, event.closesOn])).toEqual([['P', '2026-10-13'], ['O', '2026-10-25']]);
   });
 
-  it('leaves out events the server would refuse: own events not approved yet, and archived ones', async () => {
+  it('puts upcoming events after the open ones, the next race first; an own event before race day is already open', async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [
+      { id: 'U2', name: 'Later Race', date: '2026-10-20', location: 'Cebu City' },
+      { id: 'U1', name: 'Next Race', date: '2026-10-12', location: 'Cebu City' },
+      { id: 'P', name: 'Race Today', date: '2026-10-10', location: 'Cebu City' },
+    ] } });
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [
+      { id: 'O', name: 'My Future Run', date: '2026-11-01', location: 'Talisay', state: 'upcoming', ownedByMe: true, reviewStatus: 'approved' },
+    ] } });
+    const events = await service.listEvents(now);
+    expect(events.map(event => [event.id, event.uploadWindow])).toEqual([['O', 'open'], ['P', 'open'], ['U1', 'upcoming'], ['U2', 'upcoming']]);
+    expect(events.find(event => event.id === 'U1').state).toBe('upcoming');
+  });
+
+  it('asks for both lists at the same time, not one after the other', async () => {
+    let release;
+    authStub.fetchJson.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    authStub.authorizedFetch.mockClear();
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [] } });
+    const pending = service.listEvents(now);
+    expect(authStub.authorizedFetch).toHaveBeenCalledTimes(1); // asked before the public list answered
+    release({ data: { items: [] } });
+    expect(await pending).toEqual([]);
+  });
+
+  it('a sign-in that cannot be renewed still fails the whole list', async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [] } });
+    authStub.authorizedFetch.mockRejectedValue(new QpAuthError('QuickPitik sign-in expired'));
+    await expect(service.listEvents(now)).rejects.toBeInstanceOf(QpAuthError);
+  });
+
+  it('leaves out own events not approved yet, and lists archived ones as closed', async () => {
     authStub.fetchJson.mockResolvedValue({ data: { items: [] } });
     const mine = (id, extra) => ({ id, name: id, date: '2026-10-09', location: 'Cebu City', state: 'open', ownedByMe: true, ...extra });
     authStub.authorizedFetch.mockResolvedValue({ data: { items: [
@@ -217,7 +249,9 @@ describe('listEvents', () => {
       mine('archived-own', { reviewStatus: 'approved', state: 'past' }),
       mine('archived-covered', { ownedByMe: false, state: 'past' }),
     ] } });
-    expect((await service.listEvents(now)).map(event => event.id).sort()).toEqual(['approved', 'parked']);
+    expect((await service.listEvents(now)).map(event => [event.id, event.uploadWindow])).toEqual([
+      ['approved', 'open'], ['parked', 'open'], ['archived-own', 'closed'], ['archived-covered', 'closed'],
+    ]);
   });
 
   it('counts the day in Manila, not in UTC or on this PC', () => {

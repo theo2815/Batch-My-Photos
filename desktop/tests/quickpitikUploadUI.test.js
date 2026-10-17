@@ -25,7 +25,9 @@ import ReviewTable from '../src/components/Upload/ReviewTable.jsx';
 import UploadSummary from '../src/components/Upload/UploadSummary.jsx';
 import UploadView from '../src/components/Upload/UploadView.jsx';
 import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
-import EventPicker from '../src/components/Upload/EventPicker.jsx';
+import ConnectCard from '../src/components/Upload/ConnectCard.jsx';
+import ConfirmDialog from '../src/components/Modals/ConfirmDialog.jsx';
+import EventPicker, { ChosenEvent } from '../src/components/Upload/EventPicker.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
 import { useFolderSelection } from '../src/hooks/useFolderSelection.js';
 
@@ -41,7 +43,7 @@ const scan = { success: true, root: 'D:/Shoots/Theo dipolog', folders: [
   { relPath: 'Race A', name: 'Race A', uploadable: { count: 400, bytes: 400 }, skipped: { raw: 88, video: 0, heic: 0, oversize: 3, other: 0 }, defaultSelected: true },
   { relPath: 'Race A/Race A_Blurry', name: 'Race A_Blurry', uploadable: { count: 20, bytes: 20 }, skipped: { raw: 0, video: 0, heic: 0, oversize: 0, other: 0 }, defaultSelected: false },
 ], totals: { folders: 3, uploadable: { count: 432, bytes: 432 }, skipped: { raw: 88, video: 2, heic: 0, oversize: 3, other: 0 } } };
-const event = { id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', location: 'Cebu City', ownedByMe: false, state: 'live' };
+const event = { id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', location: 'Cebu City', ownedByMe: false, state: 'live', uploadWindow: 'open', closesOn: '2026-10-13' };
 const noop = () => {};
 
 beforeEach(() => { hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = []; });
@@ -51,11 +53,24 @@ describe('EventPicker', () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-10T12:00:00+08:00')); });
   afterEach(() => { vi.useRealTimers(); });
 
-  const own = { id: 'o1', name: 'My Fun Run', date: '2026-09-25', location: '', ownedByMe: true, state: 'open', closesOn: '2026-10-25' };
+  // In the order listEvents returns them: open newest first, upcoming next race first, closed newest first.
   const open = { ...event, closesOn: '2026-10-13' };
-  const lastDay = { id: 'e2', name: 'Mandaue Dash', date: '2026-10-07', location: 'Mandaue', ownedByMe: false, state: 'live', closesOn: '2026-10-10' };
-  const picker = (props) => render(EventPicker, { events: [own, open, lastDay], value: '', onChange: noop, onRefresh: noop, disabled: false, ...props });
-  const rows = (tree) => nodes(tree).filter(n => n.type === 'button' && 'aria-pressed' in n.props);
+  const lastDay = { id: 'e2', name: 'Mandaue Dash', date: '2026-10-07', location: 'Mandaue', ownedByMe: false, state: 'live', uploadWindow: 'open', closesOn: '2026-10-10' };
+  const own = { id: 'o1', name: 'My Fun Run', date: '2026-09-25', location: '', ownedByMe: true, state: 'open', uploadWindow: 'open', closesOn: '2026-10-25' };
+  const soon = { id: 'u1', name: 'Lapu-Lapu Run', date: '2026-10-11', location: 'Lapu-Lapu', ownedByMe: false, state: 'upcoming', uploadWindow: 'upcoming', closesOn: '2026-10-14' };
+  const later = { id: 'u2', name: 'Talisay 10K', date: '2026-10-15', location: 'Talisay', ownedByMe: false, state: 'upcoming', uploadWindow: 'upcoming', closesOn: '2026-10-18' };
+  const done = { id: 'c1', name: 'Old Fun Run', date: '2026-08-01', location: 'Talisay', ownedByMe: true, state: 'open', uploadWindow: 'closed', closesOn: '2026-09-01' };
+  const archived = { id: 'c2', name: 'Archived Race', date: '2026-10-08', location: '', ownedByMe: false, state: 'past', uploadWindow: 'closed', closesOn: '2026-10-11' };
+  const all = [open, lastDay, own, soon, later, done, archived];
+
+  const picker = (props) => render(EventPicker, { events: all, value: '', onChange: noop, onRefresh: noop, disabled: false, loading: false, loadedAt: null, ...props });
+  const rows = (tree) => nodes(tree).filter(n => n.props?.className?.startsWith('upload-event-option'));
+  const choosable = (tree) => rows(tree).filter(n => n.type === 'button');
+  const names = (tree) => rows(tree).map(row => text(nodes(row).find(n => n.props?.className === 'upload-event-name')));
+  const tabFor = (tree, label) => nodes(tree).find(n => n.props?.className === 'upload-tab' && text(n).startsWith(label));
+  const tabs = (tree) => nodes(tree).filter(n => n.props?.className === 'upload-tab').map(text);
+  const search = (tree) => nodes(tree).find(n => n.type === 'input');
+  const emptyCard = (tree) => nodes(tree).find(n => n.props?.className === 'upload-empty');
 
   it('asks which event the photos are for and says what the choice means', () => {
     const shown = text(picker());
@@ -63,24 +78,15 @@ describe('EventPicker', () => {
     expect(shown).toContain("Runners will find these photos on that event's page.");
   });
 
-  it('puts own events under "Your events" and public ones under "Open public events"', () => {
-    const shown = text(picker());
-    const at = label => shown.indexOf(label);
-    expect(at('Your events')).toBeGreaterThan(-1);
-    expect(at('Your events')).toBeLessThan(at('My Fun Run'));
-    expect(at('My Fun Run')).toBeLessThan(at('Open public events'));
-    expect(at('Open public events')).toBeLessThan(at('Cebu Marathon 2026'));
-    expect(at('Cebu Marathon 2026')).toBeLessThan(at('Mandaue Dash'));
-  });
-
-  it('shows no heading for a group with no event', () => {
-    expect(text(picker({ events: [open] }))).not.toContain('Your events');
-    expect(text(picker({ events: [own] }))).not.toContain('Open public events');
+  it('opens on the Open tab, keeps the order it was given, and counts every tab', () => {
+    const tree = picker();
+    expect(tabs(tree)).toEqual(['Open (3)', 'Upcoming (2)', 'Closed (2)']);
+    expect(tabFor(tree, 'Open').props['aria-pressed']).toBe(true);
+    expect(names(tree)).toEqual(['Cebu Marathon 2026', 'Mandaue Dash', 'My Fun Run']);
   });
 
   it('a row shows the date and place, whose event it is and how long it takes uploads', () => {
-    const [ownRow, openRow, lastDayRow] = rows(picker()).map(text);
-    expect(openRow).toContain('Cebu Marathon 2026');
+    const [openRow, lastDayRow, ownRow] = rows(picker()).map(text);
     expect(openRow).toContain('10 Oct 2026 · Cebu City');
     expect(openRow).toContain('Public event');
     expect(openRow).toContain('Uploads close in 3 days');
@@ -103,27 +109,156 @@ describe('EventPicker', () => {
     expect(row).toContain('Uploads close today');
   });
 
-  it('clicking a row chooses that event, and the chosen row is marked pressed', () => {
+  it('clicking an open row chooses that event, and the chosen row is marked pressed', () => {
     const onChange = vi.fn();
     const tree = picker({ value: 'e1', onChange });
-    expect(rows(tree).map(row => row.props['aria-pressed'])).toEqual([false, true, false]);
-    rows(tree)[2].props.onClick();
+    expect(choosable(tree).map(row => row.props['aria-pressed'])).toEqual([true, false, false]);
+    choosable(tree)[1].props.onClick();
     expect(onChange).toHaveBeenCalledWith('e2');
   });
 
-  it('explains when events open if none is open, and keeps Refresh', () => {
+  it('the Upcoming tab lists the next race first, says when uploads open, and cannot be chosen', () => {
+    tabFor(picker(), 'Upcoming').props.onClick();
+    const tree = picker();
+    expect(tabFor(tree, 'Upcoming').props['aria-pressed']).toBe(true);
+    expect(names(tree)).toEqual(['Lapu-Lapu Run', 'Talisay 10K']);
+    const [soonRow, laterRow] = rows(tree).map(text);
+    expect(soonRow).toContain('Uploads open tomorrow');
+    expect(laterRow).toContain('Uploads open in 5 days');
+    expect(choosable(tree)).toEqual([]);
+  });
+
+  it('the Closed tab says when uploads closed, or only that they did when the event was archived early', () => {
+    tabFor(picker(), 'Closed').props.onClick();
+    const tree = picker();
+    expect(names(tree)).toEqual(['Old Fun Run', 'Archived Race']);
+    const [doneRow, archivedRow] = rows(tree).map(text);
+    expect(doneRow).toContain('Uploads closed on 1 Sep 2026');
+    expect(archivedRow).toContain('Uploads closed');
+    expect(archivedRow).not.toContain('closed on');
+    expect(choosable(tree)).toEqual([]);
+  });
+
+  it('search matches the name or the place, ignoring case and spaces, and the counts follow it', () => { // Review Focus 4
+    search(picker()).props.onChange({ target: { value: '  TALISAY ' } });
+    let tree = picker();
+    expect(tabs(tree)).toEqual(['Open (0)', 'Upcoming (1)', 'Closed (1)']);
+    search(tree).props.onChange({ target: { value: 'mandaue' } });
+    tree = picker();
+    expect(names(tree)).toEqual(['Mandaue Dash']);
+  });
+
+  it('says so when nothing matches the search, and Clear search brings the list back', () => {
+    search(picker()).props.onChange({ target: { value: 'zzz ' } });
+    const card = emptyCard(picker());
+    expect(text(card)).toContain('No event matches "zzz"');
+    button(card, 'Clear search').props.onClick();
+    const tree = picker();
+    expect(search(tree).props.value).toBe('');
+    expect(names(tree)).toEqual(['Cebu Marathon 2026', 'Mandaue Dash', 'My Fun Run']);
+  });
+
+  describe('pages of five', () => {
+    const many = (n) => Array.from({ length: n }, (_, i) => ({ ...open, id: `p${i + 1}`, name: `Race ${i + 1}` }));
+    const pager = (tree) => nodes(tree).find(n => n.type === 'nav');
+
+    it('shows five rows and moves between pages', () => {
+      let tree = picker({ events: many(12) });
+      expect(names(tree)).toEqual(['Race 1', 'Race 2', 'Race 3', 'Race 4', 'Race 5']);
+      expect(text(pager(tree))).toContain('Page 1 of 3');
+      expect(button(tree, '‹ Previous').props.disabled).toBe(true);
+      button(tree, 'Next ›').props.onClick();
+      tree = picker({ events: many(12) });
+      expect(names(tree)).toEqual(['Race 6', 'Race 7', 'Race 8', 'Race 9', 'Race 10']);
+      button(tree, 'Next ›').props.onClick();
+      tree = picker({ events: many(12) });
+      expect(names(tree)).toEqual(['Race 11', 'Race 12']);
+      expect(button(tree, 'Next ›').props.disabled).toBe(true);
+    });
+
+    it('a new search or another tab starts again at page 1', () => {
+      button(picker({ events: many(12) }), 'Next ›').props.onClick();
+      search(picker({ events: many(12) })).props.onChange({ target: { value: 'Race' } });
+      expect(text(pager(picker({ events: many(12) })))).toContain('Page 1 of 3');
+      button(picker({ events: many(12) }), 'Next ›').props.onClick();
+      tabFor(picker({ events: many(12) }), 'Open').props.onClick();
+      expect(text(pager(picker({ events: many(12) })))).toContain('Page 1 of 3');
+    });
+
+    it('a Refresh that shortens the list moves back to its last page', () => { // Review Focus 1
+      button(picker({ events: many(12) }), 'Next ›').props.onClick();
+      button(picker({ events: many(12) }), 'Next ›').props.onClick();
+      const tree = picker({ events: many(6) });
+      expect(text(pager(tree))).toContain('Page 2 of 2');
+      expect(names(tree)).toEqual(['Race 6']);
+    });
+
+    it('shows no page buttons for five events or fewer', () => {
+      expect(pager(picker({ events: many(5) }))).toBeUndefined();
+    });
+  });
+
+  it('while the first list loads it shows placeholders, not "no events"', () => {
+    const tree = picker({ events: [], loading: true });
+    expect(nodes(tree).filter(n => n.props?.className === 'upload-skeleton')).toHaveLength(3);
+    expect(nodes(tree).find(n => n.props?.role === 'status').props['aria-label']).toBe('Loading events…');
+    expect(emptyCard(tree)).toBeUndefined();
+    expect(button(tree, 'Refreshing…').props.disabled).toBe(true);
+  });
+
+  it('a Refresh keeps the rows on screen and only changes the button', () => {
+    const tree = picker({ loading: true, loadedAt: new Date() });
+    expect(names(tree)).toEqual(['Cebu Marathon 2026', 'Mandaue Dash', 'My Fun Run']);
+    expect(nodes(tree).filter(n => n.props?.className === 'upload-skeleton')).toEqual([]);
+    expect(button(tree, 'Refreshing…').props.disabled).toBe(true);
+    expect(text(tree)).not.toContain('Updated');
+  });
+
+  it('says when the list was last updated, in Manila time', () => {
+    expect(text(picker({ loadedAt: new Date('2026-10-10T07:42:00Z') }))).toMatch(/Updated 3:42\sPM/);
+  });
+
+  it('explains each empty tab in a card, with Refresh on the Open tab only', () => {
     const onRefresh = vi.fn();
     const tree = picker({ events: [], onRefresh });
-    expect(text(tree)).toContain('No event is open for upload right now. Public events take photos on race day and for 3 days after; your own events for one month.');
-    expect(rows(tree)).toEqual([]);
-    button(tree, 'Refresh').props.onClick();
+    let card = emptyCard(tree);
+    expect(text(card)).toContain('Nothing open right now');
+    expect(text(card)).toContain('Public events take photos on race day and for 3 days after; your own events for one month.');
+    button(card, 'Refresh').props.onClick();
     expect(onRefresh).toHaveBeenCalledTimes(1);
+    // While a Refresh runs over a list with no open event, the card's Refresh waits too.
+    expect(button(emptyCard(picker({ events: [soon], loading: true, loadedAt: new Date() })), 'Refresh').props.disabled).toBe(true);
+    tabFor(tree, 'Upcoming').props.onClick();
+    card = emptyCard(picker({ events: [] }));
+    expect(text(card)).toContain('No upcoming events');
+    expect(text(card)).toContain('Public events show here before race day.');
+    expect(nodes(card).filter(n => n.type === 'button')).toEqual([]);
+    tabFor(picker({ events: [] }), 'Closed').props.onClick();
+    card = emptyCard(picker({ events: [] }));
+    expect(text(card)).toContain('No closed events');
+    expect(text(card)).toContain('Your events, and events you uploaded to, show here after uploads close.');
   });
 
   it('cannot be used while the view is busy', () => {
     const tree = picker({ disabled: true });
-    expect(rows(tree).map(row => row.props.disabled)).toEqual([true, true, true]);
+    expect(choosable(tree).map(row => row.props.disabled)).toEqual([true, true, true]);
     expect(button(tree, 'Refresh').props.disabled).toBe(true);
+  });
+});
+
+describe('ChosenEvent', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-10T12:00:00+08:00')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('names the chosen event on one line and offers Change', () => {
+    const onChange = vi.fn();
+    const tree = render(ChosenEvent, { event, onChange, disabled: false });
+    expect(text(tree)).toContain('Uploading to');
+    expect(text(tree)).toContain('Cebu Marathon 2026');
+    expect(text(tree)).toContain('10 Oct 2026 · Cebu City · Uploads close in 3 days');
+    button(tree, 'Change').props.onClick();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(button(render(ChosenEvent, { event, onChange, disabled: true }), 'Change').props.disabled).toBe(true);
   });
 });
 
@@ -344,9 +479,9 @@ describe('useQuickPitikUpload', () => {
 
   const other = { ...event, id: 'e2', name: 'Mandaue Dash' };
 
-  it('chooses the event when it is the only one open', async () => {
+  it('never chooses an event by itself, not even the only open one', async () => {
     connectedApi();
-    expect((await mounted()).eventId).toBe('e1');
+    expect((await mounted()).eventId).toBe('');
   });
 
   it('leaves the choice to the photographer when two events are open', async () => {
@@ -354,32 +489,193 @@ describe('useQuickPitikUpload', () => {
     expect((await mounted()).eventId).toBe('');
   });
 
-  it('keeps an event the photographer already chose when a Refresh leaves one event', async () => {
+  it('a Refresh keeps a chosen event that is still open', async () => {
+    const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    let qp = await mounted();
+    qp.setEventId('e2');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [other] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('e2');
+  });
+
+  it('a Refresh drops a chosen event that is gone or no longer open', async () => {
     const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
     let qp = await mounted();
     qp.setEventId('e2');
     api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [event] });
     await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
-    expect(qp.eventId).toBe('e2');
+    expect(qp.eventId).toBe('');
+
+    qp.setEventId('e1');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [{ ...event, uploadWindow: 'closed' }] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('');
+  });
+
+  it('says the list is loading until the answer arrives, then when it was updated', async () => {
+    let answer;
+    connectedApi({ qpListEvents: vi.fn(() => new Promise((resolve) => { answer = resolve; })) });
+    let qp = await mounted();
+    expect(qp.eventsLoading).toBe(true);
+    expect(qp.eventsLoadedAt).toBeNull();
+    answer({ success: true, events: [event] }); await effects();
+    qp = render(useQuickPitikUpload, {});
+    expect(qp.eventsLoading).toBe(false);
+    expect(qp.eventsLoadedAt).toBeInstanceOf(Date);
+  });
+
+  it('a Refresh that fails keeps the list it had and stops loading', async () => { // Review Focus 3
+    const { api } = connectedApi();
+    let qp = await mounted();
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: false, error: 'Request failed' });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.events).toEqual([event]);
+    expect(qp.eventsLoading).toBe(false);
+    expect(qp.error).toEqual({ code: 'EVENTS', message: 'Request failed' });
   });
 });
 
 describe('UploadView', () => {
-  it('Disconnect cannot be pressed while a folder is being read', async () => {
-    vi.stubGlobal('window', { electronAPI: {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-10T12:00:00+08:00')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  function viewApi(over = {}) {
+    const api = {
       qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
       onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn(() => () => {}),
       qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event] }),
       selectFolder: vi.fn().mockResolvedValue('D:/Shoots/Theo dipolog'),
-      qpScanFolder: vi.fn(() => new Promise(() => {})),
-    } });
+      qpScanFolder: vi.fn().mockResolvedValue(scan),
+      qpDisconnect: vi.fn().mockResolvedValue({ success: true }),
+      ...over,
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    return api;
+  }
+  async function view() {
     render(UploadView, {}); await effects();
     render(UploadView, {}); await effects();
-    let tree = render(UploadView, {});
+    return render(UploadView, {});
+  }
+  const find = (tree, type) => nodes(tree).find(n => n.type === type);
+  async function chooseEvent(tree) {
+    find(tree, EventPicker).props.onChange('e1');
+    return render(UploadView, {});
+  }
+
+  it('shows no drop zone until an open event is chosen, then folds the list to that event', async () => {
+    viewApi();
+    let tree = await view();
+    expect(find(tree, EventPicker)).toBeDefined();
+    expect(find(tree, FolderDrop)).toBeUndefined();
+    expect(text(tree)).toContain('Choose an open event, then add your shoot folder.');
+    tree = await chooseEvent(tree);
+    expect(find(tree, EventPicker)).toBeUndefined();
+    expect(find(tree, ChosenEvent).props.event.id).toBe('e1');
+    expect(find(tree, FolderDrop)).toBeDefined();
+    expect(text(tree)).not.toContain('Choose an open event');
+  });
+
+  it('gives no hint to choose when no event is open', async () => {
+    viewApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [{ ...event, uploadWindow: 'upcoming' }] }) });
+    expect(text(await view())).not.toContain('Choose an open event');
+  });
+
+  it('Change opens the list again and keeps a folder already read', async () => { // Review Focus 2
+    viewApi();
+    let tree = await chooseEvent(await view());
+    await find(tree, FolderDrop).props.onClick(); // no effects(): the test React re-runs the mount effect
+    tree = render(UploadView, {});
+    expect(find(tree, ReviewTable)).toBeDefined();
+    find(tree, ChosenEvent).props.onChange();
+    tree = render(UploadView, {});
+    expect(find(tree, EventPicker)).toBeDefined();
+    expect(find(tree, ReviewTable)).toBeUndefined();
+    tree = await chooseEvent(tree);
+    expect(find(tree, ReviewTable).props.scan).toBe(scan);
+  });
+
+  it('Disconnect asks first: Cancel keeps the session, Disconnect signs out', async () => {
+    const api = viewApi();
+    let tree = await view();
+    expect(find(tree, ConfirmDialog).props.isOpen).toBe(false);
+    button(tree, 'Disconnect').props.onClick();
+    tree = render(UploadView, {});
+    const dialog = find(tree, ConfirmDialog);
+    expect(dialog.props).toMatchObject({ isOpen: true, danger: true, title: 'Disconnect from QuickPitik?', confirmLabel: 'Disconnect', cancelLabel: 'Cancel' });
+    dialog.props.onCancel();
+    tree = render(UploadView, {});
+    expect(find(tree, ConfirmDialog).props.isOpen).toBe(false);
+    expect(api.qpDisconnect).not.toHaveBeenCalled();
+
+    button(tree, 'Disconnect').props.onClick();
+    find(render(UploadView, {}), ConfirmDialog).props.onConfirm(); await effects();
+    tree = render(UploadView, {});
+    expect(api.qpDisconnect).toHaveBeenCalledTimes(1);
+    expect(tree.type).toBe(ConnectCard);
+  });
+
+  it('Disconnect and Change cannot be pressed while a folder is being read', async () => {
+    viewApi({ qpScanFolder: vi.fn(() => new Promise(() => {})) });
+    let tree = await chooseEvent(await view());
     expect(button(tree, 'Disconnect').props.disabled).toBe(false);
-    nodes(tree).find(n => n.type === FolderDrop).props.onClick(); await effects();
+    find(tree, FolderDrop).props.onClick(); await effects();
     tree = render(UploadView, {});
     expect(button(tree, 'Disconnect').props.disabled).toBe(true);
+    expect(find(tree, ChosenEvent).props.disabled).toBe(true);
+  });
+});
+
+describe('ConfirmDialog', () => {
+  const dialog = (props) => render(ConfirmDialog, {
+    isOpen: true, title: 'Disconnect from QuickPitik?', message: 'You will need to connect again.',
+    confirmLabel: 'Disconnect', cancelLabel: 'Cancel', onConfirm: noop, onCancel: noop, ...props,
+  });
+
+  it('shows nothing while closed', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    expect(dialog({ isOpen: false })).toBeNull();
+  });
+
+  it('asks the question, starts on the safe answer, and reports each answer', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const onConfirm = vi.fn(); const onCancel = vi.fn();
+    const tree = dialog({ onConfirm, onCancel, danger: true });
+    const box = nodes(tree).find(n => n.props?.role === 'alertdialog');
+    expect(box.props['aria-modal']).toBe('true');
+    expect(text(tree)).toContain('Disconnect from QuickPitik?');
+    expect(text(tree)).toContain('You will need to connect again.');
+    expect(button(tree, 'Cancel').props.autoFocus).toBe(true);
+    expect(button(tree, 'Disconnect').props.className).toBe('btn danger');
+    button(tree, 'Disconnect').props.onClick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    button(tree, 'Cancel').props.onClick();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click outside the box cancels; a click inside does not', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const onCancel = vi.fn();
+    const tree = dialog({ onCancel });
+    tree.props.onClick();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    const stopPropagation = vi.fn();
+    nodes(tree).find(n => n.props?.role === 'alertdialog').props.onClick({ stopPropagation });
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
+  it('Escape cancels, and the key listener goes away when it closes', async () => {
+    const listeners = {};
+    const win = { addEventListener: vi.fn((type, fn) => { listeners[type] = fn; }), removeEventListener: vi.fn() };
+    vi.stubGlobal('window', win);
+    const onCancel = vi.fn();
+    dialog({ onCancel }); await effects();
+    listeners.keydown({ key: 'Enter', preventDefault() {} });
+    expect(onCancel).not.toHaveBeenCalled();
+    listeners.keydown({ key: 'Escape', preventDefault() {} });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    dialog({ onCancel, isOpen: false }); await effects();
+    expect(win.removeEventListener).toHaveBeenCalledWith('keydown', listeners.keydown);
   });
 });
 

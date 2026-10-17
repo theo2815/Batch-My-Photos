@@ -171,9 +171,15 @@ function daysSince(dateIso, now) {
   return Math.round((Date.parse(MANILA_DATE.format(now)) - Date.parse(dateIso)) / DAY_MS);
 }
 
-function canUploadPublic(dateIso, now = new Date()) {
+/** Where a public event stands: 'upcoming' before race day, 'open' through the third day after, then 'closed'. */
+function publicWindow(dateIso, now = new Date()) {
   const days = daysSince(dateIso, now);
-  return days >= 0 && days < PUBLIC_UPLOAD_DAYS;
+  if (days < 0) return 'upcoming';
+  return days < PUBLIC_UPLOAD_DAYS ? 'open' : 'closed';
+}
+
+function canUploadPublic(dateIso, now = new Date()) {
+  return publicWindow(dateIso, now) === 'open';
 }
 
 /** One month after race day, clamped to the month's last day like Java's plusMonths (Jan 31 → Feb 28). */
@@ -189,29 +195,49 @@ function canUploadOwned(dateIso, now = new Date()) {
   return daysSince(ownerCloseDate(dateIso), now) <= 0;
 }
 
-const eventRow = (event, ownedByMe, state) => ({
-  id: event.id, name: event.name, date: event.date, location: event.location, ownedByMe, state,
+const eventRow = (event, ownedByMe, state, uploadWindow) => ({
+  id: event.id, name: event.name, date: event.date, location: event.location, ownedByMe, state, uploadWindow,
   // The last day the event takes uploads (YYYY-MM-DD).
   closesOn: ownedByMe ? ownerCloseDate(event.date) : new Date(Date.parse(event.date) + (PUBLIC_UPLOAD_DAYS - 1) * DAY_MS).toISOString().slice(0, 10),
 });
 
-/** Events the connected photographer can upload to right now: own first, then public, no duplicates. */
+const WINDOW_ORDER = { open: 0, upcoming: 1, closed: 2 };
+
+/**
+ * The photographer's event list, each row tagged uploadWindow 'open' | 'upcoming' | 'closed'.
+ * Open and closed rows: newest race first. Upcoming rows: the next race first.
+ * Closed rows are only the photographer's own events and events they joined;
+ * closed public events they never joined are left out.
+ */
 async function listEvents(now = new Date()) {
-  const { data: publicPage } = await qpAuth.fetchJson(`${config.urls.QUICKPITIK_API_URL}/events?limit=200`);
-  const { data: minePage } = await qpAuth.authorizedFetch('/me/photographer/events?limit=200');
+  // Both lists at once: the public one needs no sign-in, so it never waits on a token renewal.
+  const started = Date.now();
+  const tookMs = {};
+  const timed = (name, promise) => promise.finally(() => { tookMs[name] = Date.now() - started; });
+  const [{ data: publicPage }, { data: minePage }] = await Promise.all([
+    timed('public', qpAuth.fetchJson(`${config.urls.QUICKPITIK_API_URL}/events?limit=200`)),
+    timed('yours', qpAuth.authorizedFetch('/me/photographer/events?limit=200')),
+  ]);
+  logger.info(`[QP] events loaded: public list ${tookMs.public} ms, your list ${tookMs.yours} ms`);
+
   const byId = new Map();
   for (const event of minePage.items || []) {
-    // The server refuses an archived event, and an own event until an admin
-    // approves it (website: isOwnedEventLive).
-    if (event.state === 'past') continue;
+    // An own event is left out until an admin approves it (website: isOwnedEventLive).
     if (event.ownedByMe && !['approved', 'change_pending'].includes(event.reviewStatus ?? 'approved')) continue;
-    const open = event.ownedByMe ? canUploadOwned(event.date, now) : canUploadPublic(event.date, now);
-    if (open) byId.set(event.id, eventRow(event, !!event.ownedByMe, event.state));
+    let uploadWindow;
+    if (event.state === 'past') uploadWindow = 'closed'; // archived: the server refuses it
+    else if (event.ownedByMe) uploadWindow = canUploadOwned(event.date, now) ? 'open' : 'closed';
+    else uploadWindow = publicWindow(event.date, now);
+    byId.set(event.id, eventRow(event, !!event.ownedByMe, event.state, uploadWindow));
   }
   for (const event of publicPage.items || []) {
-    if (!byId.has(event.id) && canUploadPublic(event.date, now)) byId.set(event.id, eventRow(event, false, 'live'));
+    const uploadWindow = publicWindow(event.date, now);
+    if (!byId.has(event.id) && uploadWindow !== 'closed') {
+      byId.set(event.id, eventRow(event, false, uploadWindow === 'upcoming' ? 'upcoming' : 'live', uploadWindow));
+    }
   }
-  return [...byId.values()].sort((a, b) => (Number(b.ownedByMe) - Number(a.ownedByMe)) || b.date.localeCompare(a.date));
+  return [...byId.values()].sort((a, b) => (WINDOW_ORDER[a.uploadWindow] - WINDOW_ORDER[b.uploadWindow])
+    || (a.uploadWindow === 'upcoming' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)));
 }
 
 // ── Upload engine ─────────────────────────────────────────────────────────────
