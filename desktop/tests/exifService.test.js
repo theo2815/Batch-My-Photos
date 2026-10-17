@@ -125,7 +125,7 @@ describe('extractExifDates', () => {
     expect(dates[`cut${jpg.length - 1}.jpg`]).toBe(taken);
     for (const name of Object.keys(files)) {
       const { birthtimeMs, mtimeMs } = fs.statSync(path.join(folder, name));
-      expect([taken, Math.min(birthtimeMs, mtimeMs)], name).toContain(dates[name]);
+      expect([taken, Math.min(birthtimeMs || Infinity, mtimeMs || Infinity)], name).toContain(dates[name]);
     }
     expect(open).toBe(0);
   });
