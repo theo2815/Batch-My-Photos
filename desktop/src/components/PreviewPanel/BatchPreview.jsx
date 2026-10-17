@@ -303,7 +303,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
         <div className="blurry-header analyzing">
           <ScanEye size={18} className="icon-inline" />
           <span className="blurry-analyzing-text">
-            Analyzing image quality...
+            {blurProgress?.waiting ? 'Waiting for the blur service…' : 'Analyzing image quality...'}
             {blurProgress && (
               <> {blurProgress.current.toLocaleString()} / {blurProgress.total.toLocaleString()}</>
             )}

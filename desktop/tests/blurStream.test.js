@@ -334,6 +334,75 @@ describe('real blur stream client', () => {
     expect(progress).not.toHaveBeenCalled();
   });
 
+  const refusal = (status, code) => new Response(JSON.stringify({ success: false, error: { code, message: 'no' } }), {
+    status, headers: { 'Retry-After': '1' },
+  });
+
+  it('waits while the blur service is busy, reports waiting, then analyzes every photo', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockResolvedValueOnce(refusal(503, 'BLUR_BUSY'));
+    fetchMock.mockResolvedValueOnce(refusal(503, 'BLUR_BUSY'));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), row(1), summary(2)]));
+    const pending = blur.analyzeBlur(groups, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect([result.FIRST.predictedClass, result.SECOND.predictedClass]).toEqual(['sharp', 'sharp']);
+    expect(progress.mock.calls.map(([value]) => value)).toEqual([
+      { current: 0, total: 2, waiting: true },
+      { current: 0, total: 2, waiting: true },
+      { current: 1, total: 2 },
+      { current: 2, total: 2 },
+    ]);
+  });
+
+  it('treats a busy API key (429 BLUR_KEY_BUSY) as busy and succeeds on the next turn', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockResolvedValueOnce(refusal(429, 'BLUR_KEY_BUSY'));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), summary(1)]));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await pending).FIRST.predictedClass).toBe('sharp');
+    expect(progress.mock.calls[0][0]).toEqual({ current: 0, total: 1, waiting: true });
+  });
+
+  it('gives up after five minutes of busy answers and asks no more', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => refusal(503, 'BLUR_BUSY'));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    const rejected = expect(pending).rejects.toThrow('AI service temporarily unavailable; retry manually after server backoff');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(300000);   // BLUR_AI_BUSY_WAIT_MS
+    await rejected;
+    const calls = fetchMock.mock.calls.length;
+    expect(calls).toBeGreaterThan(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('still retries a non-busy 503 (MODEL_UNAVAILABLE) exactly once', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockImplementation(async () => refusal(503, 'MODEL_UNAVAILABLE'));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress);
+    const rejected = expect(pending).rejects.toThrow(/AI service returned 503/);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(10000);
+    await rejected;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(progress).not.toHaveBeenCalled();
+  });
+
+  it('still fails a 401 with an error code at once', async () => {
+    fetchMock.mockImplementation(async () => refusal(401, 'INVALID_API_KEY'));
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder)).rejects.toThrow(/^AI service returned 401/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('re-reads a replaced image when beta analysis is explicitly restarted', async () => {
     fetchMock.mockImplementation(async () => ndjsonResponse([row(0), summary(1)]));
     await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);

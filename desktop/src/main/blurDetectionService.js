@@ -36,7 +36,7 @@ const {
   BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_TIMEOUT_MS,
   BLUR_AI_MAX_DIMENSION, BLUR_AI_JPEG_QUALITY, BLUR_AI_RESIZE_CONCURRENCY,
   BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_MAX_BYTES, BLUR_AI_STREAM_CONCURRENCY,
-  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS, SHARP_MAX_INPUT_PIXELS,
+  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS, BLUR_AI_BUSY_WAIT_MS, SHARP_MAX_INPUT_PIXELS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
@@ -502,6 +502,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
+      try { err.code = JSON.parse(body).error?.code; } catch (_err) { /* not a JSON error body */ }
       err.retryable = response.status === 503 || response.status === 429;
       if (err.retryable) {
         const retryAfter = response.headers.get('Retry-After')?.trim();
@@ -578,6 +579,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
     const failure = new Error(err.message?.includes('AI service') ? err.message : 'AI service error: ' + err.message);
     failure.retryable = err.retryable === true;
     failure.retryDelayMs = err.retryDelayMs;
+    failure.code = err.code;
     throw failure;
   } finally {
     clearTimeout(timeoutId);
@@ -680,17 +682,31 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
             streamUrl, apiKey, group, threshold, categoriesFilter,
             (baseName, result) => { blurMap[baseName] = result; tick(); },
           );
+          const unavailable = 'AI service temporarily unavailable; retry manually after server backoff';
           let missing;
-          try {
-            missing = await classifyStream();
-          } catch (err) {
-            if (!err.retryable) throw err;
-            const delay = err.retryDelayMs ?? 2000;
-            if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) {
-              throw new Error('AI service temporarily unavailable; retry manually after server backoff');
+          let retried = false;
+          let busyTries = 0;
+          let busyWaitMs = 0;
+          while (!missing) {
+            try {
+              missing = await classifyStream();
+            } catch (err) {
+              const busy = err.code === 'BLUR_BUSY' || err.code === 'BLUR_KEY_BUSY';
+              if (!err.retryable || (retried && !busy)) throw err;
+              let delay = err.retryDelayMs ?? 2000;
+              if (busy) {
+                // Another analysis holds the server: wait our turn, doubling up to 10 s,
+                // plus 0–50% jitter so waiting users do not retry in lockstep.
+                delay = Math.min((err.retryDelayMs ?? 1000) * 2 ** busyTries++, 10000) * (1 + Math.random() / 2);
+                busyWaitMs += delay;
+                if (busyWaitMs > BLUR_AI_BUSY_WAIT_MS) throw new Error(unavailable);
+                if (onProgress) onProgress({ current: processed, total, waiting: true });
+              } else {
+                retried = true;
+              }
+              if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) throw new Error(unavailable);
+              await new Promise(resolve => setTimeout(resolve, delay));
             }
-            await new Promise(resolve => setTimeout(resolve, delay));
-            missing = await classifyStream();
           }
           // Recover omitted rows only after the server commits a valid summary.
           for (const idx of missing) {

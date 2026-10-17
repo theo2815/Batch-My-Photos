@@ -290,6 +290,9 @@ const BLUR_AI_STREAM_TIMEOUT_MS = 210000;
 /** Longer server backoffs require a manual retry instead of holding the scan open. */
 const BLUR_AI_MAX_RETRY_WAIT_MS = 30000;
 
+/** Total wait per request while the server answers busy (BLUR_BUSY / BLUR_KEY_BUSY) before giving up. */
+const BLUR_AI_BUSY_WAIT_MS = 300000;
+
 // ============================================================================
 // QUICKPITIK UPLOAD (feature-flagged Upload view; spec 2026-10-10)
 // ============================================================================
@@ -368,6 +371,7 @@ module.exports = {
   BLUR_AI_STREAM_CONCURRENCY,
   BLUR_AI_STREAM_TIMEOUT_MS,
   BLUR_AI_MAX_RETRY_WAIT_MS,
+  BLUR_AI_BUSY_WAIT_MS,
   DEVICE_LIMIT_PRO,
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,

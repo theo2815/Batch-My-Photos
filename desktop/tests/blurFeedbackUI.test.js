@@ -199,6 +199,19 @@ describe('explicit beta feedback consent', () => {
     expect(text(notice)).toContain('You can still batch your photos');
   });
 
+  it('says it is waiting for the blur service while the service is busy', () => {
+    const section = progress => {
+      const state = { isAnalyzing: true, blurProgress: progress, blurryGroups: [], blurResults: null, unflaggedGroups: new Set() };
+      const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['missed.jpg'] }], blurDetectionEnabled: true, blurDetection: state });
+      const node = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+      hooks.values = [];
+      return text(render(node.type, node.props));
+    };
+    expect(section({ current: 0, total: 2, waiting: true })).toContain('Waiting for the blur service…');
+    expect(section({ current: 1, total: 2 })).toContain('Analyzing image quality...');
+    expect(section({ current: 1, total: 2 })).not.toContain('Waiting for the blur service');
+  });
+
   it.each([
     ['RAW-only', { RAW1: { score: -1, isBlurry: false }, RAW2: { score: -1, isBlurry: false } }, ['RAW1.CR3', 'RAW2.CR3'], 'No blur results available', '0 groups analyzed · 2 could not be analyzed'],
     ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 groups)', '2 groups analyzed · 1 could not be analyzed'],
