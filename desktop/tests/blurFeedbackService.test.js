@@ -253,6 +253,7 @@ describe('feedback IPC boundary', () => {
     };
     for (const name of ['progressManager', 'authService', 'subscriptionService', 'deviceService',
       'batchEngine', 'exifService', 'blurDetectionService', 'batchExecutor', 'fileUtils']) mocks['./' + name] = {};
+    mocks['./blurDetectionService'] = { cancelCount: () => 0 };
     load('src/main/ipcHandlers.js', mocks).registerIpcHandlers(
       { handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {});
     const missing = path.join(photoFolder, 'missing-folder');

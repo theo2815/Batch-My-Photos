@@ -62,6 +62,8 @@ let analyzedImageHashes = new WeakMap();
 let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 let cacheGeneration = 0;
 let aiRun = null;   // AbortController of the running AI analysis; cancelAnalysis() aborts it
+let cancels = 0;    // cancelAnalysis() calls, so a cancel that lands before a run starts still stops it
+const cancelledError = () => Object.assign(new Error('Blur analysis cancelled'), { code: 'BLUR_CANCELLED' });
 
 /**
  * Extensions that can be analyzed for blur (JPEG/PNG only — fast to decode).
@@ -860,7 +862,7 @@ async function analyzeBlurLegacy(fileGroups, folderPath, threshold = 'moderate',
  * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
  */
-async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false) {
+async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false, cancelsAtStart = cancels) {
   const groupNames = Object.keys(fileGroups);
   const mode = config.features.BLUR_AI_ENABLED ? 'ai' : 'legacy';
 
@@ -871,6 +873,7 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
   const cacheKey = buildCacheKey(folderPath, groupNames, cacheDiscriminator);
   if (force) clearCache();
   if (mode === 'ai' && aiRun) throw new Error('AI service analysis already in progress. Try again.');
+  if (mode === 'ai' && cancels !== cancelsAtStart) throw cancelledError();   // cancelled while the caller prepared
   if (!force && blurCache.cacheKey === cacheKey && blurCache.blurMap) {
     logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results (${mode})`);
     return blurCache.blurMap;
@@ -903,11 +906,13 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
  * BLUR_CANCELLED, and a new analysis may start at once.
  */
 function cancelAnalysis() {
-  const cancelled = new Error('Blur analysis cancelled');
-  cancelled.code = 'BLUR_CANCELLED';
-  aiRun?.abort(cancelled);
+  cancels++;
+  aiRun?.abort(cancelledError());
   aiRun = null;
 }
+
+/** The number of cancels so far; a caller passes it to analyzeBlur from before its own preparation. */
+const cancelCount = () => cancels;
 
 /**
  * Ask ai-api whether it accepts a beta key, without sending a photo: a job
@@ -933,6 +938,7 @@ async function verifyBetaKey(key) {
 module.exports = {
   analyzeBlur,
   cancelAnalysis,
+  cancelCount,
   verifyBetaKey,
   clearCache,
   getCachedBlurResult,

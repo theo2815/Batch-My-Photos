@@ -294,11 +294,23 @@ describe('analysis needs a beta key', () => {
     await handlers.get('cancel-blur')({});
     expect(cancelAnalysis).toHaveBeenCalledTimes(1);
   });
+  it('passes the cancel count from before the folder read, so an early cancel is not lost', async () => {
+    let cancels = 0;
+    let handlers;
+    const analyzeBlur = vi.fn(async () => ({}));
+    ({ handlers } = ipcFor(configFor(storeManifest), { get: () => 'stored-key' }, {
+      './blurDetectionService': { analyzeBlur, cancelAnalysis: () => cancels++, cancelCount: () => cancels },
+      './securityManager': { isPathAllowedAsync: async () => true },
+      './batchEngine': { groupFilesByBaseName: async () => { await handlers.get('cancel-blur')({}); return {}; } },
+    }));
+    await handlers.get('analyze-blur')({ sender: { send() {} } }, { folderPath: temporaryFolder() });
+    expect(analyzeBlur.mock.calls[0].at(-1)).toBe(0);
+  });
   it.each([[401, true], [403, true], [503, false]])('an analysis answered %i forgets the stored key: %s', async (status, forgotten) => {
     const keyStore = { get: () => 'stored-key', clear: vi.fn() };
     const analyzeBlur = vi.fn(async () => { throw new Error(`AI service returned ${status}: nope`); });
     const { handlers } = ipcFor(configFor(storeManifest), keyStore, {
-      './blurDetectionService': { analyzeBlur },
+      './blurDetectionService': { analyzeBlur, cancelCount: () => 0 },
       './securityManager': { isPathAllowedAsync: async () => true },
       './batchEngine': { groupFilesByBaseName: async () => ({}) },
     });

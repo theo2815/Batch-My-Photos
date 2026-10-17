@@ -887,6 +887,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         return { success: false, error: 'Save your blur beta key before starting analysis.' };
       }
 
+      const cancelsAtStart = blurDetectionService.cancelCount();   // a Cancel during the folder read below still counts
+
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
         logger.warn('[SECURITY] Blocked analyze-blur on unregistered folder');
@@ -917,7 +919,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         (progress) => {
           event.sender.send('blur-progress', { ...progress, requestId });
         },
-        config.features.BLUR_BETA_ENABLED
+        config.features.BLUR_BETA_ENABLED,
+        cancelsAtStart
       );
 
       // Count blurry groups

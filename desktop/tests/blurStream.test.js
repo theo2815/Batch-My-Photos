@@ -476,6 +476,14 @@ describe('real blur stream client', () => {
     expect((await next).FIRST.predictedClass).toBe('motion_blurred');
   });
 
+  it('a cancel that lands before the run starts still stops it, and sends nothing', async () => {
+    const startedAt = blur.cancelCount();
+    blur.cancelAnalysis();   // e.g. while the IPC handler is still reading the folder
+    await expect(blur.analyzeBlur(groups, folder, 'moderate', null, null, false, startedAt))
+      .rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('waits when the re-check of a missing photo finds the service busy', async () => {
     vi.useFakeTimers();
     const progress = vi.fn();
