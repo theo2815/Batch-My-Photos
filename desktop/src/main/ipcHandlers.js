@@ -1643,6 +1643,20 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    */
   const previewCache = new Map();
 
+  // Read from the ORIGINAL file: the preview and blur-beta bytes carry no metadata. Never fails the preview.
+  async function readPreviewMetadata(filePath) {
+    let metadata = { status: 'failed' };
+    try {
+      metadata = await exifService.readPhotoMetadata(filePath);
+    } catch (_err) { /* keep 'failed' */ }
+    try {
+      // Header only, no decode. autoOrient swaps width and height for sideways (EXIF-rotated) photos.
+      const { autoOrient } = await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).metadata();
+      metadata = { ...metadata, width: autoOrient.width, height: autoOrient.height };
+    } catch (_err) { /* the info bar then shows no size */ }
+    return metadata;
+  }
+
   handle(ipcMain, 'get-image-preview', async (event, { folderPath, fileName }) => {
     // SECURITY: Validate folder path is in allowed list
     if (!(await isPathAllowedAsync(folderPath))) {
@@ -1695,6 +1709,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         width: info.width,
         height: info.height,
         contentHash,
+        metadata: await readPreviewMetadata(filePath),
       };
 
       // Add to LRU cache, evict oldest if full
