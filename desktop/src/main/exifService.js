@@ -2,7 +2,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const exifr = require('exifr');
-const { EXIF_CONCURRENCY } = require('./constants');
+const sharp = require('sharp');
+const { EXIF_CONCURRENCY, SHARP_MAX_INPUT_PIXELS } = require('./constants');
 const logger = require('../utils/logger');
 
 /**
@@ -378,6 +379,18 @@ function normalizeMetadata(tiff = {}, xmpIptc = {}) {
 }
 
 /**
+ * PNG XMP comes from sharp, which also unpacks compressed XMP (zTXt), as QuickPitik does; exifr reads only
+ * plain iTXt. Past 64 KB (more than a JPEG can hold) it is skipped: exifr parses broken XMP in squared time
+ * and froze the app (512 KB took ~18 s). Always a Buffer: exifr.sidecar fetches a string as a URL.
+ */
+async function pngXmp(filePath) {
+  const { xmp } = await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).metadata();
+  if (!xmp || xmp.length > 65535) return {};
+  const parsed = await exifr.sidecar(xmp, XMP_IPTC_OPTIONS, 'xmp'); // 'xmp': never try other parsers on it
+  return parsed ? { ...parsed, ifd0: parsed.tiff } : {}; // sidecar names the XMP tiff: namespace 'tiff'
+}
+
+/**
  * Reads QuickPitik's display-safe metadata from one ORIGINAL file. Never throws and never logs tag values.
  * @param {string} filePath - absolute path, already validated by the caller
  * @returns {Promise<{status: 'ready'|'empty'|'unavailable'|'failed', fields?: Object, fileSizeBytes?: number}>}
@@ -394,7 +407,9 @@ async function readPhotoMetadata(filePath) {
     if (!METADATA_EXTENSIONS.includes(path.extname(filePath).toLowerCase())) return withSize({ status: 'unavailable' });
     if (await startsWithZeroZero(filePath)) return withSize({ status: 'unavailable' });
     const tiff = await exifr.parse(filePath, TIFF_OPTIONS);
-    const xmpIptc = await exifr.parse(filePath, XMP_IPTC_OPTIONS);
+    const xmpIptc = path.extname(filePath).toLowerCase() === '.png'
+      ? await pngXmp(filePath).catch(() => ({})) // damaged XMP loses only the XMP; exifr reads no PNG IPTC
+      : await exifr.parse(filePath, XMP_IPTC_OPTIONS);
     const fields = normalizeMetadata(tiff || {}, xmpIptc || {});
     return withSize(Object.keys(fields).length > 0 ? { status: 'ready', fields } : { status: 'empty' });
   } catch (_err) {

@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import zlib from 'node:zlib';
 import { createRequire } from 'node:module';
+import sharp from 'sharp';
 
 const root = path.resolve(import.meta.dirname, '..');
 const folders = [];
@@ -218,5 +220,47 @@ describe('readPhotoMetadata', () => {
     const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
     expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
       exposureTime: '1.5 s', cameraMake: '7', cameraModel: '1234', lens: '50', author: '12345', copyright: '2026' });
+  });
+
+  const xmpOf = body => '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    + `<rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">${body}</rdf:Description></rdf:RDF></x:xmpmeta>`;
+  const blankPng = () => sharp({ create: { width: 1, height: 1, channels: 3, background: '#888' } }).png().toBuffer();
+
+  // exifr parses broken XMP in squared time: 256 KB froze the app ~4.6 s, 512 KB ~18 s (review 2026-10-17).
+  it('skips a broken PNG XMP block bigger than a JPEG can hold, and answers fast', async () => {
+    const xml = Buffer.from(xmpOf('<dc:creator><rdf:Seq><rdf:li>Ana Cebu</rdf:li></rdf:Seq></dc:creator>'
+      + '<x:a>'.repeat(52000)));
+    const body = Buffer.concat([Buffer.from('iTXtXML:com.adobe.xmp\0\0\0\0\0', 'latin1'), xml]);
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(body.length - 4);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body));
+    const base = await blankPng();
+    const folder = folderWith({ 'x.png': Buffer.concat([base.subarray(0, 33), head, body, crc, base.subarray(33)]) });
+    const started = Date.now();
+    const result = await realExif().readPhotoMetadata(path.join(folder, 'x.png'));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(result.fields?.author).toBeUndefined();
+  });
+
+  it('reads compressed PNG XMP (zTXt), like QuickPitik', async () => {
+    const xml = xmpOf('<dc:creator><rdf:Seq><rdf:li>Ana Cebu</rdf:li></rdf:Seq></dc:creator>'
+      + '<dc:rights><rdf:Alt><rdf:li xml:lang="x-default">(c) Ana</rdf:li></rdf:Alt></dc:rights>');
+    const png = await sharp(await blankPng()).withXmp(xml).png().toBuffer(); // sharp writes XMP as zTXt
+    const folder = folderWith({ 'x.png': png });
+    expect((await realExif().readPhotoMetadata(path.join(folder, 'x.png'))).fields).toEqual({
+      author: 'Ana Cebu', copyright: '(c) Ana' });
+  });
+
+  it('a PNG whose XMP sharp cannot read still shows its EXIF', async () => {
+    const parse = vi.fn(async (_file, options) => (options.tiff ? { ifd0: { Artist: 'Jo' } } : undefined));
+    const metadata = vi.fn(async () => { throw new Error('bad chunk'); });
+    const { readPhotoMetadata } = load('src/main/exifService.js', {
+      exifr: { parse }, sharp: () => ({ metadata }), '../utils/logger': logger,
+    });
+    const folder = folderWith({ 'x.png': Buffer.from('89504e47', 'hex') });
+    expect(await readPhotoMetadata(path.join(folder, 'x.png'))).toEqual({
+      status: 'ready', fields: { author: 'Jo' }, fileSizeBytes: 4 });
+    expect(metadata).toHaveBeenCalled();
   });
 });
