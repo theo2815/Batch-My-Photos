@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2, ScanEye, Pencil } from 'lucide-react';
+import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2, ScanEye, Pencil, KeyRound, Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react';
 import CustomSelect from '../common/CustomSelect';
 import Tooltip from '../common/Tooltip';
 import { ValidationModal, DeletePresetModal } from '../Modals';
@@ -64,6 +64,7 @@ function SettingsPanel({
   const [betaKeyError, setBetaKeyError] = useState('');
   const [betaStatusError, setBetaStatusError] = useState('');
   const [checkingBetaKey, setCheckingBetaKey] = useState(false);
+  const [showBetaKey, setShowBetaKey] = useState(false);
   const loadBetaKeyStatus = useCallback(async () => {
     setCheckingBetaKey(true);
     setBetaStatusError('');
@@ -88,6 +89,7 @@ function SettingsPanel({
       if (!status.configured) throw new Error('Key was not saved');
       setBetaKeyStatus(status);
       setBetaKey('');
+      setShowBetaKey(false);
       setReplacingBetaKey(false);
     } catch (_error) {
       setBetaKeyError('Could not save the beta key. Try again.');
@@ -452,22 +454,37 @@ function SettingsPanel({
         </div>
       )}
       {isBeta && betaKeyStatus?.enabled && (
-        <div className="blur-beta-key">
+        <div className={`blur-beta-key${betaKeyStatus.configured && !replacingBetaKey ? ' blur-beta-key--saved' : ''}`}>
           {betaKeyStatus.configured && !replacingBetaKey ? <>
-            <p role="status">Beta key saved on this device.</p>
-            <button type="button" className="btn-small" onClick={() => setReplacingBetaKey(true)}>Replace beta key</button>
+            <p role="status" className="blur-beta-key-saved">
+              <CheckCircle2 size={16} aria-hidden="true" /> Beta key saved on this device.
+            </p>
+            <button type="button" className="blur-beta-key-ghost" onClick={() => setReplacingBetaKey(true)}>Replace beta key</button>
           </> : (
             <>
-              <label htmlFor="blur-beta-key">Blur beta key</label>
-              <p>Enter the key provided for this beta before starting analysis.</p>
+              <div className="blur-beta-key-title">
+                <KeyRound size={16} aria-hidden="true" />
+                <label htmlFor="blur-beta-key">Blur beta key</label>
+                <span className="blur-beta-key-chip">Beta</span>
+              </div>
+              <p>Enter the key from your beta invite email before starting analysis.</p>
               <div className="blur-beta-key-controls">
-                <input id="blur-beta-key" type="password" autoComplete="off"
-                  value={betaKey} onChange={e => setBetaKey(e.target.value)}
-                  disabled={savingBetaKey} aria-describedby="blur-beta-key-help" />
-                <button type="button" className="btn-small" disabled={!betaKey.trim() || savingBetaKey}
+                <div className="blur-beta-key-field">
+                  <input id="blur-beta-key" type={showBetaKey ? 'text' : 'password'} autoComplete="off" spellCheck={false}
+                    value={betaKey} onChange={e => setBetaKey(e.target.value)}
+                    disabled={savingBetaKey} aria-describedby="blur-beta-key-help" />
+                  <button type="button" className="blur-beta-key-eye" aria-pressed={showBetaKey}
+                    aria-label={showBetaKey ? 'Hide beta key' : 'Show beta key'}
+                    onClick={() => setShowBetaKey(shown => !shown)}>
+                    {showBetaKey ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                  </button>
+                </div>
+                <button type="button" className="blur-beta-key-save" disabled={!betaKey.trim() || savingBetaKey}
                   onClick={saveBetaKey}>{savingBetaKey ? 'Saving...' : 'Save beta key'}</button>
               </div>
-              <span id="blur-beta-key-help">Stored securely on this device.</span>
+              <span id="blur-beta-key-help" className="blur-beta-key-help">
+                <Lock size={12} aria-hidden="true" /> Stored securely on this device.
+              </span>
               {betaKeyError && <p role="alert">{betaKeyError}</p>}
             </>
           )}

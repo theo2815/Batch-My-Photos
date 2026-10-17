@@ -291,6 +291,24 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith('test-beta-key');
     expect(nodes(render(SettingsPanel, p)).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
   });
+  it('shows the typed beta key only on request and hides it again after saving', async () => {
+    const p = { isBeta: true };
+    const field = tree => nodes(tree).find(n => n.type === 'input' && n.props.id === 'blur-beta-key');
+    const eye = tree => nodes(tree).find(n => n.type === 'button' && /beta key$/.test(n.props['aria-label'] || ''));
+    render(SettingsPanel, p); await effects();
+    let tree = render(SettingsPanel, p);
+    expect(field(tree).props.type).toBe('password');
+    expect(eye(tree).props['aria-label']).toBe('Show beta key');
+    eye(tree).props.onClick();
+    tree = render(SettingsPanel, p);
+    expect(field(tree).props).toMatchObject({ type: 'text', spellCheck: false });
+    expect(eye(tree).props['aria-label']).toBe('Hide beta key');
+    field(tree).props.onChange({ target: { value: 'test-beta-key' } });
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
+    button(render(SettingsPanel, p), 'Replace beta key').props.onClick();
+    expect(field(render(SettingsPanel, p)).props.type).toBe('password');
+  });
   it('reloads the selected beta preview when a new analysis replaces results', async () => {
     const firstVersion = {};
     renderPreview({ ...props, previewVersion: firstVersion }); await effects();
