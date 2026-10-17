@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { STRINGS, formatString } from '../../constants/strings';
 import { useQuickPitikUpload } from '../../hooks/useQuickPitikUpload';
+import ConfirmDialog from '../Modals/ConfirmDialog';
 import ConnectCard from './ConnectCard';
-import EventPicker from './EventPicker';
+import EventPicker, { ChosenEvent } from './EventPicker';
 import FolderDrop from './FolderDrop';
 import ReviewTable from './ReviewTable';
 import UploadProgress from './UploadProgress';
@@ -12,6 +13,7 @@ import './Upload.css';
 /** The Upload view: one card per state, driven by useQuickPitikUpload. Never changes files on disk. */
 function UploadView({ onBusyChange }) {
   const qp = useQuickPitikUpload({ onBusyChange });
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   if (qp.status === 'disconnected' || qp.status === 'connecting') {
     return <ConnectCard status={qp.status} error={qp.error} onConnect={qp.connect} />;
@@ -29,25 +31,42 @@ function UploadView({ onBusyChange }) {
   }
 
   const event = qp.events.find(e => e.id === qp.eventId) || null;
+  const scanning = qp.status === 'scanning';
   return (
     <div className="upload-view">
       <div className="upload-session">
         <span className="upload-kicker">{formatString(STRINGS.QP_CONNECTED_AS, { email: qp.session?.email ?? '' })}</span>
-        <button type="button" className="upload-link" onClick={qp.disconnect} disabled={qp.status === 'scanning'}>{STRINGS.QP_BTN_DISCONNECT}</button>
+        <button type="button" className="upload-link" onClick={() => setConfirmingDisconnect(true)} disabled={scanning}>{STRINGS.QP_BTN_DISCONNECT}</button>
       </div>
-      <EventPicker events={qp.events} value={qp.eventId} onChange={qp.setEventId} onRefresh={qp.loadEvents} disabled={qp.status === 'scanning'} />
-      {qp.status === 'reviewing' && qp.scan ? (
+      {/* The folder comes after the event: until one is chosen there is no drop zone. A scan already made is kept. */}
+      {event ? (
+        <ChosenEvent event={event} onChange={() => qp.setEventId('')} disabled={scanning} />
+      ) : (
+        <EventPicker
+          events={qp.events} value={qp.eventId} onChange={qp.setEventId} onRefresh={qp.loadEvents}
+          disabled={scanning} loading={qp.eventsLoading} loadedAt={qp.eventsLoadedAt}
+        />
+      )}
+      {!event && !qp.eventsLoading && qp.events.some(e => e.uploadWindow === 'open') && <p className="upload-muted">{STRINGS.QP_PICK_EVENT_HINT}</p>}
+      {event && (qp.status === 'reviewing' && qp.scan ? (
         <ReviewTable
           scan={qp.scan} selected={qp.selected} selectedCount={qp.selectedCount} event={event}
           onToggle={qp.toggleFolder} onUpload={() => qp.startUpload()} onChangeFolder={qp.reset}
         />
       ) : (
         <FolderDrop
-          isDragOver={qp.isDragOver} scanning={qp.status === 'scanning'}
+          isDragOver={qp.isDragOver} scanning={scanning}
           onDragOver={qp.handleDragOver} onDragLeave={qp.handleDragLeave} onDrop={qp.handleDrop} onClick={qp.chooseFolder}
         />
-      )}
+      ))}
       {qp.error && <p role="alert" className="upload-error">{qp.error.message}</p>}
+      <ConfirmDialog
+        isOpen={confirmingDisconnect} danger
+        title={STRINGS.QP_DISCONNECT_TITLE} message={STRINGS.QP_DISCONNECT_BODY}
+        confirmLabel={STRINGS.QP_BTN_DISCONNECT} cancelLabel={STRINGS.BTN_CANCEL}
+        onConfirm={() => { setConfirmingDisconnect(false); qp.disconnect(); }}
+        onCancel={() => setConfirmingDisconnect(false)}
+      />
     </div>
   );
 }

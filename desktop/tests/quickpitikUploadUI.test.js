@@ -25,6 +25,8 @@ import ReviewTable from '../src/components/Upload/ReviewTable.jsx';
 import UploadSummary from '../src/components/Upload/UploadSummary.jsx';
 import UploadView from '../src/components/Upload/UploadView.jsx';
 import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
+import ConnectCard from '../src/components/Upload/ConnectCard.jsx';
+import ConfirmDialog from '../src/components/Modals/ConfirmDialog.jsx';
 import EventPicker, { ChosenEvent } from '../src/components/Upload/EventPicker.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
 import { useFolderSelection } from '../src/hooks/useFolderSelection.js';
@@ -519,21 +521,146 @@ describe('useQuickPitikUpload', () => {
 });
 
 describe('UploadView', () => {
-  it('Disconnect cannot be pressed while a folder is being read', async () => {
-    vi.stubGlobal('window', { electronAPI: {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-10T12:00:00+08:00')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  function viewApi(over = {}) {
+    const api = {
       qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
       onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn(() => () => {}),
       qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event] }),
       selectFolder: vi.fn().mockResolvedValue('D:/Shoots/Theo dipolog'),
-      qpScanFolder: vi.fn(() => new Promise(() => {})),
-    } });
+      qpScanFolder: vi.fn().mockResolvedValue(scan),
+      qpDisconnect: vi.fn().mockResolvedValue({ success: true }),
+      ...over,
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    return api;
+  }
+  async function view() {
     render(UploadView, {}); await effects();
     render(UploadView, {}); await effects();
-    let tree = render(UploadView, {});
+    return render(UploadView, {});
+  }
+  const find = (tree, type) => nodes(tree).find(n => n.type === type);
+  async function chooseEvent(tree) {
+    find(tree, EventPicker).props.onChange('e1');
+    return render(UploadView, {});
+  }
+
+  it('shows no drop zone until an open event is chosen, then folds the list to that event', async () => {
+    viewApi();
+    let tree = await view();
+    expect(find(tree, EventPicker)).toBeDefined();
+    expect(find(tree, FolderDrop)).toBeUndefined();
+    expect(text(tree)).toContain('Choose an open event, then add your shoot folder.');
+    tree = await chooseEvent(tree);
+    expect(find(tree, EventPicker)).toBeUndefined();
+    expect(find(tree, ChosenEvent).props.event.id).toBe('e1');
+    expect(find(tree, FolderDrop)).toBeDefined();
+    expect(text(tree)).not.toContain('Choose an open event');
+  });
+
+  it('gives no hint to choose when no event is open', async () => {
+    viewApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [{ ...event, uploadWindow: 'upcoming' }] }) });
+    expect(text(await view())).not.toContain('Choose an open event');
+  });
+
+  it('Change opens the list again and keeps a folder already read', async () => { // Review Focus 2
+    viewApi();
+    let tree = await chooseEvent(await view());
+    await find(tree, FolderDrop).props.onClick(); // no effects(): the test React re-runs the mount effect
+    tree = render(UploadView, {});
+    expect(find(tree, ReviewTable)).toBeDefined();
+    find(tree, ChosenEvent).props.onChange();
+    tree = render(UploadView, {});
+    expect(find(tree, EventPicker)).toBeDefined();
+    expect(find(tree, ReviewTable)).toBeUndefined();
+    tree = await chooseEvent(tree);
+    expect(find(tree, ReviewTable).props.scan).toBe(scan);
+  });
+
+  it('Disconnect asks first: Cancel keeps the session, Disconnect signs out', async () => {
+    const api = viewApi();
+    let tree = await view();
+    expect(find(tree, ConfirmDialog).props.isOpen).toBe(false);
+    button(tree, 'Disconnect').props.onClick();
+    tree = render(UploadView, {});
+    const dialog = find(tree, ConfirmDialog);
+    expect(dialog.props).toMatchObject({ isOpen: true, danger: true, title: 'Disconnect from QuickPitik?', confirmLabel: 'Disconnect', cancelLabel: 'Cancel' });
+    dialog.props.onCancel();
+    tree = render(UploadView, {});
+    expect(find(tree, ConfirmDialog).props.isOpen).toBe(false);
+    expect(api.qpDisconnect).not.toHaveBeenCalled();
+
+    button(tree, 'Disconnect').props.onClick();
+    find(render(UploadView, {}), ConfirmDialog).props.onConfirm(); await effects();
+    tree = render(UploadView, {});
+    expect(api.qpDisconnect).toHaveBeenCalledTimes(1);
+    expect(tree.type).toBe(ConnectCard);
+  });
+
+  it('Disconnect and Change cannot be pressed while a folder is being read', async () => {
+    viewApi({ qpScanFolder: vi.fn(() => new Promise(() => {})) });
+    let tree = await chooseEvent(await view());
     expect(button(tree, 'Disconnect').props.disabled).toBe(false);
-    nodes(tree).find(n => n.type === FolderDrop).props.onClick(); await effects();
+    find(tree, FolderDrop).props.onClick(); await effects();
     tree = render(UploadView, {});
     expect(button(tree, 'Disconnect').props.disabled).toBe(true);
+    expect(find(tree, ChosenEvent).props.disabled).toBe(true);
+  });
+});
+
+describe('ConfirmDialog', () => {
+  const dialog = (props) => render(ConfirmDialog, {
+    isOpen: true, title: 'Disconnect from QuickPitik?', message: 'You will need to connect again.',
+    confirmLabel: 'Disconnect', cancelLabel: 'Cancel', onConfirm: noop, onCancel: noop, ...props,
+  });
+
+  it('shows nothing while closed', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    expect(dialog({ isOpen: false })).toBeNull();
+  });
+
+  it('asks the question, starts on the safe answer, and reports each answer', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const onConfirm = vi.fn(); const onCancel = vi.fn();
+    const tree = dialog({ onConfirm, onCancel, danger: true });
+    const box = nodes(tree).find(n => n.props?.role === 'alertdialog');
+    expect(box.props['aria-modal']).toBe('true');
+    expect(text(tree)).toContain('Disconnect from QuickPitik?');
+    expect(text(tree)).toContain('You will need to connect again.');
+    expect(button(tree, 'Cancel').props.autoFocus).toBe(true);
+    expect(button(tree, 'Disconnect').props.className).toBe('btn danger');
+    button(tree, 'Disconnect').props.onClick();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    button(tree, 'Cancel').props.onClick();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click outside the box cancels; a click inside does not', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const onCancel = vi.fn();
+    const tree = dialog({ onCancel });
+    tree.props.onClick();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    const stopPropagation = vi.fn();
+    nodes(tree).find(n => n.props?.role === 'alertdialog').props.onClick({ stopPropagation });
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
+  it('Escape cancels, and the key listener goes away when it closes', async () => {
+    const listeners = {};
+    const win = { addEventListener: vi.fn((type, fn) => { listeners[type] = fn; }), removeEventListener: vi.fn() };
+    vi.stubGlobal('window', win);
+    const onCancel = vi.fn();
+    dialog({ onCancel }); await effects();
+    listeners.keydown({ key: 'Enter', preventDefault() {} });
+    expect(onCancel).not.toHaveBeenCalled();
+    listeners.keydown({ key: 'Escape', preventDefault() {} });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    dialog({ onCancel, isOpen: false }); await effects();
+    expect(win.removeEventListener).toHaveBeenCalledWith('keydown', listeners.keydown);
   });
 });
 
