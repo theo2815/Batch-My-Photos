@@ -113,7 +113,7 @@ describe('real blur stream client', () => {
     expect(progress.mock.calls.map(([value]) => value.current)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
-  it('caps each request at 100 images even when the byte budget fits more', async () => {
+  it('caps each request at 25 images even when the byte budget fits more', async () => {
     const smallBlur = blurWithByteBudget(60000);
     const counts = [];
     fetchMock.mockImplementation(async (_url, { body }) => {
@@ -121,10 +121,10 @@ describe('real blur stream client', () => {
       counts.push(files.length);
       return ndjsonResponse([...files.map((_file, i) => row(i)), summary(files.length)]);
     });
-    const input = Object.fromEntries(Array.from({ length: 101 }, (_unused, i) => ['GROUP' + i, ['FIRST.jpg']]));
+    const input = Object.fromEntries(Array.from({ length: 60 }, (_unused, i) => ['GROUP' + i, ['FIRST.jpg']]));
     const results = await smallBlur.analyzeBlur(input, folder);
-    expect(counts).toEqual([100, 1]);
-    expect(Object.keys(results)).toHaveLength(101);
+    expect(counts).toEqual([25, 25, 10]);
+    expect(Object.keys(results)).toHaveLength(60);
   });
 
   it('continues every byte-split group through sequential single-image fallback', async () => {
