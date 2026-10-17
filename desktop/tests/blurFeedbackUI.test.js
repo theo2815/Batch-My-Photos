@@ -53,7 +53,7 @@ const props = { isOpen: true, isBeta: true, folderPath: 'C:/fixture', fileName: 
 beforeEach(() => {
   hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
   feedbackHooks = { values: [], cursor: 0, effects: [], deps: [], cleanups: [] };
-  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512, contentHash: 'a'.repeat(64) }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512, contentHash: 'a'.repeat(64) }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true), cancelBlurAnalysis: vi.fn().mockResolvedValue({ success: true }) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal('document', { activeElement: { focus: vi.fn() }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
 
@@ -403,6 +403,19 @@ describe('explicit beta feedback consent', () => {
     await render(useBlurDetection, p).submitExample('same.jpg', 'sharp', 'a'.repeat(64));
     expect(render(useBlurDetection, p).getSubmission('same.jpg', 'a'.repeat(64)).status).toBe('success');
     expect(render(useBlurDetection, p).getSubmission('same.jpg', 'b'.repeat(64))).toBeUndefined();
+  });
+
+  it('a folder change, blur off or Reset also stops a running analysis in main', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn(() => new Promise(resolve => { finishOld = resolve; }));
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
+    finishOld({ success: false, error: 'cancelled' });
+    await old;
+    render(useBlurDetection, p).resetBlurState();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it('queues a restart after toggle reset until the old main request settles', async () => {

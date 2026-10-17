@@ -226,16 +226,15 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     setAiUnavailable(false);
     lastAnalysisRef.current = { folderPath: null, key: null };
     // Keep the guard until main settles; a toggle must not start another stream.
+    // Stop the old run in main so it does not keep waiting on a busy service.
+    if (analysisInFlightRef.current) window.electronAPI.cancelBlurAnalysis();
   }, []);
 
   /**
    * Cancel the running analysis: main stops sending photos, and the run ends
    * like a reset (no results, no error); the user can start a new one.
    */
-  const cancelAnalysis = useCallback(() => {
-    resetBlurState();
-    window.electronAPI.cancelBlurAnalysis();
-  }, [resetBlurState]);
+  const cancelAnalysis = useCallback(() => resetBlurState(), [resetBlurState]);
 
   /**
    * Clear only the analysis cache so the next runBlurAnalysis() call
