@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Loader2, ImageOff, Undo2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Loader2, ImageOff, Undo2, Info } from 'lucide-react';
+import PhotoMetadataPanel from './PhotoMetadataPanel';
 import './Modals.css';
 
 /**
@@ -26,6 +27,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [prevDataUrl, setPrevDataUrl] = useState(null); // For fade transition
+  const [showMetadata, setShowMetadata] = useState(false); // Stays open while arrowing between photos
   const prefetchRef = useRef({}); // Cache for prefetched images
   const modalRef = useRef(null);
 
@@ -78,7 +80,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         if (cancelled) return;
 
         if (result.success) {
-          setPreviewData({ fileName: currentFile, dataUrl: result.dataUrl, width: result.width, height: result.height, contentHash: result.contentHash });
+          setPreviewData({ fileName: currentFile, dataUrl: result.dataUrl, width: result.width, height: result.height, contentHash: result.contentHash, metadata: result.metadata });
           setError(null);
         } else {
           setPreviewData(null);
@@ -124,6 +126,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
             width: result.width,
             height: result.height,
             contentHash: result.contentHash,
+            metadata: result.metadata,
           };
         }
       } catch (_) {
@@ -143,6 +146,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
       setPrevDataUrl(null);
       setError(null);
       setIsLoading(false);
+      setShowMetadata(false);
     }
   }, [isOpen]);
 
@@ -183,7 +187,9 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
       switch (e.key) {
         case 'Escape':
           e.preventDefault();
-          onClose();
+          // First Escape closes the metadata panel, the next one closes the preview.
+          if (showMetadata) setShowMetadata(false);
+          else onClose();
           break;
         case 'ArrowLeft':
           e.preventDefault();
@@ -200,7 +206,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, goToPrev, goToNext]);
+  }, [isOpen, onClose, goToPrev, goToNext, showMetadata]);
 
   // Focus the modal when it opens
   useEffect(() => {
@@ -219,7 +225,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
 
   return (
     <div
-      className={`image-preview-overlay ${analyzedImage ? 'image-preview-beta' : ''}`}
+      className={`image-preview-overlay ${analyzedImage ? 'image-preview-beta' : ''} ${showMetadata ? 'image-preview-with-metadata' : ''}`}
       onClick={onClose}
       ref={modalRef}
       tabIndex={-1}
@@ -317,6 +323,15 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         </section>
       )}
 
+      {showMetadata && (
+        <PhotoMetadataPanel
+          id="photo-metadata-panel"
+          fileName={currentFile}
+          loading={isLoading}
+          metadata={previewData?.fileName === currentFile ? previewData.metadata : undefined}
+        />
+      )}
+
       {/* Bottom info bar */}
       {(() => {
         // Look up blur info for the current file (supports navigation)
@@ -327,9 +342,9 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         return (
           <div className="image-preview-info" onClick={(e) => e.stopPropagation()}>
             <span className="image-preview-filename">{currentFile}</span>
-            {previewData && (
+            {previewData?.fileName === currentFile && previewData.metadata?.width && (
               <span className="image-preview-dimensions">
-                {previewData.width} x {previewData.height}
+                {previewData.metadata.width} x {previewData.metadata.height}
               </span>
             )}
             {hasBlurContext && (
@@ -346,6 +361,16 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
                 <span>Restore</span>
               </button>
             )}
+            <button
+              type="button"
+              className="image-preview-metadata-toggle"
+              aria-expanded={showMetadata}
+              aria-controls="photo-metadata-panel"
+              onClick={() => setShowMetadata((open) => !open)}
+            >
+              <Info size={14} aria-hidden="true" />
+              <span>Metadata</span>
+            </button>
             {positionLabel && (
               <span className="image-preview-position">{positionLabel}</span>
             )}
