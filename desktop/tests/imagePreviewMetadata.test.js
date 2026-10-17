@@ -133,6 +133,22 @@ describe('get-image-preview metadata', () => {
     expect(result.metadata).toEqual({ status: 'failed', width: 1000, height: 2000 });
   });
 
+  it('a failed size read still opens the preview and shows no size', async () => {
+    // Beta mode lets the preview come from prepared bytes while sharp cannot read the original's header.
+    fs.writeFileSync(path.join(folder, 'photo.jpg'), 'not a photo');
+    config.features.BLUR_BETA_ENABLED = true;
+    blur = {
+      prepareImageForUpload: async () =>
+        sharp({ create: { width: 64, height: 32, channels: 3, background: 'gray' } })
+          .jpeg()
+          .toBuffer(),
+    };
+    exifService = { readPhotoMetadata: async () => ({ status: 'empty', fileSizeBytes: 11 }) };
+    const result = await preview();
+    expect(result.success).toBe(true);
+    expect(result.metadata).toEqual({ status: 'empty', fileSizeBytes: 11 });
+  });
+
   it('serves metadata from the preview cache on a repeat request', async () => {
     const spy = vi.spyOn(exifService, 'readPhotoMetadata');
     const get = previewHandler();
