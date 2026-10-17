@@ -79,13 +79,6 @@
   color: var(--text-primary);
 }
 
-.upload-event-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  margin-top: var(--space-md);
-}
-
 /* One event = one button. The chosen one is marked in ink, so green stays with the primary button. */
 .upload-event-option {
   display: grid;
@@ -270,4 +263,172 @@
   padding: 0;
   margin: var(--space-sm) 0 0;
   font-size: 0.85rem;
+}
+
+/* ── Event list: tabs, search, pages, loading ─────────────────────────────── */
+
+.upload-refresh {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  white-space: nowrap;
+}
+
+.upload-refresh .upload-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.upload-updated {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.upload-spin {
+  animation: upload-spin 0.9s linear infinite;
+}
+
+@keyframes upload-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Three segments on a paper inset; the chosen one is inked, like the "Your event" tag. */
+.upload-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  width: fit-content;
+  margin-top: var(--space-md);
+  padding: var(--space-xs);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-pill);
+}
+
+.upload-tab {
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.upload-tab:hover {
+  color: var(--text-primary);
+}
+
+.upload-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.upload-tab[aria-pressed='true'] {
+  color: var(--bg-primary);
+  background: var(--text-primary);
+}
+
+.upload-search {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.upload-search::placeholder {
+  color: var(--text-muted);
+}
+
+.upload-search:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.upload-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+/* Rows settle in one after another when a tab, page or search changes. */
+.upload-event-list > * {
+  animation: upload-row-in 220ms ease-out both;
+}
+
+.upload-event-list > :nth-child(2) { animation-delay: 30ms; }
+.upload-event-list > :nth-child(3) { animation-delay: 60ms; }
+.upload-event-list > :nth-child(4) { animation-delay: 90ms; }
+.upload-event-list > :nth-child(5) { animation-delay: 120ms; }
+
+@keyframes upload-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Upcoming and closed rows: shown for reference, no radio circle, no hover. */
+.upload-event-option.static {
+  grid-template-columns: minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+.upload-event-option.static::before {
+  display: none;
+}
+
+.upload-skeleton {
+  height: 74px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: upload-shimmer 1.2s linear infinite;
+}
+
+@keyframes upload-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.upload-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-md);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* The chosen event, folded to one line above the drop zone. */
+.upload-chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-lg);
+  animation: upload-row-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-spin,
+  .upload-skeleton,
+  .upload-chosen,
+  .upload-event-list > * {
+    animation: none;
+  }
 }

@@ -1,53 +1,150 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { STRINGS, formatString } from '../../constants/strings';
 
 const MANILA_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
+const MANILA_TIME = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
 const RACE_DATE = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const PAGE_SIZE = 5;
+const TABS = [
+  ['open', STRINGS.QP_EVENT_TAB_OPEN],
+  ['upcoming', STRINGS.QP_EVENT_TAB_UPCOMING],
+  ['closed', STRINGS.QP_EVENT_TAB_CLOSED],
+];
+const EMPTY = { open: STRINGS.QP_NO_EVENTS, upcoming: STRINGS.QP_NO_UPCOMING, closed: STRINGS.QP_NO_CLOSED };
 
-/** "10 Oct 2026" from a YYYY-MM-DD race date. */
+/** "10 Oct 2026" from a YYYY-MM-DD date. */
 function raceDate(dateIso) {
   const part = Object.fromEntries(RACE_DATE.formatToParts(new Date(dateIso)).map(p => [p.type, p.value]));
   return `${part.day} ${part.month} ${part.year}`;
 }
 
-/** Days left are counted in Manila, the same way the main process decides which events are open. */
+/** Whole days from Manila-today to a YYYY-MM-DD date, counted the same way the main process does. */
+function daysFromToday(dateIso) {
+  return Math.round((Date.parse(dateIso) - Date.parse(MANILA_DATE.format(new Date()))) / 86400000);
+}
+
 function closesText(closesOn) {
-  const days = Math.round((Date.parse(closesOn) - Date.parse(MANILA_DATE.format(new Date()))) / 86400000);
+  const days = daysFromToday(closesOn);
   if (days <= 0) return STRINGS.QP_EVENT_CLOSES_TODAY;
   return days === 1 ? STRINGS.QP_EVENT_CLOSES_IN_ONE : formatString(STRINGS.QP_EVENT_CLOSES_IN, { count: days });
 }
 
-/** Events open for upload (public window + the photographer's own), from qpListEvents. */
-function EventPicker({ events, value, onChange, onRefresh, disabled }) {
-  const groups = [
-    [STRINGS.QP_EVENT_GROUP_OWN, events.filter(event => event.ownedByMe)],
-    [STRINGS.QP_EVENT_GROUP_PUBLIC, events.filter(event => !event.ownedByMe)],
-  ].filter(([, list]) => list.length > 0);
+function windowText(event) {
+  if (event.uploadWindow === 'upcoming') {
+    const days = daysFromToday(event.date);
+    return days === 1 ? STRINGS.QP_EVENT_OPENS_TOMORROW : formatString(STRINGS.QP_EVENT_OPENS_IN, { count: days });
+  }
+  if (event.uploadWindow === 'closed') {
+    // An archived event can close before its last upload day; then there is no date to give.
+    return daysFromToday(event.closesOn) < 0 ? formatString(STRINGS.QP_EVENT_CLOSED_ON, { date: raceDate(event.closesOn) }) : STRINGS.QP_EVENT_CLOSED;
+  }
+  return closesText(event.closesOn);
+}
+
+const whenText = event => [raceDate(event.date), event.location].filter(Boolean).join(' · ');
+
+function matches(event, query) {
+  const q = query.trim().toLowerCase();
+  return !q || `${event.name} ${event.location || ''}`.toLowerCase().includes(q);
+}
+
+/** One row. A plain function, not a component, so the tests' tree shows it rendered. */
+function eventRow(event, { chosen, disabled, onChange }) {
+  const body = [
+    <span key="main" className="upload-event-main">
+      <span className="upload-event-name">{event.name}</span>
+      <span className="upload-event-when">{whenText(event)}</span>
+    </span>,
+    <span key="side" className="upload-event-side">
+      <span className={`upload-event-tag${event.ownedByMe ? ' own' : ''}`}>{event.ownedByMe ? STRINGS.QP_EVENT_TAG_OWN : STRINGS.QP_EVENT_TAG_PUBLIC}</span>
+      <span className="upload-event-closes">{windowText(event)}</span>
+    </span>,
+  ];
+  // Only an open event can be chosen; upcoming and closed ones are shown for reference.
+  if (event.uploadWindow !== 'open') return <div key={event.id} className="upload-event-option static">{body}</div>;
+  return (
+    <button key={event.id} type="button" className="upload-event-option" aria-pressed={chosen} disabled={disabled} onClick={() => onChange(event.id)}>
+      {body}
+    </button>
+  );
+}
+
+/** The chosen event, folded to one line, with a way back to the list. */
+export function ChosenEvent({ event, onChange, disabled }) {
+  return (
+    <div className="upload-chosen">
+      <span className="upload-event-main">
+        <span className="upload-kicker">{STRINGS.QP_UPLOADING_TO}</span>
+        <span className="upload-event-name">{event.name}</span>
+        <span className="upload-event-when">{[whenText(event), closesText(event.closesOn)].join(' · ')}</span>
+      </span>
+      <button type="button" className="upload-link" onClick={onChange} disabled={disabled}>{STRINGS.QP_BTN_CHANGE_EVENT}</button>
+    </div>
+  );
+}
+
+/** Events from qpListEvents in three tabs (open, upcoming, closed), searchable, five to a page. */
+function EventPicker({ events, value, onChange, onRefresh, disabled, loading, loadedAt }) {
+  const [tab, setTab] = useState('open');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+
+  const found = events.filter(event => matches(event, query));
+  const list = found.filter(event => event.uploadWindow === tab);
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1); // a Refresh can shorten the list under the page
+  const shown = list.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+  const firstLoad = loading && events.length === 0;
+
+  let empty = null;
+  if (!firstLoad && list.length === 0) empty = query.trim() ? formatString(STRINGS.QP_NO_MATCH, { query: query.trim() }) : EMPTY[tab];
+
   return (
     <div className="upload-event">
       <div className="upload-event-row">
         <h2 className="upload-event-title">{STRINGS.QP_EVENT_HEADING}</h2>
-        <button type="button" className="upload-link" onClick={onRefresh} disabled={disabled}>{STRINGS.QP_BTN_REFRESH_EVENTS}</button>
+        <span className="upload-refresh">
+          {loadedAt && !loading && <span className="upload-updated">{formatString(STRINGS.QP_EVENTS_UPDATED, { time: MANILA_TIME.format(loadedAt) })}</span>}
+          <button type="button" className="upload-link" onClick={onRefresh} disabled={disabled || loading}>
+            <RefreshCw size={13} aria-hidden="true" className={loading ? 'upload-spin' : undefined} />
+            {loading ? STRINGS.QP_BTN_REFRESHING : STRINGS.QP_BTN_REFRESH_EVENTS}
+          </button>
+        </span>
       </div>
       <p className="upload-muted">{STRINGS.QP_EVENT_HELP}</p>
-      {groups.map(([heading, list]) => (
-        <div key={heading} className="upload-event-group" role="group" aria-label={heading}>
-          <span className="upload-kicker">{heading}</span>
-          {list.map(event => (
-            <button key={event.id} type="button" className="upload-event-option" aria-pressed={event.id === value} disabled={disabled} onClick={() => onChange(event.id)}>
-              <span className="upload-event-main">
-                <span className="upload-event-name">{event.name}</span>
-                <span className="upload-event-when">{[raceDate(event.date), event.location].filter(Boolean).join(' · ')}</span>
-              </span>
-              <span className="upload-event-side">
-                <span className={`upload-event-tag${event.ownedByMe ? ' own' : ''}`}>{event.ownedByMe ? STRINGS.QP_EVENT_TAG_OWN : STRINGS.QP_EVENT_TAG_PUBLIC}</span>
-                <span className="upload-event-closes">{closesText(event.closesOn)}</span>
-              </span>
-            </button>
-          ))}
+
+      <div className="upload-tabs" role="group" aria-label={STRINGS.QP_EVENT_TABS_LABEL}>
+        {TABS.map(([id, label]) => (
+          <button key={id} type="button" className="upload-tab" aria-pressed={tab === id} onClick={() => { setTab(id); setPage(0); }}>
+            {formatString(label, { count: found.filter(event => event.uploadWindow === id).length })}
+          </button>
+        ))}
+      </div>
+      <input
+        type="search" className="upload-search" aria-label={STRINGS.QP_EVENT_SEARCH_LABEL} placeholder={STRINGS.QP_EVENT_SEARCH_PLACEHOLDER}
+        value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }}
+      />
+
+      {firstLoad && (
+        <div className="upload-event-list" role="status" aria-label={STRINGS.QP_EVENTS_LOADING}>
+          {[0, 1, 2].map(i => <div key={i} className="upload-skeleton" />)}
         </div>
-      ))}
-      {events.length === 0 && <p className="upload-muted">{STRINGS.QP_NO_EVENTS}</p>}
+      )}
+      {shown.length > 0 && (
+        <div className="upload-event-list">
+          {shown.map(event => eventRow(event, { chosen: event.id === value, disabled, onChange }))}
+        </div>
+      )}
+      {empty && <p className="upload-muted">{empty}</p>}
+
+      {list.length > PAGE_SIZE && (
+        <nav className="upload-pager" aria-label={STRINGS.QP_PAGER_LABEL}>
+          <button type="button" className="upload-link" disabled={current === 0} onClick={() => setPage(current - 1)}>{STRINGS.QP_PAGE_PREV}</button>
+          <span>{formatString(STRINGS.QP_PAGE_OF, { page: current + 1, pages })}</span>
+          <button type="button" className="upload-link" disabled={current === pages - 1} onClick={() => setPage(current + 1)}>{STRINGS.QP_PAGE_NEXT}</button>
+        </nav>
+      )}
     </div>
   );
 }
