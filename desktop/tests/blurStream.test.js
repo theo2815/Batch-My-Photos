@@ -476,6 +476,45 @@ describe('real blur stream client', () => {
     expect((await next).FIRST.predictedClass).toBe('motion_blurred');
   });
 
+  it('waits when the re-check of a missing photo finds the service busy', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    let singles = 0;
+    fetchMock.mockImplementation(async (url, options) => {
+      if (url.endsWith('/stream')) return ndjsonResponse([row(0), summary(2)]);
+      return ++singles === 1 ? refusal(503, 'BLUR_BUSY') : jpegOnlySingle(options, MOTION);
+    });
+    const pending = blur.analyzeBlur(groups, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(singles).toBe(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await pending).SECOND.predictedClass).toBe('motion_blurred');
+    expect(singles).toBe(2);
+    expect(progress).toHaveBeenCalledWith({ current: 1, total: 2, waiting: true });
+  });
+
+  it('still fails a 401 on the re-check at once', async () => {
+    fetchMock.mockImplementation(async url => url.endsWith('/stream')
+      ? ndjsonResponse([row(0), summary(2)])
+      : refusal(401, 'INVALID_API_KEY'));
+    await expect(blur.analyzeBlur(groups, folder)).rejects.toThrow(/^AI service returned 401/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancel aborts a re-check in flight', async () => {
+    let signal;
+    fetchMock.mockImplementation(async (url, options) => {
+      if (url.endsWith('/stream')) return ndjsonResponse([row(0), summary(2)]);
+      signal = options.signal;
+      return hangUntilAborted(url, options);
+    });
+    const pending = blur.analyzeBlur(groups, folder);
+    const cancelled = expect(pending).rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    blur.cancelAnalysis();
+    expect(signal.aborted).toBe(true);
+    await cancelled;
+  });
+
   it('re-reads a replaced image when beta analysis is explicitly restarted', async () => {
     fetchMock.mockImplementation(async () => ndjsonResponse([row(0), summary(1)]));
     await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);
