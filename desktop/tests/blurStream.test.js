@@ -353,6 +353,7 @@ describe('real blur stream client', () => {
     expect(progress.mock.calls.map(([value]) => value)).toEqual([
       { current: 0, total: 2, waiting: true },
       { current: 0, total: 2, waiting: true },
+      { current: 0, total: 2 },   // the server took the request: no longer waiting, before any result
       { current: 1, total: 2 },
       { current: 2, total: 2 },
     ]);
@@ -497,7 +498,12 @@ describe('real blur stream client', () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect((await pending).SECOND.predictedClass).toBe('motion_blurred');
     expect(singles).toBe(2);
-    expect(progress).toHaveBeenCalledWith({ current: 1, total: 2, waiting: true });
+    expect(progress.mock.calls.map(([value]) => value)).toEqual([
+      { current: 1, total: 2 },
+      { current: 1, total: 2, waiting: true },
+      { current: 1, total: 2 },   // the re-check was taken: no longer waiting, before its result
+      { current: 2, total: 2 },
+    ]);
   });
 
   it('still fails a 401 on the re-check at once', async () => {

@@ -74,6 +74,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
 
   // Track analysis start time for ETA computation
   const analysisStartTimeRef = useRef(null);
+  const waitStartRef = useRef(null);   // when a busy wait began; the ETA clock pauses until it ends
 
   // Guard against concurrent analysis runs (refs are synchronous, unlike state)
   const analysisInFlightRef = useRef(false);
@@ -85,7 +86,13 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   useEffect(() => {
     if (!window.electronAPI?.onBlurProgress) return;
     const cleanup = window.electronAPI.onBlurProgress((data) => {
-      if (data?.requestId === analysisRunRef.current && analysisInFlightRef.current) setBlurProgress(data);
+      if (data?.requestId !== analysisRunRef.current || !analysisInFlightRef.current) return;
+      if (data.waiting) waitStartRef.current ??= Date.now();
+      else if (waitStartRef.current) {
+        analysisStartTimeRef.current += Date.now() - waitStartRef.current;   // waiting does not count as work
+        waitStartRef.current = null;
+      }
+      setBlurProgress(data);
     });
     return cleanup;
   }, []);
@@ -112,6 +119,8 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     const { current, total } = blurProgress;
     if (total === 0) return null;
     const pct = current / total;
+    // Waiting for a busy service is not progress: keep the bar, hide the time left.
+    if (blurProgress.waiting) return { pct, etaSeconds: null, label: null };
     // Don't show ETA until 5% complete (early estimates are unreliable due to Sharp warmup)
     if (pct < 0.05) return { pct, etaSeconds: null, label: 'Estimating...' };
     const elapsedMs = Date.now() - analysisStartTimeRef.current;
@@ -156,6 +165,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     setBlurProgress(null);
     setAiUnavailable(false);
     analysisStartTimeRef.current = Date.now();
+    waitStartRef.current = null;
 
     try {
       const result = await window.electronAPI.analyzeBlur(folderPath, blurSensitivity, blurCategories, runId);

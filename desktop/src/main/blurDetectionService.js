@@ -348,7 +348,7 @@ async function refusalError(response) {
  * caller fails loud. Returns an un-analyzable marker for per-image decode/size
  * rejections (400/413/422) so one bad file does not abort the whole scan.
  */
-async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer, signal) {
+async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer, signal, onAccepted) {
   let buffer;
   try {
     buffer = preparedBuffer || fs.readFileSync(filePath);
@@ -376,6 +376,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
     });
 
     if (response.ok) {
+      onAccepted?.();
       const envelope = await response.json();
       if (!envelope || envelope.success !== true || !envelope.data) {
         throw new Error(`AI service error: ${envelope?.error?.message || 'unexpected response shape'}`);
@@ -501,7 +502,7 @@ function streamLineToResult(obj, threshold, categoriesFilter, analyzedFile) {
  * @throws {Error} `.code='STREAM_UNSUPPORTED'` on 404/405; "AI service ..." on
  *                 incomplete summary / auth / exhausted retry / connection failure
  */
-async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne, signal) {
+async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne, signal, onAccepted) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_STREAM_TIMEOUT_MS);
   const cancel = () => controller.abort();
@@ -527,6 +528,7 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
       throw err;
     }
     if (!response.ok) throw await refusalError(response);
+    onAccepted?.();
 
     const pendingRows = new Map();
     let summary;
@@ -641,6 +643,12 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   // Send one request until the server takes it: while it is busy, wait our turn for up to
   // BLUR_AI_BUSY_WAIT_MS; retry any other retryable error once. A cancel ends the wait at once.
   const unavailable = 'AI service temporarily unavailable; retry manually after server backoff';
+  let waiting = false;
+  // The server took a request: after a busy wait, say so at once, not when its results arrive.
+  const accepted = () => {
+    if (waiting && onProgress) onProgress({ current: processed, total });
+    waiting = false;
+  };
   const whenServed = async (send) => {
     let retried = false;
     let busyTries = 0;
@@ -659,6 +667,7 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
           delay = Math.min(Math.max(err.retryDelayMs ?? 0, 1000) * 2 ** busyTries++, 10000) * (1 + Math.random() / 2);
           busyWaitMs += delay;
           if (busyWaitMs > BLUR_AI_BUSY_WAIT_MS) throw new Error(unavailable);
+          waiting = true;
           if (onProgress) onProgress({ current: processed, total, waiting: true });
         } else {
           retried = true;
@@ -682,7 +691,7 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     signal?.throwIfAborted();
     return rememberImage(item, await whenServed(() => classifyOne(
       classifyUrl, apiKey, path.join(folderPath, item.analyzableFile),
-      threshold, categoriesFilter, item.analyzableFile, item.buffer, signal,
+      threshold, categoriesFilter, item.analyzableFile, item.buffer, signal, accepted,
     )));
   };
 
@@ -736,7 +745,7 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
         try {
           const classifyStream = () => classifyChunkStream(
             streamUrl, apiKey, group, threshold, categoriesFilter,
-            (baseName, result) => { blurMap[baseName] = result; tick(); }, signal,
+            (baseName, result) => { blurMap[baseName] = result; tick(); }, signal, accepted,
           );
           const missing = await whenServed(classifyStream);
           // Recover omitted rows only after the server commits a valid summary.

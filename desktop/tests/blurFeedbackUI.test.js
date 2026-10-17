@@ -500,6 +500,35 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(1);
     expect(render(useBlurDetection, { ...p, folderPath: 'C:/third' }).blurResults).toBeNull();
   });
+  it('hides time left while waiting and leaves the waiting time out of the estimate', async () => {
+    vi.useFakeTimers();
+    try {
+      const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+      const etaAfter = async (steps) => {
+        hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
+        let emit;
+        globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };
+        globalThis.window.electronAPI.analyzeBlur = vi.fn(() => new Promise(() => {}));
+        render(useBlurDetection, p); await effects();
+        render(useBlurDetection, p).runBlurAnalysis();
+        for (const [ms, progress] of steps) { vi.advanceTimersByTime(ms); emit({ requestId: 1, ...progress }); }
+        return render(useBlurDetection, p).blurEta;
+      };
+      const waiting = await etaAfter([[10000, { current: 1, total: 2, waiting: true }]]);
+      expect(waiting).toMatchObject({ pct: 0.5, label: null });   // the bar stays, the time left hides
+      const plain = await etaAfter([[10000, { current: 1, total: 2 }]]);
+      const afterWait = await etaAfter([
+        [5000, { current: 0, total: 2, waiting: true }],
+        [60000, { current: 0, total: 2 }],
+        [5000, { current: 1, total: 2 }],
+      ]);
+      expect(plain.label).toBe('~10s remaining');
+      expect(afterWait.label).toBe(plain.label);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores progress from an obsolete run after the blur toggle resets', async () => {
     let emit, finish;
     globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };
