@@ -256,6 +256,22 @@ describe('ImagePreviewModal metadata panel', () => {
     expect(panelOf(tree).props.metadata).toEqual(metadataFor('b.jpg'));
   });
 
+  it('says Loading right after arrowing, never a false "unavailable"', async () => {
+    await openWithPanel();
+    press('ArrowRight');
+    const panel = PhotoMetadataPanel(panelOf(render(props)).props);
+    expect(text(panel)).toContain('Loading metadata…');
+    expect(text(panel)).not.toContain('Metadata is unavailable for this photo.');
+  });
+
+  it('the Escape that closes the panel puts focus back on the Metadata button', async () => {
+    const tree = await openWithPanel();
+    const toggle = { focus: vi.fn() };
+    tree.props.ref.current = { querySelector: vi.fn(() => toggle) };
+    press('Escape');
+    expect(toggle.focus).toHaveBeenCalled();
+  });
+
   it('clicks inside the panel do not reach the backdrop, and Tab can reach it', async () => {
     const panel = PhotoMetadataPanel(panelOf(await openWithPanel()).props);
     const stopPropagation = vi.fn();

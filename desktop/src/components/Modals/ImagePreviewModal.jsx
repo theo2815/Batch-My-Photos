@@ -188,8 +188,11 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         case 'Escape':
           e.preventDefault();
           // First Escape closes the metadata panel, the next one closes the preview.
-          if (showMetadata) setShowMetadata(false);
-          else onClose();
+          if (showMetadata) {
+            setShowMetadata(false);
+            // Focus would otherwise fall out of the dialog when a focused panel unmounts.
+            modalRef.current?.querySelector('.image-preview-metadata-toggle')?.focus();
+          } else onClose();
           break;
         case 'ArrowLeft':
           e.preventDefault();
@@ -327,7 +330,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
         <PhotoMetadataPanel
           id="photo-metadata-panel"
           fileName={currentFile}
-          loading={isLoading}
+          loading={isLoading || (!error && previewData?.fileName !== currentFile)}
           metadata={previewData?.fileName === currentFile ? previewData.metadata : undefined}
         />
       )}
