@@ -1354,3 +1354,51 @@
   .image-preview-beta { justify-content: flex-start; }
   .image-preview-beta .image-preview-img { max-height: 30vh; }
 }
+
+/* Metadata panel: the beta card's Finish Line surface; fixed so it stays put while the beta column scrolls. */
+.image-preview-metadata {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  bottom: 56px;
+  z-index: 10001;
+  width: min(360px, 92vw);
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.image-preview-metadata:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; }
+.image-preview-metadata h2 { margin: 0 0 var(--space-sm); font-size: 1rem; }
+.image-preview-metadata p { margin: 0 0 var(--space-sm); color: var(--text-secondary); }
+.image-preview-metadata h3 { margin: var(--space-md) 0 var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--border); font-size: 0.85rem; }
+.image-preview-metadata dl { margin: 0; }
+.image-preview-metadata dt { color: var(--text-secondary); font-size: 0.75rem; font-weight: 600; }
+.image-preview-metadata dd { margin: 0 0 var(--space-sm); overflow-wrap: anywhere; }
+.image-preview-metadata-numeric { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.image-preview-metadata-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.image-preview-metadata-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.image-preview-metadata-toggle:hover { background: rgba(255, 255, 255, 0.18); }
+.image-preview-metadata-toggle[aria-expanded="true"] { border-color: var(--accent-primary); background: var(--accent-soft); }
+/* Keep the photo and the right arrow clear of the open panel. */
+.image-preview-with-metadata { padding-right: calc(min(360px, 92vw) + 32px); }
+.image-preview-with-metadata .image-preview-nav-right { right: calc(min(360px, 92vw) + 32px); }
+.image-preview-with-metadata .image-preview-container,
+.image-preview-with-metadata .image-preview-img { max-width: 100%; }

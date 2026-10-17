@@ -135,12 +135,13 @@ const features = {
    * When enabled, users can toggle blur analysis in the settings panel
    * to detect and separate blurry photos during batching.
    *
-   * DISABLED FOR INITIAL RELEASE - Feature under development
+   * Packaged builds: only with a valid blur-beta manifest. Source runs: on
+   * unless BATCH_BLUR_DETECTION_ENABLED=false (same for the two flags below).
    */
-  BLUR_DETECTION_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_DETECTION_ENABLED', false),
+  BLUR_DETECTION_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_DETECTION_ENABLED', true),
 
   /** Beta suggestions never change batch routing. */
-  BLUR_BETA_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_BETA_ENABLED', false),
+  BLUR_BETA_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_BETA_ENABLED', true),
 
   /**
    * Enable the AI-powered blur detection backend.
@@ -148,7 +149,7 @@ const features = {
    * instead of using the local Laplacian-based algorithm.
    * Set to false to use the local Laplacian backend (offline baseline).
    */
-  BLUR_AI_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_AI_ENABLED', false),
+  BLUR_AI_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_AI_ENABLED', true),
 
   /**
    * Enable Hardware ID (HWID) device binding.
@@ -162,25 +163,27 @@ const features = {
   /**
    * Base URL of the QuickPitik ai-api (the desktop is the one client allowed to
    * call ai-api directly). The blur path appends /api/v1/blur/classify.
-   * Defaults to a local ai-api in development; set BATCH_BLUR_AI_URL to a
-   * deployed ai-api host for production.
+   * Source runs default to the deployed ai-api (the URL in blur-store.json);
+   * BATCH_BLUR_AI_URL=http://localhost:8000 points them at a local one.
    */
-  BLUR_AI_URL: isProduction ? betaManifest?.blurApiUrl || '' : process.env.BATCH_BLUR_AI_URL || 'http://localhost:8000',
+  BLUR_AI_URL: isProduction
+    ? betaManifest?.blurApiUrl || ''
+    : process.env.BATCH_BLUR_AI_URL || 'https://ai-api-blur-production.up.railway.app',
 
   /**
-   * API key sent as X-API-Key to ai-api. Empty by default — a local ai-api in
-   * DEBUG mode accepts requests without a key. For a deployed ai-api, set
-   * BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
+   * API key sent as X-API-Key to ai-api from source runs. Empty by default —
+   * only a local ai-api in DEBUG mode accepts that. For the deployed ai-api,
+   * set BATCH_BLUR_AI_API_KEY to a key scoped to `blur:read` (see docs/api-keys.md).
    */
   BLUR_AI_API_KEY: isProduction ? '' : process.env.BATCH_BLUR_AI_API_KEY || '',
 
   /**
    * QuickPitik Upload view (spec: desktop/docs/superpowers/specs/
    * 2026-10-10-quickpitik-upload-workflow-design.md). On in every packaged
-   * build from this release; source runs opt in with
-   * BATCH_QUICKPITIK_UPLOAD_ENABLED=true.
+   * build from this release; source runs too, unless
+   * BATCH_QUICKPITIK_UPLOAD_ENABLED=false.
    */
-  QUICKPITIK_UPLOAD_ENABLED: isProduction ? true : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', false),
+  QUICKPITIK_UPLOAD_ENABLED: isProduction ? true : envBool('BATCH_QUICKPITIK_UPLOAD_ENABLED', true),
 };
 
 // ============================================================================
@@ -238,25 +241,29 @@ const urls = {
   SUPABASE_ANON_KEY: (!isProduction && process.env.BATCH_SUPABASE_ANON_KEY)
     || 'sb_publishable_NjMEpJILZHOwg1Ea0z8GRA_7Ljgf0Cg',
 
-  /** Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version */
-  FRONTEND_URL: (!isProduction && process.env.BATCH_FRONTEND_URL)
-    || (isProduction ? PROD_URL : 'http://localhost:3000'),
+  /**
+   * Website frontend URL (no trailing slash) — login deep link, dashboard, /api/version.
+   * Source runs use it too; local website: BATCH_FRONTEND_URL=http://localhost:3000
+   */
+  FRONTEND_URL: (!isProduction && process.env.BATCH_FRONTEND_URL) || PROD_URL,
 
   // QuickPitik (the marathon marketplace — a separate account from
-  // BatchMyPhotos). Used only by the feature-flagged Upload view. Env
-  // overrides are honoured only when unpackaged, like the Supabase values.
+  // BatchMyPhotos). Used only by the Upload view. Source runs also use the
+  // deployed QuickPitik; for a local stack set BATCH_QUICKPITIK_API_URL=
+  // http://localhost:8080/api/v1 and BATCH_QUICKPITIK_WEB_URL=http://localhost:3000.
+  // Env overrides are honoured only when unpackaged, like the Supabase values.
 
   /** QuickPitik Spring Boot API, including the /api/v1 prefix */
   QUICKPITIK_API_URL: (!isProduction && process.env.BATCH_QUICKPITIK_API_URL)
-    || (isProduction ? 'https://api.quickpitik.com/api/v1' : 'http://localhost:8080/api/v1'),
+    || 'https://api.quickpitik.com/api/v1',
 
   /** QuickPitik website — hosts the /connect/desktop hand-off page */
   QUICKPITIK_WEB_URL: (!isProduction && process.env.BATCH_QUICKPITIK_WEB_URL)
-    || (isProduction ? 'https://quickpitik.com' : 'http://localhost:3000'),
+    || 'https://quickpitik.com',
 
-  /** Origin presigned upload URLs must match; '' = direct uploads not configured */
+  /** Origin presigned upload URLs must match */
   QUICKPITIK_UPLOAD_ORIGIN: (!isProduction && process.env.BATCH_QUICKPITIK_UPLOAD_ORIGIN)
-    || (isProduction ? QUICKPITIK_PROD_UPLOAD_ORIGIN : ''),
+    || QUICKPITIK_PROD_UPLOAD_ORIGIN,
 };
 
 // ============================================================================

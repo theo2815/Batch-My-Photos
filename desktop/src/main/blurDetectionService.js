@@ -36,7 +36,7 @@ const {
   BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_TIMEOUT_MS,
   BLUR_AI_MAX_DIMENSION, BLUR_AI_JPEG_QUALITY, BLUR_AI_RESIZE_CONCURRENCY,
   BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_MAX_BYTES, BLUR_AI_STREAM_CONCURRENCY,
-  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS, SHARP_MAX_INPUT_PIXELS,
+  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS, BLUR_AI_BUSY_WAIT_MS, SHARP_MAX_INPUT_PIXELS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
@@ -61,7 +61,9 @@ sharp.block({ operation: ['VipsForeignLoadSvg', 'VipsForeignLoadHeif'] });
 let analyzedImageHashes = new WeakMap();
 let blurCache = { cacheKey: null, folderPath: null, mode: null, blurMap: null };
 let cacheGeneration = 0;
-let aiAnalysisInFlight = false;
+let aiRun = null;   // AbortController of the running AI analysis; cancelAnalysis() aborts it
+let cancels = 0;    // cancelAnalysis() calls, so a cancel that lands before a run starts still stops it
+const cancelledError = () => Object.assign(new Error('Blur analysis cancelled'), { code: 'BLUR_CANCELLED' });
 
 /**
  * Extensions that can be analyzed for blur (JPEG/PNG only — fast to decode).
@@ -322,6 +324,23 @@ function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
 }
 
 /**
+ * The error for a non-OK ai-api answer: its JSON `error.code`, and for 503/429
+ * `retryable` plus the server's Retry-After as `retryDelayMs`.
+ */
+async function refusalError(response) {
+  const body = await response.text().catch(() => '');
+  const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
+  try { err.code = JSON.parse(body).error?.code; } catch (_err) { /* not a JSON error body */ }
+  err.retryable = response.status === 503 || response.status === 429;
+  if (err.retryable) {
+    const retryAfter = response.headers.get('Retry-After')?.trim();
+    const seconds = Number(retryAfter);
+    if (/^\d+(?:\.\d+)?$/.test(retryAfter) && Number.isFinite(seconds)) err.retryDelayMs = seconds * 1000;
+  }
+  return err;
+}
+
+/**
  * Classify a single image via ai-api and return the mapped blur result.
  *
  * Throws an "AI service ..." error on server-unavailable conditions (503 model
@@ -329,7 +348,7 @@ function mapClassification(data, threshold, categoriesFilter, analyzedFile) {
  * caller fails loud. Returns an un-analyzable marker for per-image decode/size
  * rejections (400/413/422) so one bad file does not abort the whole scan.
  */
-async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer) {
+async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesFilter, analyzedFile, preparedBuffer, signal, onAccepted) {
   let buffer;
   try {
     buffer = preparedBuffer || fs.readFileSync(filePath);
@@ -340,6 +359,8 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_TIMEOUT_MS);
+  const cancel = () => controller.abort();
+  signal?.addEventListener('abort', cancel);
   try {
     const form = new FormData();
     form.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
@@ -355,6 +376,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
     });
 
     if (response.ok) {
+      onAccepted?.();
       const envelope = await response.json();
       if (!envelope || envelope.success !== true || !envelope.data) {
         throw new Error(`AI service error: ${envelope?.error?.message || 'unexpected response shape'}`);
@@ -369,17 +391,21 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
       return { score: -1, isBlurry: false, analyzedFile, confidence: 0 };
     }
 
-    // 503 (model unavailable), 401/403 (auth), 429 (rate), 5xx — fail loud.
-    const errText = await response.text().catch(() => '');
-    throw new Error(`AI service returned ${response.status}: ${errText.slice(0, 200)}`);
+    // 503 (model unavailable / busy), 401/403 (auth), 429 (rate / key busy), 5xx — the caller decides.
+    throw await refusalError(response);
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error(`AI service timed out after ${BLUR_AI_TIMEOUT_MS}ms`);
     }
     // Re-tag connection errors so the IPC handler classifies them as AI errors.
-    throw new Error(err.message?.includes('AI service') ? err.message : `AI service error: ${err.message}`);
+    const failure = new Error(err.message?.includes('AI service') ? err.message : `AI service error: ${err.message}`);
+    failure.retryable = err.retryable === true;
+    failure.retryDelayMs = err.retryDelayMs;
+    failure.code = err.code;
+    throw failure;
   } finally {
     clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', cancel);
   }
 }
 
@@ -476,9 +502,11 @@ function streamLineToResult(obj, threshold, categoriesFilter, analyzedFile) {
  * @throws {Error} `.code='STREAM_UNSUPPORTED'` on 404/405; "AI service ..." on
  *                 incomplete summary / auth / exhausted retry / connection failure
  */
-async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne) {
+async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categoriesFilter, onOne, signal, onAccepted) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BLUR_AI_STREAM_TIMEOUT_MS);
+  const cancel = () => controller.abort();
+  signal?.addEventListener('abort', cancel);
   try {
     const form = new FormData();
     chunk.forEach((item, i) => form.append('files', new Blob([item.buffer], { type: 'image/jpeg' }), String(i)));
@@ -499,17 +527,8 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
       err.code = 'STREAM_UNSUPPORTED';
       throw err;
     }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      const err = new Error('AI service returned ' + response.status + ': ' + body.slice(0, 200));
-      err.retryable = response.status === 503 || response.status === 429;
-      if (err.retryable) {
-        const retryAfter = response.headers.get('Retry-After')?.trim();
-        const seconds = Number(retryAfter);
-        if (/^\d+(?:\.\d+)?$/.test(retryAfter) && Number.isFinite(seconds)) err.retryDelayMs = seconds * 1000;
-      }
-      throw err;
-    }
+    if (!response.ok) throw await refusalError(response);
+    onAccepted?.();
 
     const pendingRows = new Map();
     let summary;
@@ -578,13 +597,15 @@ async function classifyChunkStream(streamUrl, apiKey, chunk, threshold, categori
     const failure = new Error(err.message?.includes('AI service') ? err.message : 'AI service error: ' + err.message);
     failure.retryable = err.retryable === true;
     failure.retryDelayMs = err.retryDelayMs;
+    failure.code = err.code;
     throw failure;
   } finally {
     clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', cancel);
   }
 }
 
-async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitivity = 'moderate', onProgress = null) {
+async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitivity = 'moderate', onProgress = null, signal = null) {
   const groupNames = Object.keys(fileGroups);
   const blurMap = {};
 
@@ -619,15 +640,61 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     if (onProgress) onProgress({ current: processed, total });
   };
 
+  // Send one request until the server takes it: while it is busy, wait our turn for up to
+  // BLUR_AI_BUSY_WAIT_MS; retry any other retryable error once. A cancel ends the wait at once.
+  const unavailable = 'AI service temporarily unavailable; retry manually after server backoff';
+  let waiting = false;
+  // The server took a request: after a busy wait, say so at once, not when its results arrive.
+  const accepted = () => {
+    if (waiting && onProgress) onProgress({ current: processed, total });
+    waiting = false;
+  };
+  const whenServed = async (send) => {
+    let retried = false;
+    let busyTries = 0;
+    let busyWaitMs = 0;
+    for (;;) {
+      try {
+        return await send();
+      } catch (err) {
+        signal?.throwIfAborted();
+        const busy = err.code === 'BLUR_BUSY' || err.code === 'BLUR_KEY_BUSY';
+        if (!err.retryable || (retried && !busy)) throw err;
+        let delay = err.retryDelayMs ?? 2000;
+        if (busy) {
+          // Another analysis holds the server: wait our turn (at least 1 s), doubling up to 3 s so a
+          // long waiter asks about as often as the holder, plus 0–50% jitter so waiting users do not
+          // retry in lockstep. In production a refused try costs little upload (the proxy ends it early).
+          delay = Math.min(Math.max(err.retryDelayMs ?? 0, 1000) * 2 ** busyTries++, 3000) * (1 + Math.random() / 2);
+          busyWaitMs += delay;
+          if (busyWaitMs > BLUR_AI_BUSY_WAIT_MS) throw new Error(unavailable);
+          waiting = true;
+          if (onProgress) onProgress({ current: processed, total, waiting: true });
+        } else {
+          retried = true;
+        }
+        if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) throw new Error(unavailable);
+        await new Promise((resolve, reject) => {
+          const stop = () => { clearTimeout(timer); reject(signal.reason); };
+          const timer = setTimeout(() => { signal?.removeEventListener('abort', stop); resolve(); }, delay);
+          signal?.addEventListener('abort', stop, { once: true });
+        });
+      }
+    }
+  };
+
   // Per-image fallback (single /classify) for one work item.
   const rememberImage = (item, result) => {
     analyzedImageHashes.set(result, crypto.createHash('sha256').update(item.buffer).digest('hex'));
     return result;
   };
-  const classifyItemSingle = async (item) => rememberImage(item, await classifyOne(
-    classifyUrl, apiKey, path.join(folderPath, item.analyzableFile),
-    threshold, categoriesFilter, item.analyzableFile, item.buffer,
-  ));
+  const classifyItemSingle = async (item) => {
+    signal?.throwIfAborted();
+    return rememberImage(item, await whenServed(() => classifyOne(
+      classifyUrl, apiKey, path.join(folderPath, item.analyzableFile),
+      threshold, categoriesFilter, item.analyzableFile, item.buffer, signal, accepted,
+    )));
+  };
 
   // Split the work list into streaming chunks.
   const chunks = [];
@@ -673,25 +740,15 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
     if (request.length) requests.push(request);
 
     for (const group of requests) {
+      signal?.throwIfAborted();
       // Phase 2 — STREAM the request (unless the server already proved it lacks it).
       if (!streamUnsupported) {
         try {
           const classifyStream = () => classifyChunkStream(
             streamUrl, apiKey, group, threshold, categoriesFilter,
-            (baseName, result) => { blurMap[baseName] = result; tick(); },
+            (baseName, result) => { blurMap[baseName] = result; tick(); }, signal, accepted,
           );
-          let missing;
-          try {
-            missing = await classifyStream();
-          } catch (err) {
-            if (!err.retryable) throw err;
-            const delay = err.retryDelayMs ?? 2000;
-            if (delay > BLUR_AI_MAX_RETRY_WAIT_MS) {
-              throw new Error('AI service temporarily unavailable; retry manually after server backoff');
-            }
-            await new Promise(resolve => setTimeout(resolve, delay));
-            missing = await classifyStream();
-          }
+          const missing = await whenServed(classifyStream);
           // Recover omitted rows only after the server commits a valid summary.
           for (const idx of missing) {
             const item = group[idx];
@@ -724,6 +781,7 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
   };
 
   await runPool(chunks, BLUR_AI_STREAM_CONCURRENCY, processChunk);
+  signal?.throwIfAborted();
 
   const blurryCount = Object.values(blurMap).filter(r => r.isBlurry).length;
   logger.log(`🤖 [BLUR-AI] Analysis complete. ${blurryCount} blurry groups found out of ${groupNames.length}.`);
@@ -814,7 +872,7 @@ async function analyzeBlurLegacy(fileGroups, folderPath, threshold = 'moderate',
  * @param {Function} [onProgress] - Optional callback: ({ current, total }) => void
  * @returns {Promise<Object>} Map of baseName -> { score, isBlurry, analyzedFile }
  */
-async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false) {
+async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categories = null, onProgress = null, force = false, cancelsAtStart = cancels) {
   const groupNames = Object.keys(fileGroups);
   const mode = config.features.BLUR_AI_ENABLED ? 'ai' : 'legacy';
 
@@ -824,7 +882,8 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
     : threshold;
   const cacheKey = buildCacheKey(folderPath, groupNames, cacheDiscriminator);
   if (force) clearCache();
-  if (mode === 'ai' && aiAnalysisInFlight) throw new Error('AI service analysis already in progress. Try again.');
+  if (mode === 'ai' && aiRun) throw new Error('AI service analysis already in progress. Try again.');
+  if (mode === 'ai' && cancels !== cancelsAtStart) throw cancelledError();   // cancelled while the caller prepared
   if (!force && blurCache.cacheKey === cacheKey && blurCache.blurMap) {
     logger.log(`🔍 [BLUR] Cache hit — returning ${groupNames.length} cached results (${mode})`);
     return blurCache.blurMap;
@@ -835,15 +894,15 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
   if (!force) clearCache();
   const generation = cacheGeneration;
   let blurMap;
-  if (mode === 'ai') aiAnalysisInFlight = true;
+  const run = mode === 'ai' ? (aiRun = new AbortController()) : null;
   try {
     if (mode === 'ai') {
-      blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress);
+      blurMap = await analyzeBlurAI(fileGroups, folderPath, categories, threshold, onProgress, run.signal);
     } else {
       blurMap = await analyzeBlurLegacy(fileGroups, folderPath, threshold, onProgress);
     }
   } finally {
-    if (mode === 'ai') aiAnalysisInFlight = false;
+    if (run && aiRun === run) aiRun = null;   // a cancelled run must not free a newer run's turn
   }
 
   // Store in cache
@@ -852,8 +911,45 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
   return blurMap;
 }
 
+/**
+ * Stop the running AI analysis, if any: its analyzeBlur call rejects with code
+ * BLUR_CANCELLED, and a new analysis may start at once.
+ */
+function cancelAnalysis() {
+  cancels++;
+  aiRun?.abort(cancelledError());
+  aiRun = null;
+}
+
+/** The number of cancels so far; a caller passes it to analyzeBlur from before its own preparation. */
+const cancelCount = () => cancels;
+
+/**
+ * Ask ai-api whether it accepts a beta key, without sending a photo: a job
+ * lookup needs only the key's jobs:read scope (401/403 = refused). This only
+ * keeps a refused key from unlocking the UI; ai-api checks the key on every
+ * blur request regardless. Redirects are refused so the key cannot be passed
+ * on to another host.
+ * @returns {Promise<'valid'|'invalid'|'unreachable'>}
+ */
+async function verifyBetaKey(key) {
+  const base = (config.features.BLUR_AI_URL || '').replace(/\/+$/, '');
+  try {
+    const response = await net.fetch(`${base}/api/v1/jobs/00000000-0000-0000-0000-000000000000`, {
+      headers: { 'X-API-Key': key }, redirect: 'error', signal: AbortSignal.timeout(BLUR_AI_TIMEOUT_MS),
+    });
+    if (response.status === 401 || response.status === 403) return 'invalid';
+    return response.ok ? 'valid' : 'unreachable';
+  } catch {
+    return 'unreachable';
+  }
+}
+
 module.exports = {
   analyzeBlur,
+  cancelAnalysis,
+  cancelCount,
+  verifyBetaKey,
   clearCache,
   getCachedBlurResult,
   prepareImageForUpload,

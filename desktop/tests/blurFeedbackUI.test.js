@@ -53,7 +53,7 @@ const props = { isOpen: true, isBeta: true, folderPath: 'C:/fixture', fileName: 
 beforeEach(() => {
   hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
   feedbackHooks = { values: [], cursor: 0, effects: [], deps: [], cleanups: [] };
-  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512, contentHash: 'a'.repeat(64) }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('window', { electronAPI: { submitBlurExample: vi.fn().mockResolvedValue({ success: true }), getImagePreview: vi.fn().mockResolvedValue({ success: true, dataUrl: 'data:image/jpeg;base64,test', width: 512, height: 512, contentHash: 'a'.repeat(64) }), blurBetaKey: vi.fn().mockResolvedValue({ enabled: true, configured: false }), getBlurDetectionEnabled: vi.fn().mockResolvedValue(true), cancelBlurAnalysis: vi.fn().mockResolvedValue({ success: true }) }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal('document', { activeElement: { focus: vi.fn() }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
 
@@ -199,6 +199,50 @@ describe('explicit beta feedback consent', () => {
     expect(text(notice)).toContain('You can still batch your photos');
   });
 
+  it('says it is waiting for the blur service while the service is busy', () => {
+    const section = progress => {
+      const state = { isAnalyzing: true, blurProgress: progress, blurryGroups: [], blurResults: null, unflaggedGroups: new Set() };
+      const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['missed.jpg'] }], blurDetectionEnabled: true, blurDetection: state });
+      const node = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+      hooks.values = [];
+      return text(render(node.type, node.props));
+    };
+    expect(section({ current: 0, total: 2, waiting: true })).toContain('Waiting for the blur service…');
+    expect(section({ current: 1, total: 2 })).toContain('Analyzing image quality...');
+    expect(section({ current: 1, total: 2 })).not.toContain('Waiting for the blur service');
+  });
+
+  it('shows Cancel while analysing and cancels through the blur hook', () => {
+    const cancelAnalysis = vi.fn();
+    const state = { isAnalyzing: true, blurProgress: { current: 0, total: 2 }, blurryGroups: [], blurResults: null, unflaggedGroups: new Set(), cancelAnalysis };
+    const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['missed.jpg'] }], blurDetectionEnabled: true, blurDetection: state });
+    const node = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = [];
+    button(render(node.type, node.props), 'Cancel').props.onClick();
+    expect(cancelAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel ends the analysis quietly, then a new analysis can start', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { NEW: { predictedClass: 'sharp' } } });
+    globalThis.window.electronAPI.cancelBlurAnalysis = vi.fn().mockResolvedValue({ success: true });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    expect(render(useBlurDetection, p).isAnalyzing).toBe(true);
+    render(useBlurDetection, p).cancelAnalysis();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
+    expect(render(useBlurDetection, p).isAnalyzing).toBe(false);
+    finishOld({ success: false, aiUnavailable: true, error: 'cancelled' });
+    await old;
+    let state = render(useBlurDetection, p);
+    expect([state.blurResults, state.aiUnavailable, state.isAnalyzing]).toEqual([null, false, false]);
+    await state.runBlurAnalysis();
+    state = render(useBlurDetection, p);
+    expect(state.blurResults).toEqual({ NEW: { predictedClass: 'sharp' } });
+  });
+
   it.each([
     ['RAW-only', { RAW1: { score: -1, isBlurry: false }, RAW2: { score: -1, isBlurry: false } }, ['RAW1.CR3', 'RAW2.CR3'], 'No blur results available', '0 groups analyzed · 2 could not be analyzed'],
     ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 groups)', '2 groups analyzed · 1 could not be analyzed'],
@@ -291,6 +335,62 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith('test-beta-key');
     expect(nodes(render(SettingsPanel, p)).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
   });
+  it('shows the typed beta key only on request and hides it again after saving', async () => {
+    const p = { isBeta: true };
+    const field = tree => nodes(tree).find(n => n.type === 'input' && n.props.id === 'blur-beta-key');
+    const eye = tree => nodes(tree).find(n => n.type === 'button' && /beta key$/.test(n.props['aria-label'] || ''));
+    render(SettingsPanel, p); await effects();
+    let tree = render(SettingsPanel, p);
+    expect(field(tree).props.type).toBe('password');
+    expect(eye(tree).props['aria-label']).toBe('Show beta key');
+    eye(tree).props.onClick();
+    tree = render(SettingsPanel, p);
+    expect(field(tree).props).toMatchObject({ type: 'text', spellCheck: false });
+    expect(eye(tree).props['aria-label']).toBe('Hide beta key');
+    field(tree).props.onChange({ target: { value: 'test-beta-key' } });
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
+    button(render(SettingsPanel, p), 'Replace beta key').props.onClick();
+    expect(field(render(SettingsPanel, p)).props.type).toBe('password');
+  });
+  it('shows why a key was not saved, keeps what was typed, and keeps blur locked', async () => {
+    const p = { isBeta: true };
+    const field = tree => nodes(tree).find(n => n.type === 'input' && n.props.id === 'blur-beta-key');
+    const blurSwitch = tree => nodes(tree).find(n => n.type === 'input' && n.props.role === 'switch');
+    render(SettingsPanel, p); await effects();
+    field(render(SettingsPanel, p)).props.onChange({ target: { value: 'wrong-key' } });
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue(
+      { enabled: true, configured: false, error: 'This beta key was not accepted. Check it and try again.' });
+    await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
+    const tree = render(SettingsPanel, p);
+    expect(text(tree)).toContain('This beta key was not accepted');
+    expect(field(tree).props.value).toBe('wrong-key');
+    expect(blurSwitch(tree).props.disabled).toBe(true);
+  });
+  it('turns blur off whenever no beta key is saved (a preset, or a key the server rejected)', async () => {
+    const onChange = vi.fn();
+    const p = { isBeta: true, blurDetectionEnabled: true, onChange };
+    render(SettingsPanel, p); await effects();
+    render(SettingsPanel, p); await effects();
+    expect(onChange).toHaveBeenCalledWith('blurDetectionEnabled', false);
+    expect(text(render(SettingsPanel, p))).toContain('needs a valid beta key');
+    hooks.values = []; hooks.deps = []; hooks.effects = []; onChange.mockClear();
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    render(SettingsPanel, p); await effects();
+    render(SettingsPanel, p); await effects();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+  it('checks the key again when an analysis ends, so a rejected key locks blur', async () => {
+    const calls = () => globalThis.window.electronAPI.blurBetaKey.mock.calls.length;
+    // This harness re-runs the mount check on every effects() call, so compare increments.
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    const steady = calls();
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    const perRender = calls() - steady;
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: false }); await effects();
+    expect(calls() - steady - perRender).toBe(perRender + 1);
+  });
   it('reloads the selected beta preview when a new analysis replaces results', async () => {
     const firstVersion = {};
     renderPreview({ ...props, previewVersion: firstVersion }); await effects();
@@ -303,6 +403,19 @@ describe('explicit beta feedback consent', () => {
     await render(useBlurDetection, p).submitExample('same.jpg', 'sharp', 'a'.repeat(64));
     expect(render(useBlurDetection, p).getSubmission('same.jpg', 'a'.repeat(64)).status).toBe('success');
     expect(render(useBlurDetection, p).getSubmission('same.jpg', 'b'.repeat(64))).toBeUndefined();
+  });
+
+  it('a folder change, blur off or Reset also stops a running analysis in main', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn(() => new Promise(resolve => { finishOld = resolve; }));
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    render(useBlurDetection, p).resetBlurState();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
+    finishOld({ success: false, error: 'cancelled' });
+    await old;
+    render(useBlurDetection, p).resetBlurState();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it('queues a restart after toggle reset until the old main request settles', async () => {
@@ -400,6 +513,35 @@ describe('explicit beta feedback consent', () => {
     expect(globalThis.window.electronAPI.analyzeBlur).toHaveBeenCalledTimes(1);
     expect(render(useBlurDetection, { ...p, folderPath: 'C:/third' }).blurResults).toBeNull();
   });
+  it('hides time left while waiting and leaves the waiting time out of the estimate', async () => {
+    vi.useFakeTimers();
+    try {
+      const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+      const etaAfter = async (steps) => {
+        hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = [];
+        let emit;
+        globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };
+        globalThis.window.electronAPI.analyzeBlur = vi.fn(() => new Promise(() => {}));
+        render(useBlurDetection, p); await effects();
+        render(useBlurDetection, p).runBlurAnalysis();
+        for (const [ms, progress] of steps) { vi.advanceTimersByTime(ms); emit({ requestId: 1, ...progress }); }
+        return render(useBlurDetection, p).blurEta;
+      };
+      const waiting = await etaAfter([[10000, { current: 1, total: 2, waiting: true }]]);
+      expect(waiting).toMatchObject({ pct: 0.5, label: null });   // the bar stays, the time left hides
+      const plain = await etaAfter([[10000, { current: 1, total: 2 }]]);
+      const afterWait = await etaAfter([
+        [5000, { current: 0, total: 2, waiting: true }],
+        [60000, { current: 0, total: 2 }],
+        [5000, { current: 1, total: 2 }],
+      ]);
+      expect(plain.label).toBe('~10s remaining');
+      expect(afterWait.label).toBe(plain.label);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores progress from an obsolete run after the blur toggle resets', async () => {
     let emit, finish;
     globalThis.window.electronAPI.onBlurProgress = callback => { emit = callback; return () => {}; };

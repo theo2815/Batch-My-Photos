@@ -113,7 +113,7 @@ describe('real blur stream client', () => {
     expect(progress.mock.calls.map(([value]) => value.current)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
-  it('caps each request at 100 images even when the byte budget fits more', async () => {
+  it('caps each request at 25 images even when the byte budget fits more', async () => {
     const smallBlur = blurWithByteBudget(60000);
     const counts = [];
     fetchMock.mockImplementation(async (_url, { body }) => {
@@ -121,10 +121,10 @@ describe('real blur stream client', () => {
       counts.push(files.length);
       return ndjsonResponse([...files.map((_file, i) => row(i)), summary(files.length)]);
     });
-    const input = Object.fromEntries(Array.from({ length: 101 }, (_unused, i) => ['GROUP' + i, ['FIRST.jpg']]));
+    const input = Object.fromEntries(Array.from({ length: 60 }, (_unused, i) => ['GROUP' + i, ['FIRST.jpg']]));
     const results = await smallBlur.analyzeBlur(input, folder);
-    expect(counts).toEqual([100, 1]);
-    expect(Object.keys(results)).toHaveLength(101);
+    expect(counts).toEqual([25, 25, 10]);
+    expect(Object.keys(results)).toHaveLength(60);
   });
 
   it('continues every byte-split group through sequential single-image fallback', async () => {
@@ -332,6 +332,222 @@ describe('real blur stream client', () => {
       .rejects.toThrow(/AI service returned 401/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(progress).not.toHaveBeenCalled();
+  });
+
+  const refusal = (status, code) => new Response(JSON.stringify({ success: false, error: { code, message: 'no' } }), {
+    status, headers: { 'Retry-After': '1' },
+  });
+
+  it('waits while the blur service is busy, reports waiting, then analyzes every photo', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockResolvedValueOnce(refusal(503, 'BLUR_BUSY'));
+    fetchMock.mockResolvedValueOnce(refusal(503, 'BLUR_BUSY'));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), row(1), summary(2)]));
+    const pending = blur.analyzeBlur(groups, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect([result.FIRST.predictedClass, result.SECOND.predictedClass]).toEqual(['sharp', 'sharp']);
+    expect(progress.mock.calls.map(([value]) => value)).toEqual([
+      { current: 0, total: 2, waiting: true },
+      { current: 0, total: 2, waiting: true },
+      { current: 0, total: 2 },   // the server took the request: no longer waiting, before any result
+      { current: 1, total: 2 },
+      { current: 2, total: 2 },
+    ]);
+  });
+
+  it('treats a busy API key (429 BLUR_KEY_BUSY) as busy and succeeds on the next turn', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockResolvedValueOnce(refusal(429, 'BLUR_KEY_BUSY'));
+    fetchMock.mockResolvedValueOnce(ndjsonResponse([row(0), summary(1)]));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await pending).FIRST.predictedClass).toBe('sharp');
+    expect(progress.mock.calls[0][0]).toEqual({ current: 0, total: 1, waiting: true });
+  });
+
+  it('waits at least 1 s on busy (even with Retry-After: 0), doubling up to 3 s', async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: { code: 'BLUR_BUSY' } }), {
+        status: 503, headers: { 'Retry-After': '0' },
+      }));
+      const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(() => {});
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      // vi.waitFor already moved the fake clock up to 50 ms, so checkpoints leave 100 ms of slack.
+      await vi.advanceTimersByTimeAsync(900);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      for (const [wait, calls] of [[100, 2], [2000, 3], [2900, 3], [100, 4], [3000, 5], [3000, 6]]) {
+        await vi.advanceTimersByTimeAsync(wait);
+        expect(fetchMock).toHaveBeenCalledTimes(calls);
+      }
+      await vi.advanceTimersByTimeAsync(300000);
+      await pending;
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('never waits longer than 3 s x 1.5 between busy tries, so a long waiter still gets turns', async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.9999);   // largest jitter
+    try {
+      const tries = [];
+      fetchMock.mockImplementation(async () => {
+        tries.push(Date.now());
+        return refusal(503, 'BLUR_BUSY');
+      });
+      const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(() => {});
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(300000);
+      await pending;
+      const gaps = tries.slice(1).map((t, i) => t - tries[i]);
+      expect(gaps.length).toBeGreaterThan(20);
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(3000 * 1.5);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('gives up after five minutes of busy answers and asks no more', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => refusal(503, 'BLUR_BUSY'));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    const rejected = expect(pending).rejects.toThrow('AI service temporarily unavailable; retry manually after server backoff');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(300000);   // BLUR_AI_BUSY_WAIT_MS
+    await rejected;
+    const calls = fetchMock.mock.calls.length;
+    expect(calls).toBeGreaterThan(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('still retries a non-busy 503 (MODEL_UNAVAILABLE) exactly once', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockImplementation(async () => refusal(503, 'MODEL_UNAVAILABLE'));
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress);
+    const rejected = expect(pending).rejects.toThrow(/AI service returned 503/);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(10000);
+    await rejected;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(progress).not.toHaveBeenCalled();
+  });
+
+  it('still fails a 401 with an error code at once', async () => {
+    fetchMock.mockImplementation(async () => refusal(401, 'INVALID_API_KEY'));
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder)).rejects.toThrow(/^AI service returned 401/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Like net.fetch: an aborted request rejects with an AbortError.
+  const hangUntilAborted = (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+
+  it('cancel during a busy wait ends the analysis at once and asks no more', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockImplementation(async () => refusal(503, 'BLUR_BUSY'));
+    let error;
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress)
+      .catch(err => { error = err; });
+    await vi.waitFor(() => expect(progress).toHaveBeenCalledWith({ current: 0, total: 1, waiting: true }));
+    blur.cancelAnalysis();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error?.code).toBe('BLUR_CANCELLED');
+    await vi.advanceTimersByTimeAsync(60000);
+    await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel aborts the blur request in flight', async () => {
+    let signal;
+    fetchMock.mockImplementation((url, options) => { signal = options.signal; return hangUntilAborted(url, options); });
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    const cancelled = expect(pending).rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    blur.cancelAnalysis();
+    expect(signal.aborted).toBe(true);
+    await cancelled;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a new analysis start right after cancel, and cancel with nothing running does nothing', async () => {
+    blur.cancelAnalysis();
+    let finishNext;
+    fetchMock.mockImplementationOnce(hangUntilAborted)
+      .mockImplementationOnce(() => new Promise(resolve => { finishNext = resolve; }));
+    const old = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(err => err);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    blur.cancelAnalysis();
+    const next = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);   // before the old run has settled
+    expect((await old).code).toBe('BLUR_CANCELLED');
+    // The old run ending must not free the new run's turn.
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder)).rejects.toThrow(/already in progress/i);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    finishNext(ndjsonResponse([row(0, MOTION), summary(1)]));
+    expect((await next).FIRST.predictedClass).toBe('motion_blurred');
+  });
+
+  it('a cancel that lands before the run starts still stops it, and sends nothing', async () => {
+    const startedAt = blur.cancelCount();
+    blur.cancelAnalysis();   // e.g. while the IPC handler is still reading the folder
+    await expect(blur.analyzeBlur(groups, folder, 'moderate', null, null, false, startedAt))
+      .rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('waits when the re-check of a missing photo finds the service busy', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    let singles = 0;
+    fetchMock.mockImplementation(async (url, options) => {
+      if (url.endsWith('/stream')) return ndjsonResponse([row(0), summary(2)]);
+      return ++singles === 1 ? refusal(503, 'BLUR_BUSY') : jpegOnlySingle(options, MOTION);
+    });
+    const pending = blur.analyzeBlur(groups, folder, 'moderate', null, progress);
+    await vi.waitFor(() => expect(singles).toBe(1));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await pending).SECOND.predictedClass).toBe('motion_blurred');
+    expect(singles).toBe(2);
+    expect(progress.mock.calls.map(([value]) => value)).toEqual([
+      { current: 1, total: 2 },
+      { current: 1, total: 2, waiting: true },
+      { current: 1, total: 2 },   // the re-check was taken: no longer waiting, before its result
+      { current: 2, total: 2 },
+    ]);
+  });
+
+  it('still fails a 401 on the re-check at once', async () => {
+    fetchMock.mockImplementation(async url => url.endsWith('/stream')
+      ? ndjsonResponse([row(0), summary(2)])
+      : refusal(401, 'INVALID_API_KEY'));
+    await expect(blur.analyzeBlur(groups, folder)).rejects.toThrow(/^AI service returned 401/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancel aborts a re-check in flight', async () => {
+    let signal;
+    fetchMock.mockImplementation(async (url, options) => {
+      if (url.endsWith('/stream')) return ndjsonResponse([row(0), summary(2)]);
+      signal = options.signal;
+      return hangUntilAborted(url, options);
+    });
+    const pending = blur.analyzeBlur(groups, folder);
+    const cancelled = expect(pending).rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    blur.cancelAnalysis();
+    expect(signal.aborted).toBe(true);
+    await cancelled;
   });
 
   it('re-reads a replaced image when beta analysis is explicitly restarted', async () => {

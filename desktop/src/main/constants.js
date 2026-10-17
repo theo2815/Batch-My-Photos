@@ -266,10 +266,11 @@ const BLUR_AI_RESIZE_CONCURRENCY = Math.max(2, os.cpus().length - 1);
 
 /**
  * Images per /blur/classify/stream request. Must be ≤ the server's
- * STREAM_CLASSIFY_MAX_SIZE (500). Kept at 100 to bound server memory (it buffers
- * the whole request before streaming) and to limit rework if a stream drops.
+ * STREAM_CLASSIFY_MAX_SIZE (500). Kept at 25 so the busy server frees its slot every
+ * few seconds and waiting users take turns; small requests also bound server memory
+ * and limit rework if a stream drops.
  */
-const BLUR_AI_STREAM_BATCH_SIZE = 100;
+const BLUR_AI_STREAM_BATCH_SIZE = 25;
 
 /** Prepared JPEGs stay below staging's 128 MiB body ceiling with 8 MiB for multipart framing. */
 const BLUR_AI_STREAM_MAX_BYTES = 120 * 1024 * 1024;
@@ -289,6 +290,9 @@ const BLUR_AI_STREAM_TIMEOUT_MS = 210000;
 
 /** Longer server backoffs require a manual retry instead of holding the scan open. */
 const BLUR_AI_MAX_RETRY_WAIT_MS = 30000;
+
+/** Total wait per request while the server answers busy (BLUR_BUSY / BLUR_KEY_BUSY) before giving up. */
+const BLUR_AI_BUSY_WAIT_MS = 300000;
 
 // ============================================================================
 // QUICKPITIK UPLOAD (feature-flagged Upload view; spec 2026-10-10)
@@ -368,6 +372,7 @@ module.exports = {
   BLUR_AI_STREAM_CONCURRENCY,
   BLUR_AI_STREAM_TIMEOUT_MS,
   BLUR_AI_MAX_RETRY_WAIT_MS,
+  BLUR_AI_BUSY_WAIT_MS,
   DEVICE_LIMIT_PRO,
   DEVICE_LIMIT_PRO_PLUS,
   HEARTBEAT_INTERVAL_MS,

@@ -887,6 +887,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         return { success: false, error: 'Save your blur beta key before starting analysis.' };
       }
 
+      const cancelsAtStart = blurDetectionService.cancelCount();   // a Cancel during the folder read below still counts
+
       // SECURITY: Validate path is allowed
       if (!(await isPathAllowedAsync(folderPath))) {
         logger.warn('[SECURITY] Blocked analyze-blur on unregistered folder');
@@ -917,7 +919,8 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         (progress) => {
           event.sender.send('blur-progress', { ...progress, requestId });
         },
-        config.features.BLUR_BETA_ENABLED
+        config.features.BLUR_BETA_ENABLED,
+        cancelsAtStart
       );
 
       // Count blurry groups
@@ -932,6 +935,11 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalGroups: Object.keys(blurResults).length,
       };
     } catch (error) {
+      // ai-api refused the saved beta key (revoked or wrong): forget it so Settings asks again.
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 40[13]\b/.test(error.message || '')) {
+        require('./blurBetaKeyStore').clear();
+        return { success: false, error: 'Your blur beta key was not accepted. Enter it again in Settings.', aiUnavailable: false };
+      }
       // Check if this is an AI service unavailability error
       const isAiError = error.message?.includes('AI service');
       return {
@@ -943,6 +951,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       };
     }
   });
+
+  /** Handler: stop the running blur analysis (does nothing when none runs). */
+  handle(ipcMain, 'cancel-blur', () => blurDetectionService.cancelAnalysis());
 
   /**
    * Handler: Validate execution environment before starting batch operation
@@ -1138,7 +1149,17 @@ function registerPreferenceHandlers(ipcMain, store) {
   handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
     if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
     const keyStore = require('./blurBetaKeyStore');
-    if (key !== undefined) keyStore.set(key);
+    if (key !== undefined) {
+      keyStore.check(key);
+      // Save only a key ai-api accepts; a refused or unchecked key leaves the stored one alone.
+      const verdict = await blurDetectionService.verifyBetaKey(key);
+      if (verdict !== 'valid') {
+        return { enabled: true, configured: !!keyStore.get(), error: verdict === 'invalid'
+          ? 'This beta key was not accepted. Check it and try again.'
+          : 'Could not check this key with the blur service. Check your connection and try again.' };
+      }
+      keyStore.set(key);
+    }
     return { enabled: true, configured: !!keyStore.get() };
   });
 
@@ -1628,6 +1649,20 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
    */
   const previewCache = new Map();
 
+  // Read from the ORIGINAL file: the preview and blur-beta bytes carry no metadata. Never fails the preview.
+  async function readPreviewMetadata(filePath) {
+    let metadata = { status: 'failed' };
+    try {
+      metadata = await exifService.readPhotoMetadata(filePath);
+    } catch (_err) { /* keep 'failed' */ }
+    try {
+      // Header only, no decode. autoOrient swaps width and height for sideways (EXIF-rotated) photos.
+      const { autoOrient } = await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).metadata();
+      metadata = { ...metadata, width: autoOrient.width, height: autoOrient.height };
+    } catch (_err) { /* the info bar then shows no size */ }
+    return metadata;
+  }
+
   handle(ipcMain, 'get-image-preview', async (event, { folderPath, fileName }) => {
     // SECURITY: Validate folder path is in allowed list
     if (!(await isPathAllowedAsync(folderPath))) {
@@ -1680,6 +1715,7 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         width: info.width,
         height: info.height,
         contentHash,
+        metadata: await readPreviewMetadata(filePath),
       };
 
       // Add to LRU cache, evict oldest if full

@@ -12,14 +12,22 @@ function get() {
   return getStore().get('apiKey', '');
 }
 
-function set(key) {
+function check(key) {
   if (typeof key !== 'string' || !/^[\x21-\x7e]{1,1024}$/.test(key)) {
     throw new Error('Enter a valid beta key without whitespace (maximum 1024 characters).');
   }
+}
+
+function set(key) {
+  check(key);
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('OS encryption is unavailable. Restart the app before saving a beta key.');
   }
   getStore().set('apiKey', key);
 }
 
-module.exports = { get, set };
+function clear() {
+  getStore().delete('apiKey');
+}
+
+module.exports = { get, set, check, clear };
