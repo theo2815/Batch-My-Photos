@@ -41,7 +41,7 @@ const scan = { success: true, root: 'D:/Shoots/Theo dipolog', folders: [
   { relPath: 'Race A', name: 'Race A', uploadable: { count: 400, bytes: 400 }, skipped: { raw: 88, video: 0, heic: 0, oversize: 3, other: 0 }, defaultSelected: true },
   { relPath: 'Race A/Race A_Blurry', name: 'Race A_Blurry', uploadable: { count: 20, bytes: 20 }, skipped: { raw: 0, video: 0, heic: 0, oversize: 0, other: 0 }, defaultSelected: false },
 ], totals: { folders: 3, uploadable: { count: 432, bytes: 432 }, skipped: { raw: 88, video: 2, heic: 0, oversize: 3, other: 0 } } };
-const event = { id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', location: 'Cebu City', ownedByMe: false, state: 'live' };
+const event = { id: 'e1', name: 'Cebu Marathon 2026', date: '2026-10-10', location: 'Cebu City', ownedByMe: false, state: 'live', uploadWindow: 'open', closesOn: '2026-10-13' };
 const noop = () => {};
 
 beforeEach(() => { hooks.values = []; hooks.cursor = 0; hooks.effects = []; hooks.deps = []; hooks.cleanups = []; });
@@ -344,9 +344,9 @@ describe('useQuickPitikUpload', () => {
 
   const other = { ...event, id: 'e2', name: 'Mandaue Dash' };
 
-  it('chooses the event when it is the only one open', async () => {
+  it('never chooses an event by itself, not even the only open one', async () => {
     connectedApi();
-    expect((await mounted()).eventId).toBe('e1');
+    expect((await mounted()).eventId).toBe('');
   });
 
   it('leaves the choice to the photographer when two events are open', async () => {
@@ -354,13 +354,49 @@ describe('useQuickPitikUpload', () => {
     expect((await mounted()).eventId).toBe('');
   });
 
-  it('keeps an event the photographer already chose when a Refresh leaves one event', async () => {
+  it('a Refresh keeps a chosen event that is still open', async () => {
+    const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
+    let qp = await mounted();
+    qp.setEventId('e2');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [other] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('e2');
+  });
+
+  it('a Refresh drops a chosen event that is gone or no longer open', async () => {
     const { api } = connectedApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event, other] }) });
     let qp = await mounted();
     qp.setEventId('e2');
     api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [event] });
     await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
-    expect(qp.eventId).toBe('e2');
+    expect(qp.eventId).toBe('');
+
+    qp.setEventId('e1');
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: true, events: [{ ...event, uploadWindow: 'closed' }] });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.eventId).toBe('');
+  });
+
+  it('says the list is loading until the answer arrives, then when it was updated', async () => {
+    let answer;
+    connectedApi({ qpListEvents: vi.fn(() => new Promise((resolve) => { answer = resolve; })) });
+    let qp = await mounted();
+    expect(qp.eventsLoading).toBe(true);
+    expect(qp.eventsLoadedAt).toBeNull();
+    answer({ success: true, events: [event] }); await effects();
+    qp = render(useQuickPitikUpload, {});
+    expect(qp.eventsLoading).toBe(false);
+    expect(qp.eventsLoadedAt).toBeInstanceOf(Date);
+  });
+
+  it('a Refresh that fails keeps the list it had and stops loading', async () => { // Review Focus 3
+    const { api } = connectedApi();
+    let qp = await mounted();
+    api.qpListEvents = vi.fn().mockResolvedValue({ success: false, error: 'Request failed' });
+    await qp.loadEvents(); qp = render(useQuickPitikUpload, {});
+    expect(qp.events).toEqual([event]);
+    expect(qp.eventsLoading).toBe(false);
+    expect(qp.error).toEqual({ code: 'EVENTS', message: 'Request failed' });
   });
 });
 

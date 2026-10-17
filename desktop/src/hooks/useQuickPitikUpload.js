@@ -14,6 +14,8 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const [status, setStatus] = useState('disconnected');
   const [session, setSession] = useState(null);   // { email, name }
   const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsLoadedAt, setEventsLoadedAt] = useState(null); // Date of the last good list
   const [eventId, setEventId] = useState('');
   const [scan, setScan] = useState(null);         // qpScanFolder result
   const [selected, setSelected] = useState([]);   // ticked relPaths
@@ -22,11 +24,13 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const loadEvents = useCallback(async () => {
+    setEventsLoading(true);
     const result = await ask(window.electronAPI.qpListEvents());
+    setEventsLoading(false);
     if (result.success) {
-      setEvents(result.events); setError(null);
-      // The only open event needs no click; a choice already made is kept.
-      if (result.events.length === 1) setEventId(current => current || result.events[0].id);
+      setEvents(result.events); setError(null); setEventsLoadedAt(new Date());
+      // The photographer always picks; a choice that is no longer open for upload is dropped.
+      setEventId(current => (result.events.some(e => e.id === current && e.uploadWindow === 'open') ? current : ''));
       return;
     }
     if (result.authRejected) { setSession(null); setStatus('disconnected'); }
@@ -79,7 +83,7 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
 
   const disconnect = useCallback(async () => {
     await ask(window.electronAPI.qpDisconnect());
-    setSession(null); setEvents([]); setEventId(''); setScan(null); setSelected([]); setProgress(null); setError(null);
+    setSession(null); setEvents([]); setEventsLoadedAt(null); setEventId(''); setScan(null); setSelected([]); setProgress(null); setError(null);
     setStatus('disconnected');
   }, []);
 
@@ -145,7 +149,7 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
     .reduce((sum, f) => sum + f.uploadable.count, 0);
 
   return {
-    status, session, events, eventId, setEventId, scan, selected, selectedCount, progress, error, isDragOver,
+    status, session, events, eventsLoading, eventsLoadedAt, eventId, setEventId, scan, selected, selectedCount, progress, error, isDragOver,
     connect, disconnect, loadEvents, chooseFolder, handleDragOver, handleDragLeave, handleDrop, toggleFolder,
     startUpload, cancelUpload, retryFailed, reset,
   };
