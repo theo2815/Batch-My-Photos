@@ -36,7 +36,7 @@ function UploadView({ onBusyChange }) {
     <div className="upload-view">
       <div className="upload-session">
         <span className="upload-kicker">{formatString(STRINGS.QP_CONNECTED_AS, { email: qp.session?.email ?? '' })}</span>
-        <button type="button" className="upload-link" onClick={() => setConfirmingDisconnect(true)} disabled={scanning}>{STRINGS.QP_BTN_DISCONNECT}</button>
+        <button type="button" className="upload-link upload-link-quiet" onClick={() => setConfirmingDisconnect(true)} disabled={scanning}>{STRINGS.QP_BTN_DISCONNECT}</button>
       </div>
       {/* The folder comes after the event: until one is chosen there is no drop zone. A scan already made is kept. */}
       {event ? (

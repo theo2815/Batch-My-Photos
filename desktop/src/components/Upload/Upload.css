@@ -40,11 +40,15 @@
   white-space: nowrap;
 }
 
+/* The account line is its own quiet strip, set apart from the event section below it. */
 .upload-session {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border);
 }
 
 .upload-link {
@@ -62,6 +66,16 @@
 .upload-link:disabled {
   color: var(--text-muted);
   cursor: not-allowed;
+}
+
+/* Disconnect: grey, so Refresh stays the one green link; red only when about to be pressed. */
+.upload-link-quiet {
+  color: var(--text-muted);
+}
+
+.upload-link-quiet:hover:not(:disabled),
+.upload-link-quiet:focus-visible {
+  color: var(--error);
 }
 
 .upload-event-row {
