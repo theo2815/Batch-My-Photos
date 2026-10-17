@@ -1,0 +1,5 @@
+Copied unchanged from the QuickPitik monorepo (theo2815/Capstone-Project) at commit f4642ae6:
+  backend/src/test/resources/photo-metadata/
+They are synthetic 8x8 images (see "provenance" in expected.json). No private photos.
+They pin BatchMyPhotos' metadata panel to the same answers as QuickPitik's backend extractor.
+If QuickPitik changes its extractor or these files, copy them again and re-run tests/exifService.test.js.

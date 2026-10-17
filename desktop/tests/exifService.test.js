@@ -94,3 +94,90 @@ describe('extractExifDates', () => {
     expect(dates['empty.jpg']).toBeGreaterThan(0);
   });
 });
+
+// QuickPitik parity fixtures, copied unchanged from the monorepo (see fixtures/photo-metadata/SOURCE.txt).
+const fixtures = path.join(import.meta.dirname, 'fixtures', 'photo-metadata');
+const evidence = JSON.parse(fs.readFileSync(path.join(fixtures, 'expected.json'), 'utf8'));
+const realExif = () => load('src/main/exifService.js', { '../utils/logger': logger });
+
+describe('readPhotoMetadata', () => {
+  it.each(Object.entries(evidence.vectors))('matches QuickPitik for %s', async (name, expected) => {
+    const result = await realExif().readPhotoMetadata(path.join(fixtures, name));
+    expect(result.status).toBe(Object.keys(expected).length ? 'ready' : 'empty');
+    expect({ ...result.fields }).toEqual(expected);
+    expect(result.fileSizeBytes).toBe(fs.statSync(path.join(fixtures, name)).size);
+  });
+
+  it('never returns GPS, serial numbers or private XMP from any fixture', async () => {
+    const { readPhotoMetadata } = realExif();
+    for (const name of fs.readdirSync(fixtures).filter(n => n !== 'expected.json')) {
+      const json = JSON.stringify(await readPhotoMetadata(path.join(fixtures, name)));
+      for (const sentinel of evidence.sentinels) expect(json, name).not.toContain(sentinel);
+    }
+  });
+
+  it('keeps the backend 7,000-unit text budget on the payload-limit fixture', async () => {
+    const { fields } = await realExif().readPhotoMetadata(path.join(fixtures, 'xmp-payload-limit.jpg'));
+    expect(fields.aperture).toBe(2.8);
+    expect(fields.author).toContain('"');
+    expect(fields.author).toContain('\\');
+    expect(fields.copyright).toBeTruthy();
+    expect(Buffer.byteLength(JSON.stringify(fields))).toBeLessThanOrEqual(8 * 1024);
+  });
+
+  it('a corrupt file resolves without fields instead of throwing', async () => {
+    const result = await realExif().readPhotoMetadata(path.join(fixtures, evidence.parserFailure));
+    expect(result.fields).toBeUndefined();
+    expect(['empty', 'failed']).toContain(result.status);
+  });
+
+  it('never hands files starting 00 00 to exifr', async () => {
+    const parse = vi.fn();
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'IMG_0001.jpg': heifLooper });
+    expect(await readPhotoMetadata(path.join(folder, 'IMG_0001.jpg'))).toEqual({
+      status: 'unavailable', fileSizeBytes: 40,
+    });
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it('formats exifr cannot read are unavailable and never reach exifr', async () => {
+    const parse = vi.fn();
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({
+      'a.webp': Buffer.from('RIFF'), 'b.gif': Buffer.from('GIF8'), 'c.bmp': Buffer.from('BM'),
+    });
+    for (const name of ['a.webp', 'b.gif', 'c.bmp']) {
+      expect((await readPhotoMetadata(path.join(folder, name))).status).toBe('unavailable');
+    }
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it('an exifr error gives failed with the file size, and logs nothing', async () => {
+    const warn = vi.fn();
+    const parse = vi.fn(async () => { throw new Error('SERIAL_SENTINEL_QP_94'); });
+    const { readPhotoMetadata } = load('src/main/exifService.js', {
+      exifr: { parse }, '../utils/logger': { ...logger, warn, log: warn },
+    });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect(await readPhotoMetadata(path.join(folder, 'x.jpg'))).toEqual({ status: 'failed', fileSizeBytes: 3 });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('a missing file gives failed', async () => {
+    const missing = path.join(os.tmpdir(), 'no-such-photo.jpg');
+    expect(await realExif().readPhotoMetadata(missing)).toEqual({ status: 'failed' });
+  });
+
+  it('cleans text, strips the make from the model, and keeps exact fractions and offsets', async () => {
+    const tiff = { ifd0: { Make: 'Ca‮non​', Model: 'canon EOS R5', Artist: 'A\u0007b' },
+      exif: { DateTimeOriginal: '2026:01:02 03:04:05', SubSecTimeOriginal: '500', OffsetTimeOriginal: '+00:00',
+        ExposureTime: 0.3, ISO: [200, 0] } };
+    const parse = vi.fn(async (_file, options) => (options.tiff ? tiff : undefined));
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
+      cameraMake: 'Canon', cameraModel: 'EOS R5', author: 'Ab', exposureTime: '3/10 s', iso: 200,
+      takenAtLocal: '2026-01-02T03:04:05.5', takenAtOffset: 'Z' });
+  });
+});
