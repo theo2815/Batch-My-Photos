@@ -370,6 +370,29 @@ describe('real blur stream client', () => {
     expect(progress.mock.calls[0][0]).toEqual({ current: 0, total: 1, waiting: true });
   });
 
+  it('waits at least 1 s on busy (even with Retry-After: 0), doubling up to 10 s', async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: { code: 'BLUR_BUSY' } }), {
+        status: 503, headers: { 'Retry-After': '0' },
+      }));
+      const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(() => {});
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      // vi.waitFor already moved the fake clock up to 50 ms, so checkpoints leave 100 ms of slack.
+      await vi.advanceTimersByTimeAsync(900);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      for (const [wait, calls] of [[100, 2], [2000, 3], [4000, 4], [8000, 5], [9900, 5], [100, 6], [10000, 7]]) {
+        await vi.advanceTimersByTimeAsync(wait);
+        expect(fetchMock).toHaveBeenCalledTimes(calls);
+      }
+      await vi.advanceTimersByTimeAsync(300000);
+      await pending;
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   it('gives up after five minutes of busy answers and asks no more', async () => {
     vi.useFakeTimers();
     fetchMock.mockImplementation(async () => refusal(503, 'BLUR_BUSY'));

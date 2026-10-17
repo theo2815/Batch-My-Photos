@@ -695,9 +695,9 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
               if (!err.retryable || (retried && !busy)) throw err;
               let delay = err.retryDelayMs ?? 2000;
               if (busy) {
-                // Another analysis holds the server: wait our turn, doubling up to 10 s,
+                // Another analysis holds the server: wait our turn (at least 1 s), doubling up to 10 s,
                 // plus 0–50% jitter so waiting users do not retry in lockstep.
-                delay = Math.min((err.retryDelayMs ?? 1000) * 2 ** busyTries++, 10000) * (1 + Math.random() / 2);
+                delay = Math.min(Math.max(err.retryDelayMs ?? 0, 1000) * 2 ** busyTries++, 10000) * (1 + Math.random() / 2);
                 busyWaitMs += delay;
                 if (busyWaitMs > BLUR_AI_BUSY_WAIT_MS) throw new Error(unavailable);
                 if (onProgress) onProgress({ current: processed, total, waiting: true });
