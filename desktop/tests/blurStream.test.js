@@ -426,6 +426,56 @@ describe('real blur stream client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  // Like net.fetch: an aborted request rejects with an AbortError.
+  const hangUntilAborted = (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+
+  it('cancel during a busy wait ends the analysis at once and asks no more', async () => {
+    vi.useFakeTimers();
+    const progress = vi.fn();
+    fetchMock.mockImplementation(async () => refusal(503, 'BLUR_BUSY'));
+    let error;
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, progress)
+      .catch(err => { error = err; });
+    await vi.waitFor(() => expect(progress).toHaveBeenCalledWith({ current: 0, total: 1, waiting: true }));
+    blur.cancelAnalysis();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error?.code).toBe('BLUR_CANCELLED');
+    await vi.advanceTimersByTimeAsync(60000);
+    await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel aborts the blur request in flight', async () => {
+    let signal;
+    fetchMock.mockImplementation((url, options) => { signal = options.signal; return hangUntilAborted(url, options); });
+    const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);
+    const cancelled = expect(pending).rejects.toMatchObject({ code: 'BLUR_CANCELLED' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    blur.cancelAnalysis();
+    expect(signal.aborted).toBe(true);
+    await cancelled;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a new analysis start right after cancel, and cancel with nothing running does nothing', async () => {
+    blur.cancelAnalysis();
+    let finishNext;
+    fetchMock.mockImplementationOnce(hangUntilAborted)
+      .mockImplementationOnce(() => new Promise(resolve => { finishNext = resolve; }));
+    const old = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(err => err);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    blur.cancelAnalysis();
+    const next = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder);   // before the old run has settled
+    expect((await old).code).toBe('BLUR_CANCELLED');
+    // The old run ending must not free the new run's turn.
+    await expect(blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder)).rejects.toThrow(/already in progress/i);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    finishNext(ndjsonResponse([row(0, MOTION), summary(1)]));
+    expect((await next).FIRST.predictedClass).toBe('motion_blurred');
+  });
+
   it('re-reads a replaced image when beta analysis is explicitly restarted', async () => {
     fetchMock.mockImplementation(async () => ndjsonResponse([row(0), summary(1)]));
     await blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder, 'moderate', null, null, true);

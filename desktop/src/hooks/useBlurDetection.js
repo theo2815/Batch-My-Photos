@@ -219,6 +219,15 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   }, []);
 
   /**
+   * Cancel the running analysis: main stops sending photos, and the run ends
+   * like a reset (no results, no error); the user can start a new one.
+   */
+  const cancelAnalysis = useCallback(() => {
+    resetBlurState();
+    window.electronAPI.cancelBlurAnalysis();
+  }, [resetBlurState]);
+
+  /**
    * Clear only the analysis cache so the next runBlurAnalysis() call
    * re-runs even if folder + sensitivity + categories haven't changed.
    * Used when the user explicitly clicks "Start Analysis" in the modal.
@@ -246,6 +255,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
     runBlurAnalysis,
     toggleBlurFlag,
     resetBlurState,
+    cancelAnalysis,
     clearAnalysisCache,
   };
 }

@@ -273,6 +273,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('analyze-blur', { folderPath, threshold, categories, requestId }),
 
   /**
+   * Stop the running blur analysis; its analyzeBlur call then ends without results.
+   * @returns {Promise<void>}
+   */
+  cancelBlurAnalysis: () => ipcRenderer.invoke('cancel-blur'),
+
+  /**
    * Whether blur detection is available (feature-flagged off for release).
    * The settings toggle stays visible but is disabled when this is false.
    * @param {boolean} [includeBeta=false] - Request beta status alongside availability

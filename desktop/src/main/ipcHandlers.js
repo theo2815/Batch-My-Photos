@@ -949,6 +949,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
     }
   });
 
+  /** Handler: stop the running blur analysis (does nothing when none runs). */
+  handle(ipcMain, 'cancel-blur', () => blurDetectionService.cancelAnalysis());
+
   /**
    * Handler: Validate execution environment before starting batch operation
    * Checks disk space sufficiency and write permissions on the target directory.

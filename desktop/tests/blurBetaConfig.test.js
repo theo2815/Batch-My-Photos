@@ -288,6 +288,12 @@ describe('analysis needs a beta key', () => {
     expect(result.error).toMatch(/beta key/i);
     expect(analyzeBlur).not.toHaveBeenCalled();
   });
+  it('cancel-blur cancels the running analysis', async () => {
+    const cancelAnalysis = vi.fn();
+    const { handlers } = ipcFor(configFor(storeManifest), {}, { './blurDetectionService': { cancelAnalysis } });
+    await handlers.get('cancel-blur')({});
+    expect(cancelAnalysis).toHaveBeenCalledTimes(1);
+  });
   it.each([[401, true], [403, true], [503, false]])('an analysis answered %i forgets the stored key: %s', async (status, forgotten) => {
     const keyStore = { get: () => 'stored-key', clear: vi.fn() };
     const analyzeBlur = vi.fn(async () => { throw new Error(`AI service returned ${status}: nope`); });

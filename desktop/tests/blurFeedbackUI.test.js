@@ -212,6 +212,37 @@ describe('explicit beta feedback consent', () => {
     expect(section({ current: 1, total: 2 })).not.toContain('Waiting for the blur service');
   });
 
+  it('shows Cancel while analysing and cancels through the blur hook', () => {
+    const cancelAnalysis = vi.fn();
+    const state = { isAnalyzing: true, blurProgress: { current: 0, total: 2 }, blurryGroups: [], blurResults: null, unflaggedGroups: new Set(), cancelAnalysis };
+    const tree = render(BatchPreview, { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['missed.jpg'] }], blurDetectionEnabled: true, blurDetection: state });
+    const node = nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = [];
+    button(render(node.type, node.props), 'Cancel').props.onClick();
+    expect(cancelAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel ends the analysis quietly, then a new analysis can start', async () => {
+    const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate', isBeta: true };
+    let finishOld;
+    globalThis.window.electronAPI.analyzeBlur = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ success: true, blurResults: { NEW: { predictedClass: 'sharp' } } });
+    globalThis.window.electronAPI.cancelBlurAnalysis = vi.fn().mockResolvedValue({ success: true });
+    const old = render(useBlurDetection, p).runBlurAnalysis();
+    expect(render(useBlurDetection, p).isAnalyzing).toBe(true);
+    render(useBlurDetection, p).cancelAnalysis();
+    expect(globalThis.window.electronAPI.cancelBlurAnalysis).toHaveBeenCalledTimes(1);
+    expect(render(useBlurDetection, p).isAnalyzing).toBe(false);
+    finishOld({ success: false, aiUnavailable: true, error: 'cancelled' });
+    await old;
+    let state = render(useBlurDetection, p);
+    expect([state.blurResults, state.aiUnavailable, state.isAnalyzing]).toEqual([null, false, false]);
+    await state.runBlurAnalysis();
+    state = render(useBlurDetection, p);
+    expect(state.blurResults).toEqual({ NEW: { predictedClass: 'sharp' } });
+  });
+
   it.each([
     ['RAW-only', { RAW1: { score: -1, isBlurry: false }, RAW2: { score: -1, isBlurry: false } }, ['RAW1.CR3', 'RAW2.CR3'], 'No blur results available', '0 groups analyzed · 2 could not be analyzed'],
     ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 groups)', '2 groups analyzed · 1 could not be analyzed'],

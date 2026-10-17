@@ -241,7 +241,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
  * Blur suggestions section - shows flagged groups for optional review
  */
 function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThumbnails, onImageClick }) {
-  const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag } = blurDetection;
+  const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag, cancelAnalysis } = blurDetection;
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [blurThumbnails, setBlurThumbnails] = useState({});
@@ -310,6 +310,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
           </span>
           {blurEta?.label && <span className="blurry-eta">{blurEta.label}</span>}
           <Loader2 size={16} className="spin-icon" />
+          <button type="button" className="unflag-btn" onClick={cancelAnalysis}><X size={12} />Cancel</button>
         </div>
         {blurEta && (
           <div className="blurry-progress-bar">
