@@ -95,7 +95,7 @@ function BlurSensitivityModal({ isOpen, currentCategories, currentSensitivity, i
         aria-label="Configure Blur Detection"
       >
         <div className="modal-icon">
-          <ScanEye size={48} className="text-primary" />
+          <ScanEye size={36} className="text-primary" />
         </div>
         <h3>Configure Blur Detection</h3>
         <p>{isBeta ? 'Choose which blur types to review.' : 'Choose which blur types to flag. Sharp photos are always kept.'}</p>
