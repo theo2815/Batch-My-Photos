@@ -75,18 +75,21 @@ describe('QuickPitik upload configuration', () => {
     expect({ protocol, origin }).toEqual({ protocol: 'https:', origin: config.urls.QUICKPITIK_UPLOAD_ORIGIN });
   });
 
-  it('turns on from source with BATCH_QUICKPITIK_UPLOAD_ENABLED and honours the URL overrides', () => {
-    expect(configFor(false).features.QUICKPITIK_UPLOAD_ENABLED).toBe(false);
+  it('is on from source against the deployed services, and env still points it at local ones', () => {
+    expect(configFor(false).features.QUICKPITIK_UPLOAD_ENABLED).toBe(true);
     expect(configFor(false).urls).toMatchObject({
-      QUICKPITIK_API_URL: 'http://localhost:8080/api/v1', QUICKPITIK_WEB_URL: 'http://localhost:3000', QUICKPITIK_UPLOAD_ORIGIN: '',
+      FRONTEND_URL: 'https://www.batchmyphotos.com',
+      QUICKPITIK_API_URL: 'https://api.quickpitik.com/api/v1', QUICKPITIK_WEB_URL: 'https://quickpitik.com',
+      QUICKPITIK_UPLOAD_ORIGIN: 'https://277f145551e9715f57bc8e8f70182d5d.r2.cloudflarestorage.com',
     });
+    expect(configFor(false, { BATCH_QUICKPITIK_UPLOAD_ENABLED: 'false' }).features.QUICKPITIK_UPLOAD_ENABLED).toBe(false);
     const config = configFor(false, {
-      BATCH_QUICKPITIK_UPLOAD_ENABLED: 'true', BATCH_QUICKPITIK_API_URL: 'http://localhost:8081/api/v1',
+      BATCH_FRONTEND_URL: 'http://localhost:3000', BATCH_QUICKPITIK_API_URL: 'http://localhost:8080/api/v1',
       BATCH_QUICKPITIK_WEB_URL: 'http://localhost:3001', BATCH_QUICKPITIK_UPLOAD_ORIGIN: 'https://uploads.test',
     });
-    expect(config.features.QUICKPITIK_UPLOAD_ENABLED).toBe(true);
     expect(config.urls).toMatchObject({
-      QUICKPITIK_API_URL: 'http://localhost:8081/api/v1', QUICKPITIK_WEB_URL: 'http://localhost:3001', QUICKPITIK_UPLOAD_ORIGIN: 'https://uploads.test',
+      FRONTEND_URL: 'http://localhost:3000', QUICKPITIK_API_URL: 'http://localhost:8080/api/v1',
+      QUICKPITIK_WEB_URL: 'http://localhost:3001', QUICKPITIK_UPLOAD_ORIGIN: 'https://uploads.test',
     });
   });
 

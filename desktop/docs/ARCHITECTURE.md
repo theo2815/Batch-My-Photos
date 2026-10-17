@@ -333,8 +333,10 @@ Requires Electron `app` module. Supports `process.env` overrides (prefix: `BATCH
 | `features.EXIF_SORTING_ENABLED`      | `BATCH_EXIF_SORTING_ENABLED` | `true`  | Toggle EXIF sorting        |
 | `limits.MAX_PRESETS`                 | `BATCH_MAX_PRESETS`          | 20      | Preset storage cap         |
 | `limits.MAX_FILES_PER_BATCH_CEILING` | —                            | 10000   | DoS prevention             |
-| `features.QUICKPITIK_UPLOAD_ENABLED` | `BATCH_QUICKPITIK_UPLOAD_ENABLED` | `false` from source | Upload view (always on when packaged) |
-| `urls.QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_QUICKPITIK_*` | localhost from source, production when packaged; origin `''` from source | QuickPitik API, website, storage origin (env overrides apply to source runs only) |
+| `features.QUICKPITIK_UPLOAD_ENABLED` | `BATCH_QUICKPITIK_UPLOAD_ENABLED` | `true` | Upload view (always on when packaged) |
+| `features.BLUR_DETECTION_ENABLED` / `BLUR_BETA_ENABLED` / `BLUR_AI_ENABLED` | `BATCH_BLUR_*_ENABLED` | `true` from source; packaged: only with the blur-beta manifest | Blur detection, beta suggestions, AI blur |
+| `features.BLUR_AI_URL` | `BATCH_BLUR_AI_URL` | deployed ai-api from source (local: `http://localhost:8000`); packaged: the manifest's URL | ai-api blur service |
+| `urls.FRONTEND_URL` / `QUICKPITIK_API_URL` / `QUICKPITIK_WEB_URL` / `QUICKPITIK_UPLOAD_ORIGIN` | `BATCH_FRONTEND_URL`, `BATCH_QUICKPITIK_*` | production, from source too (local: `http://localhost:3000`, `http://localhost:8080/api/v1`, `http://localhost:3000`) | BatchMyPhotos website, QuickPitik API, website, storage origin (env overrides apply to source runs only) |
 
 All config objects are `Object.freeze()`d to prevent accidental mutation.
 
@@ -451,7 +453,8 @@ Set before launching to override defaults:
 ```bash
 # Windows PowerShell
 $env:BATCH_VERBOSE_LOGGING="true"; npm run start
-$env:BATCH_QUICKPITIK_UPLOAD_ENABLED="true"; $env:BATCH_QUICKPITIK_API_URL="http://localhost:8080/api/v1"; $env:BATCH_QUICKPITIK_WEB_URL="http://localhost:3000"; npm run start
+$env:BATCH_QUICKPITIK_API_URL="http://localhost:8080/api/v1"; $env:BATCH_QUICKPITIK_WEB_URL="http://localhost:3000"; npm run start  # local QuickPitik stack
+$env:BATCH_BLUR_AI_URL="http://localhost:8000"; npm run start  # local ai-api
 
 # Windows CMD
 set BATCH_VERBOSE_LOGGING=true && npm run start

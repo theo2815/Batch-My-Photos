@@ -172,8 +172,15 @@ describe('packaged beta configuration', () => {
       BLUR_AI_URL: 'https://blur.example.test', BLUR_AI_API_KEY: '',
     });
   });
+  it('is on from source against the deployed ai-api by default', () => {
+    expect(configFor(undefined, false).features).toMatchObject({
+      BLUR_BETA_ENABLED: true, BLUR_DETECTION_ENABLED: true, BLUR_AI_ENABLED: true,
+      BLUR_AI_URL: 'https://ai-api-blur-production.up.railway.app', BLUR_AI_API_KEY: '',
+    });
+  });
   it('preserves source environment settings and ignores a packaged manifest', () => {
     const config = configFor(validManifest, false, {
+      BATCH_BLUR_BETA_ENABLED: 'false', BATCH_BLUR_DETECTION_ENABLED: 'false',
       BATCH_BLUR_AI_ENABLED: 'true', BATCH_BLUR_AI_URL: 'http://localhost:8123',
       BATCH_BLUR_AI_API_KEY: 'source-key',
     });
