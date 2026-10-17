@@ -36,6 +36,8 @@ let _exchanging = false
 
 // Prevent concurrent refresh attempts from racing
 let _refreshPromise = null
+// Bumped by clearSession: an exchange started before it must not save its tokens
+let _sessionGen = 0
 
 class QpApiError extends Error {
   constructor({ status, code, message, retryAfterSeconds }) {
@@ -148,6 +150,7 @@ async function completeConnect(code, state) {
   }
 
   let data
+  const generation = _sessionGen
   _exchanging = true
   try {
     ({ data } = await request(`${API_URL}/auth/desktop/exchange`, {
@@ -166,6 +169,12 @@ async function completeConnect(code, state) {
     _exchanging = false
   }
 
+  if (generation !== _sessionGen) {
+    // A disconnect or logout ran while the code was being exchanged: do not bring the session back
+    logger.warn('⚠️ [QP-AUTH] Connect dropped: the session was cleared meanwhile')
+    sendConnectResult({ success: false, error: 'Could not finish connecting. Press Connect again.' })
+    return
+  }
   const { id, email, name, role } = data.user
   store.set('access_token', data.accessToken)
   store.set('refresh_token', data.refreshToken)
@@ -305,6 +314,7 @@ async function disconnect() {
 
 function clearSession() {
   store.clear()
+  _sessionGen++
   _pending = null
   _refreshPromise = null
 }

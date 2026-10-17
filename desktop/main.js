@@ -143,16 +143,24 @@ async function handleDeepLink(url) {
       return;
     }
 
-    const token = parsed.searchParams.get('token');
-    const refreshToken = parsed.searchParams.get('refresh_token');
-    const email = parsed.searchParams.get('email');
-    const name = parsed.searchParams.get('name');
-
-    if (!token || !email) {
-      logger.error('[DEEP-LINK] Missing token or email in callback URL');
+    // SECURITY: only a login this app started (and has not finished) may sign it in
+    if (!authService.consumeLoginState(parsed.searchParams.get('state'))) {
+      logger.warn('[DEEP-LINK] Auth callback refused: not started from this app');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('auth-callback', { success: false, error: 'Invalid callback: missing token or email' });
+        mainWindow.webContents.send('auth-callback', { success: false, error: 'This sign-in link was not started from this app. Press Sign in with Browser again.' });
+      }
+      return;
+    }
+
+    const token = parsed.searchParams.get('token');
+    const refreshToken = parsed.searchParams.get('refresh_token');
+
+    if (!token) {
+      logger.error('[DEEP-LINK] Missing token in callback URL');
+      const mainWindow = getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth-callback', { success: false, error: 'Invalid callback: missing token' });
       }
       return;
     }
@@ -162,13 +170,17 @@ async function handleDeepLink(url) {
     // Never save a token we could not verify — rejected OR unreachable.
     // The user just had a browser open, so a retry when online costs one click.
     const verification = await authService.verifySession(token, { allowRefresh: false });
-    if (!verification.valid) {
-      logger.warn('[DEEP-LINK] Token not verified — refusing to save session', verification.networkError ? '(backend unreachable)' : '(rejected)');
+    // The email and name come from the server, never from the link
+    const profile = verification.valid ? await authService.fetchUserProfile(token) : null;
+    if (!profile?.email) {
+      // A valid token whose profile could not be read is treated like an unreachable server
+      const networkError = verification.valid || verification.networkError;
+      logger.warn('[DEEP-LINK] Token not verified — refusing to save session', networkError ? '(backend unreachable)' : '(rejected)');
       const mainWindow = getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('auth-callback', {
           success: false,
-          error: verification.networkError
+          error: networkError
             ? 'Could not verify your login — check your connection and try again'
             : 'Invalid or expired token',
         });
@@ -176,10 +188,9 @@ async function handleDeepLink(url) {
       return;
     }
 
-    authService.saveSession(token, {
-      email: decodeURIComponent(email),
-      name: decodeURIComponent(name || ''),
-    });
+    // A new sign-in ends whatever session is still stored (and its QuickPitik connection)
+    authService.clearSession();
+    authService.saveSession(token, { email: profile.email, name: profile.name });
 
     // Store refresh token for persistent sessions (silent re-auth on JWT expiry)
     if (refreshToken) {
@@ -194,8 +205,8 @@ async function handleDeepLink(url) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('auth-callback', {
         success: true,
-        email: decodeURIComponent(email),
-        name: decodeURIComponent(name || ''),
+        email: profile.email,
+        name: profile.name,
       });
 
       // Focus the window so user sees the app is now authenticated
@@ -203,7 +214,7 @@ async function handleDeepLink(url) {
       mainWindow.focus();
     }
 
-    logger.log('[DEEP-LINK] Auth callback processed successfully for:', email);
+    logger.log('[DEEP-LINK] Auth callback processed successfully for:', profile.email);
   } catch (err) {
     logger.error('[DEEP-LINK] Failed to parse deep link URL:', err.message);
   }

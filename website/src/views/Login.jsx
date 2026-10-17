@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import { rememberDesktopState, tabStorage } from '../lib/desktopLoginState'
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
 import GoogleAuthButton from '../components/GoogleAuthButton'
 import InfoModal from '../components/modals/InfoModal'
@@ -30,6 +31,8 @@ export default function Login() {
       setSessionChecked(true) // skip check for non-desktop
       return
     }
+
+    rememberDesktopState(window.location.search, tabStorage())
 
     async function checkExistingSession() {
       try {
@@ -230,7 +233,7 @@ export default function Login() {
         <div className="mt-6 flex flex-col items-center gap-4 text-xs text-text-muted">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Your photos are safe — everything stays on your device</span>
+            <span>Your photos stay on your device unless you upload them</span>
           </div>
           <div className="flex gap-4">
             <button onClick={(e) => { e.preventDefault(); setActiveModal('privacyPolicy') }} className="hover:underline cursor-pointer">Privacy Policy</button>

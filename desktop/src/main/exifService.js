@@ -84,6 +84,12 @@ async function extractExifDates(files, folderPath) {
       const filePath = path.join(folderPath, fileName);
       
       try {
+        // C-22: exifr treats a file starting 00 00 as HEIF and can loop forever on it, so such files
+        // (real HEIC/AVIF included, until EXIF runs in a killable process: H-10) use the file time.
+        const handle = await fs.open(filePath, 'r');
+        const head = await handle.read(Buffer.alloc(2), 0, 2, 0).finally(() => handle.close());
+        if (head.bytesRead === 2 && head.buffer[0] === 0 && head.buffer[1] === 0) throw new Error('HEIF-like');
+
         // 1. Try to read EXIF DateTimeOriginal
         // Only read the necessary segment for speed (first few KB usually)
         const output = await exifr.parse(filePath, { 

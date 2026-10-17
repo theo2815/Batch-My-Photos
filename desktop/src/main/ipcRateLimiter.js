@@ -14,6 +14,7 @@
  */
 
 const logger = require('../utils/logger');
+const { isAppUrl } = require('./windowManager');
 
 // ============================================================================
 // TIER DEFINITIONS
@@ -143,6 +144,11 @@ function resetAll() {
  */
 function rateLimitedHandle(ipcMain, channel, handler) {
   ipcMain.handle(channel, async (event, ...args) => {
+    // SECURITY: only the app's own page may call in (C-16); a gone frame has senderFrame null
+    if (!isAppUrl(event?.senderFrame?.url)) {
+      logger.warn(`🔒 [SECURITY] Refused ${channel} from an unknown page`);
+      throw new Error('FORBIDDEN: IPC from an unknown page');
+    }
     const { allowed, retryAfterMs } = checkLimit(channel);
     if (!allowed) {
       logger.warn(`⚠️ [RATE-LIMIT] Blocked ${channel} — retry in ${retryAfterMs}ms`);

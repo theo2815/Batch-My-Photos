@@ -58,7 +58,7 @@ export default function HeroBeforeAfter() {
               <span className="race-stripe" aria-hidden="true">
                 <span className="bg-primary" /><span className="bg-accent-strong" /><span className="bg-deep-ember" />
               </span>
-              <span className="kicker">Windows desktop app · 100% local</span>
+              <span className="kicker">Windows desktop app · Processed on your PC</span>
             </div>
 
             <h1 className="font-hero text-[2.5rem] leading-[0.95] sm:text-6xl lg:text-[3.9rem] text-text-primary text-balance">
@@ -68,7 +68,7 @@ export default function HeroBeforeAfter() {
             </h1>
 
             <p className="mt-6 text-lg text-text-secondary max-w-xl mx-auto lg:mx-0 text-pretty">
-              BatchMyPhotos sorts 5,000-20,000 photos into numbered folders on your drive. No uploads, fully reversible.
+              BatchMyPhotos sorts 5,000-20,000 photos into numbered folders on your drive. Sorting needs no uploads and is fully reversible.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3">

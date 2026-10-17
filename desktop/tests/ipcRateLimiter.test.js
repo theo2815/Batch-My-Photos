@@ -5,7 +5,11 @@
  * from abuse. Re-implements the core logic without Electron dependency.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import { createRequire } from 'node:module';
 
 // ============================================================================
 // RE-IMPLEMENT RATE LIMITER LOGIC FOR ISOLATED TESTING
@@ -252,5 +256,86 @@ describe('IPC Rate Limiter', () => {
       resetAll();
       expect(checkLimit('execute-batch', now).allowed).toBe(true);
     });
+  });
+});
+
+// ============================================================================
+// SENDER CHECK (real modules, loaded in vm)
+// ============================================================================
+
+const root = path.resolve(import.meta.dirname, '..');
+const logger = { log() {}, warn() {}, error() {} };
+const windowManager = { isAppUrl: url => url === 'file:///app/dist/index.html' };
+function load(file, mocks) {
+  const filename = path.join(root, file);
+  const nativeRequire = createRequire(filename);
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
+    module, exports: module.exports, __dirname: path.dirname(filename),
+    require: name => Object.hasOwn(mocks, name) ? mocks[name] : nativeRequire(name),
+    process, console, setTimeout, clearTimeout,
+  }, { filename });
+  return module.exports;
+}
+const appEvent = { senderFrame: { url: 'file:///app/dist/index.html' } };
+const foreignEvents = [
+  ['a foreign page', { senderFrame: { url: 'file:///C:/Downloads/evil.html' } }],
+  ['a frame that has gone', { senderFrame: null }],
+  ['no frame at all', {}],
+];
+
+describe('rateLimitedHandle sender check', () => {
+  function register() {
+    const handlers = new Map();
+    const inner = vi.fn(async () => 'answer');
+    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': windowManager });
+    limiter.rateLimitedHandle({ handle: (name, fn) => handlers.set(name, fn) }, 'get-theme', inner);
+    return { handler: handlers.get('get-theme'), inner };
+  }
+
+  it('answers the app\'s own page', async () => {
+    const { handler, inner } = register();
+    await expect(handler(appEvent, 'arg')).resolves.toBe('answer');
+    expect(inner).toHaveBeenCalledWith(appEvent, 'arg');
+  });
+
+  it.each(foreignEvents)('refuses %s', async (_, event) => {
+    const { handler, inner } = register();
+    await expect(handler(event)).rejects.toThrow(/FORBIDDEN/);
+    expect(inner).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateManager sender check', () => {
+  function register(blurBeta) {
+    const handlers = new Map();
+    const updater = { on: vi.fn(), checkForUpdates: vi.fn(async () => {}), downloadUpdate: vi.fn(), quitAndInstall: vi.fn() };
+    load('src/main/updateManager.js', {
+      './config': { features: { BLUR_BETA_ENABLED: blurBeta } }, '../utils/logger': logger,
+      './windowManager': windowManager, 'electron-updater': { autoUpdater: updater },
+      electron: { app: { isPackaged: false }, ipcMain: { handle: (name, fn) => handlers.set(name, fn) } },
+    }).initAutoUpdater(() => null);
+    return { handlers, updater };
+  }
+
+  it('answers the app\'s own page', async () => {
+    const { handlers, updater } = register(false);
+    await expect(handlers.get('check-for-updates')(appEvent)).resolves.toEqual({ status: 'checking' });
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1);
+    await expect(register(true).handlers.get('check-for-updates')(appEvent)).resolves.toEqual({ status: 'disabled-beta' });
+  });
+
+  it.each(foreignEvents)('refuses %s', async (_, event) => {
+    const { handlers, updater } = register(false);
+    for (const name of ['check-for-updates', 'download-update', 'install-update']) {
+      await expect(async () => handlers.get(name)(event)).rejects.toThrow(/FORBIDDEN/);
+    }
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+    expect(updater.downloadUpdate).not.toHaveBeenCalled();
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    const beta = register(true).handlers;
+    for (const name of ['check-for-updates', 'download-update', 'install-update']) {
+      await expect(async () => beta.get(name)(event)).rejects.toThrow(/FORBIDDEN/);
+    }
   });
 });

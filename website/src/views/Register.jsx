@@ -282,7 +282,7 @@ export default function Register() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-bg-elevated border border-border-subtle text-text-muted px-3 py-1 text-xs">
               <ShieldCheck className="w-3 h-3" />
-              100% private
+              Private by default
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-bg-elevated border border-border-subtle text-text-muted px-3 py-1 text-xs">
               <Sparkles className="w-3 h-3" />

@@ -94,13 +94,13 @@
     "node-machine-id": "^1.1.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "electron": "^28.3.3",
+    "electron": "^44.8.0",
     "electron-builder": "^26.4.0",
     "eslint": "^9.39.2",
     "eslint-plugin-react": "^7.37.5",

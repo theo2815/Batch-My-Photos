@@ -16,12 +16,14 @@
  * No sensitive data (tokens, plan info) is ever written to disk in plain text.
  */
 
+const crypto = require('crypto')
 const { app, net, shell } = require('electron')
 const SecureStore = require('./secureStore')
 const logger = require('../utils/logger')
 const config = require('./config')
 const deviceService = require('./deviceService')
 const { rpc, SUPABASE_URL, ANON_KEY } = require('./supabaseApi')
+const { LOGIN_PENDING_TTL_MS } = require('./constants')
 
 // SecureStore encrypts all data at rest via safeStorage.
 // Automatic migration: existing plain-text keys from older versions
@@ -32,6 +34,12 @@ const FRONTEND_URL = config.urls.FRONTEND_URL
 
 // Prevent concurrent refresh attempts from racing
 let _refreshPromise = null
+// Bumped by clearSession: a refresh started before it must not save its tokens
+let _sessionGen = 0
+
+// The one Log In the browser may answer: { state, createdAt }. Memory only,
+// so after a restart the user presses Log In again.
+let _pendingLogin = null
 
 // ============================================================================
 // Session Management
@@ -87,7 +95,19 @@ function getStoredRefreshToken() {
  */
 function clearSession() {
   store.clear()
+  _sessionGen++
   _refreshPromise = null
+  // A QuickPitik connection must not outlive this sign-in (shared PCs).
+  // Required here, not at the top: its store must open after main.js sets the data folder.
+  if (config.features.QUICKPITIK_UPLOAD_ENABLED) {
+    try {
+      // Stop a running upload too, but only if it is already loaded: a logout must not load or write anything new
+      require.cache[require.resolve('./quickpitikUploadService')]?.exports.cancelUpload()
+      require('./quickpitikAuthService').disconnect()
+    } catch (err) {
+      logger.warn('⚠️ [AUTH] Could not disconnect QuickPitik:', err.message)
+    }
+  }
   logger.log('🚪 [AUTH] Session cleared (logout)')
 }
 
@@ -153,6 +173,7 @@ async function refreshAccessToken() {
  * @returns {Promise<{refreshed: boolean, accessToken?: string}>}
  */
 async function _doRefresh(refreshToken) {
+  const generation = _sessionGen
   try {
     logger.log('🔄 [AUTH] Refreshing access token via Supabase...')
 
@@ -184,6 +205,11 @@ async function _doRefresh(refreshToken) {
 
     if (!newAccessToken) {
       logger.error('❌ [AUTH] Refresh response missing access_token')
+      return { refreshed: false }
+    }
+
+    if (generation !== _sessionGen) {
+      logger.warn('⚠️ [AUTH] Refresh dropped: the session was cleared meanwhile')
       return { refreshed: false }
     }
 
@@ -243,6 +269,8 @@ async function verifySession(sessionToken, { allowRefresh = true } = {}) {
               logger.log('✅ [AUTH] Token refreshed — re-verifying with new token...')
               return verifySession(refreshResult.accessToken, { allowRefresh: false })
             }
+            // Could not reach the server to renew: keep the session, as offline
+            if (refreshResult.networkError) return { valid: false, networkError: true }
           }
           logger.warn(`⚠️ [AUTH] Session explicitly rejected: ${status}`)
           return { valid: false }
@@ -362,9 +390,47 @@ async function checkAuthStatus() {
  * User will authenticate on website, then copy their token back to desktop app
  */
 function openLoginPage() {
-  const loginUrl = `${FRONTEND_URL}/login?desktop=true`
-  logger.log(`[AUTH] Opening login page: ${loginUrl}`)
-  shell.openExternal(loginUrl)
+  // A new Log In replaces the one before it
+  const state = crypto.randomBytes(32).toString('base64url')
+  _pendingLogin = { state, createdAt: Date.now() }
+  logger.log(`[AUTH] Opening login page: ${FRONTEND_URL}/login?desktop=true`)
+  shell.openExternal(`${FRONTEND_URL}/login?desktop=true&state=${state}`)
+}
+
+/**
+ * Check the state a login link came back with. Single use: a match clears
+ * the pending login; a mismatch keeps it, so a forged link cannot cancel it.
+ * @param {string|null} state
+ * @returns {boolean}
+ */
+function consumeLoginState(state) {
+  const pending = _pendingLogin
+  if (!pending || typeof state !== 'string' || Date.now() - pending.createdAt > LOGIN_PENDING_TTL_MS) return false
+  const given = Buffer.from(state)
+  const expected = Buffer.from(pending.state)
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return false
+  _pendingLogin = null
+  return true
+}
+
+/**
+ * Read the signed-in account's email and name from Supabase.
+ * @param {string} token - Access token (JWT)
+ * @returns {Promise<{email: string, name: string}|null>} null if refused or unreachable
+ */
+async function fetchUserProfile(token) {
+  try {
+    const response = await net.fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) return null
+    const user = await response.json()
+    return { email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name || '' }
+  } catch (err) {
+    logger.error('❌ [AUTH] Could not read the user profile:', err.message)
+    return null
+  }
 }
 
 /**
@@ -392,5 +458,7 @@ module.exports = {
   checkAuthStatus,
   verifySession,
   openLoginPage,
+  consumeLoginState,
+  fetchUserProfile,
   openDashboard,
 }

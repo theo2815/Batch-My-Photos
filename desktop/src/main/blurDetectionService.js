@@ -36,7 +36,7 @@ const {
   BLUR_EDGE_PIXEL_THRESHOLD, BLUR_AI_TIMEOUT_MS,
   BLUR_AI_MAX_DIMENSION, BLUR_AI_JPEG_QUALITY, BLUR_AI_RESIZE_CONCURRENCY,
   BLUR_AI_STREAM_BATCH_SIZE, BLUR_AI_STREAM_MAX_BYTES, BLUR_AI_STREAM_CONCURRENCY,
-  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS,
+  BLUR_AI_STREAM_TIMEOUT_MS, BLUR_AI_MAX_RETRY_WAIT_MS, SHARP_MAX_INPUT_PIXELS,
 } = require('./constants');
 const logger = require('../utils/logger');
 
@@ -44,6 +44,9 @@ const logger = require('../utils/logger');
 // Batch processing optimization: limit libvips to 1 thread per Sharp call.
 // ---------------------------------------------------------------------------
 sharp.concurrency(1);
+// Folders come from other people; sharp 0.34.5 has memory-corruption advisories in its SVG and
+// HEIF decoders (GHSA-wq5f-xc86-pv6w, GHSA-rgj7-g3m4-5g8c). TIFF/GIF stay open: preview, blur and thumbnails use them.
+sharp.block({ operation: ['VipsForeignLoadSvg', 'VipsForeignLoadHeif'] });
 
 // ============================================================================
 // IN-MEMORY CACHE
@@ -155,7 +158,7 @@ async function computeBlurScore(filePath) {
   try {
     // Resize + grayscale + normalise + Laplacian in one Sharp pipeline.
     // sequentialRead: true — hint to libvips for linear access (faster I/O).
-    const { data, info } = await sharp(filePath, { sequentialRead: true })
+    const { data, info } = await sharp(filePath, { sequentialRead: true, limitInputPixels: SHARP_MAX_INPUT_PIXELS })
       .resize(BLUR_RESIZE_WIDTH, null, { withoutEnlargement: true })
       .grayscale()
       .normalise()           // histogram stretching — makes scores contrast-independent
@@ -397,7 +400,7 @@ async function classifyOne(classifyUrl, apiKey, filePath, threshold, categoriesF
 async function prepareImageForUpload(filePath) {
   try {
     // Read fresh bytes so libvips cannot reuse a stale filename-based decode.
-    return await sharp(await fs.promises.readFile(filePath), { sequentialRead: true })
+    return await sharp(await fs.promises.readFile(filePath), { sequentialRead: true, limitInputPixels: SHARP_MAX_INPUT_PIXELS })
       .rotate()                       // auto-orient from EXIF before re-encode
       .resize(BLUR_AI_MAX_DIMENSION, BLUR_AI_MAX_DIMENSION, {
         fit: 'inside',
