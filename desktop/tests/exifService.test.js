@@ -17,7 +17,7 @@ function load(file, mocks = {}) {
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module, exports: module.exports, __dirname: path.dirname(filename),
     require: name => Object.hasOwn(mocks, name) ? mocks[name] : nativeRequire(name),
-    process, Buffer, console,
+    process, Buffer, console, Uint8Array, // exifr checks instanceof Uint8Array in this realm
   }, { filename });
   return module.exports;
 }
@@ -59,7 +59,7 @@ describe('extractExifDates', () => {
 
     expect(heifLooper.length).toBe(40);
     expect(parse).toHaveBeenCalledTimes(1);
-    expect(parse.mock.calls[0][0]).toBe(path.join(folder, 'IMG_0002.jpg'));
+    expect(parse.mock.calls[0][0]).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10])); // IMG_0002.jpg
     expect(dates['IMG_0002.jpg']).toBe(exifDate.getTime());
     expect(dates['IMG_0001.jpg']).toBeGreaterThan(0);
     expect(dates['IMG_0001.jpg']).not.toBe(exifDate.getTime());
@@ -94,6 +94,41 @@ describe('extractExifDates', () => {
 
     expect(dates['one.jpg']).toBeGreaterThan(0);
     expect(dates['empty.jpg']).toBeGreaterThan(0);
+  });
+
+  // exifr reads a cut-short block of a file under 4 KB past its end into Node's shared memory pool, where other
+  // recent data sits (photo metadata branch review, 2026-10-17). The spy puts "8"s after each slice, like that data.
+  it('a cut-short photo gets its real date or its file time, never one from leftover memory, and is closed', async () => {
+    const { extractExifDates } = load('src/main/exifService.js', { '../utils/logger': logger });
+    const jpg = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } })
+      .jpeg().withExif({ IFD2: { DateTimeOriginal: '2023:03:04 05:06:07' } }).toBuffer();
+    const files = Object.fromEntries([...Array(jpg.length).keys()].map(n => [`cut${n}.jpg`, jpg.subarray(0, n)]));
+    const folder = folderWith(files);
+    let open = 0;
+    const realOpen = fs.promises.open;
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      const handle = await realOpen(...args);
+      const close = handle.close.bind(handle);
+      open++;
+      handle.close = () => { open--; return close(); };
+      return handle;
+    });
+    const allocUnsafe = Buffer.allocUnsafe;
+    vi.spyOn(Buffer, 'allocUnsafe').mockImplementation(size => allocUnsafe(size + 4096).fill('8').subarray(0, size));
+    let dates;
+    try {
+      dates = await extractExifDates(Object.keys(files), folder);
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    const taken = new Date(2023, 2, 4, 5, 6, 7).getTime(); // exifr reads EXIF time as local time
+    expect(dates[`cut${jpg.length - 1}.jpg`]).toBe(taken);
+    for (const name of Object.keys(files)) {
+      const { birthtimeMs, mtimeMs } = fs.statSync(path.join(folder, name));
+      expect([taken, Math.min(birthtimeMs || Infinity, mtimeMs || Infinity)], name).toContain(dates[name]);
+    }
+    expect(open).toBe(0);
   });
 });
 

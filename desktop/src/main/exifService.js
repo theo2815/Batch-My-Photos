@@ -96,10 +96,15 @@ async function extractExifDates(files, folderPath) {
       
       try {
         if (await startsWithZeroZero(filePath)) throw new Error('HEIF-like'); // C-22: such files use the file time
+        // exifr reads a cut-short file under 4 KB past its end into Node's shared memory pool, so other recent
+        // data could become its date; it gets the bytes in their own memory instead, where past the end is an error.
+        // Bigger files are safe because exifr's first read is 64 KB wherever `navigator` exists (Electron, Node 21+).
+        const { size } = await fs.stat(filePath);
+        const input = size < 4096 ? new Uint8Array(await fs.readFile(filePath)) : filePath;
 
         // 1. Try to read EXIF DateTimeOriginal
         // Only read the necessary segment for speed (first few KB usually)
-        const output = await exifr.parse(filePath, { 
+        const output = await exifr.parse(input, { 
           pick: ['DateTimeOriginal'], 
           tiff: true,   // Needed for some raw formats
           ifd0: false,  // Skip unnecessary IFDs for speed
