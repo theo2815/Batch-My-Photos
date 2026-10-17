@@ -180,4 +180,14 @@ describe('readPhotoMetadata', () => {
       cameraMake: 'Canon', cameraModel: 'EOS R5', author: 'Ab', exposureTime: '3/10 s', iso: 200,
       takenAtLocal: '2026-01-02T03:04:05.5', takenAtOffset: 'Z' });
   });
+
+  it('decodes XML escapes in XMP text once, like QuickPitik', async () => {
+    const xmp = { dc: { creator: 'Juan &amp; Maria', rights: { lang: 'x-default', value: '&#169; 2026 J&amp;M' } },
+      exifEX: { LensModel: '24-70 &quot;Art&quot; &#x41; &amp;#169; &#9999999999;' } };
+    const parse = vi.fn(async (_file, options) => (options.tiff ? undefined : xmp));
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
+      author: 'Juan & Maria', copyright: '\u00a9 2026 J&M', lens: '24-70 "Art" A &#169; &#9999999999;' });
+  });
 });

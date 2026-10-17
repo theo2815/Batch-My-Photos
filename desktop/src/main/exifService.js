@@ -188,12 +188,23 @@ function iptcText(value) {
   return Buffer.from(utf8, 'utf8').equals(bytes) ? utf8 : text;
 }
 
+const XML_NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+/** exifr leaves XML escapes in XMP text ("&amp;", "&#169;"); decode them once, as QuickPitik's XMPCore does. */
+function xmlDecoded(text) {
+  return text.replace(/&(?:#x([0-9a-fA-F]+)|#([0-9]+)|(amp|lt|gt|quot|apos));/g, (match, hex, dec, name) => {
+    if (name) return XML_NAMED[name];
+    const code = hex ? parseInt(hex, 16) : Number(dec);
+    return code <= 0x10ffff ? String.fromCodePoint(code) : match;
+  });
+}
+
 /** First non-blank value of an XMP text, list, or language list. */
 function xmpText(value) {
   const items = Array.isArray(value) ? value : [value];
   for (const item of items) {
     const text = nonBlank(item && typeof item === 'object' ? item.value : item);
-    if (text) return text;
+    if (text) return xmlDecoded(text);
   }
   return null;
 }
@@ -202,7 +213,7 @@ function xmpText(value) {
 function xmpLocalized(value) {
   const items = Array.isArray(value) ? value : [value];
   const fallback = items.find((item) => item && item.lang === 'x-default' && nonBlank(item.value));
-  return fallback ? fallback.value : xmpText(value);
+  return fallback ? xmlDecoded(fallback.value) : xmpText(value);
 }
 
 function rationalText(value) {
