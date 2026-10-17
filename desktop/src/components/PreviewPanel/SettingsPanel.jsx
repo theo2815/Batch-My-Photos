@@ -8,7 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Settings, Zap, Copy, ArrowDownAZ, Save, Trash2, Info, Plus, Loader2, ScanEye, Pencil, KeyRound, Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react';
 import CustomSelect from '../common/CustomSelect';
 import Tooltip from '../common/Tooltip';
-import { ValidationModal, DeletePresetModal } from '../Modals';
+import { ValidationModal, DeletePresetModal, ConfirmDialog } from '../Modals';
 import './PreviewPanel.css';
 
 // ... (props definition)
@@ -65,6 +65,7 @@ function SettingsPanel({
   const [betaStatusError, setBetaStatusError] = useState('');
   const [checkingBetaKey, setCheckingBetaKey] = useState(false);
   const [showBetaKey, setShowBetaKey] = useState(false);
+  const [confirmingRemoveKey, setConfirmingRemoveKey] = useState(false);
   const loadBetaKeyStatus = useCallback(async () => {
     setCheckingBetaKey(true);
     setBetaStatusError('');
@@ -92,6 +93,24 @@ function SettingsPanel({
       setBetaKeyError('Blur detection needs a valid beta key. Enter it to turn blur on.');
     }
   }, [isBeta, betaKeyStatus, blurDetectionEnabled, onChange]);
+
+  const cancelReplaceBetaKey = () => {
+    setReplacingBetaKey(false);
+    setBetaKey('');
+    setShowBetaKey(false);
+    setBetaKeyError('');
+  };
+
+  // The blur-off effect above reacts to the new "not configured" status.
+  const removeBetaKey = async () => {
+    setConfirmingRemoveKey(false);
+    try {
+      setBetaKeyStatus(await window.electronAPI.blurBetaKey(null));
+      cancelReplaceBetaKey();
+    } catch {
+      setBetaKeyError('Could not remove the beta key. Try again.');
+    }
+  };
 
   const saveBetaKey = async () => {
     if (!betaKey.trim() || savingBetaKey) return;
@@ -476,7 +495,12 @@ function SettingsPanel({
             <p role="status" className="blur-beta-key-saved">
               <CheckCircle2 size={16} aria-hidden="true" /> Beta key saved on this device.
             </p>
-            <button type="button" className="blur-beta-key-ghost" onClick={() => setReplacingBetaKey(true)}>Replace beta key</button>
+            <div className="blur-beta-key-actions">
+              <button type="button" className="blur-beta-key-ghost" onClick={() => { setBetaKeyError(''); setReplacingBetaKey(true); }}>Replace beta key</button>
+              <button type="button" className="blur-beta-key-ghost" disabled={isAnalyzingBlur}
+                onClick={() => setConfirmingRemoveKey(true)}>Remove key</button>
+            </div>
+            {betaKeyError && <p role="alert">{betaKeyError}</p>}
           </> : (
             <>
               <div className="blur-beta-key-title">
@@ -498,6 +522,10 @@ function SettingsPanel({
                 </div>
                 <button type="button" className="blur-beta-key-save" disabled={!betaKey.trim() || savingBetaKey}
                   onClick={saveBetaKey}>{savingBetaKey ? 'Saving...' : 'Save beta key'}</button>
+                {betaKeyStatus.configured && (
+                  <button type="button" className="blur-beta-key-ghost" disabled={savingBetaKey}
+                    onClick={cancelReplaceBetaKey}>Cancel</button>
+                )}
               </div>
               <span id="blur-beta-key-help" className="blur-beta-key-help">
                 <Lock size={12} aria-hidden="true" /> Stored securely on this device.
@@ -613,6 +641,15 @@ function SettingsPanel({
         presetName={selectedPresetName}
         onConfirm={confirmDeletePreset}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      {/* Outside the key card, whose paragraph styles would shrink the question */}
+      <ConfirmDialog
+        isOpen={confirmingRemoveKey} danger
+        title="Remove the blur beta key?"
+        message="Blur detection turns off on this computer until you enter a key again."
+        confirmLabel="Remove key" cancelLabel="Cancel"
+        onConfirm={removeBetaKey} onCancel={() => setConfirmingRemoveKey(false)}
       />
     </div>
   );

@@ -1149,7 +1149,8 @@ function registerPreferenceHandlers(ipcMain, store) {
   handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
     if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
     const keyStore = require('./blurBetaKeyStore');
-    if (key !== undefined) {
+    if (key === null) keyStore.clear(); // null means "remove the saved key"
+    else if (key !== undefined) {
       keyStore.check(key);
       // Save only a key ai-api accepts; a refused or unchecked key leaves the stored one alone.
       const verdict = await blurDetectionService.verifyBetaKey(key);

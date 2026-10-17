@@ -208,7 +208,7 @@ describe('beta key setup', () => {
     expect([...fixture.disk.keys()]).toEqual(['blur-beta-key']);
     expect(JSON.stringify([...fixture.disk.values()])).not.toContain('stub-tester-key');
   });
-  it.each(['', ' ', 'bad key', 'key\n', 'x'.repeat(1025), null, 42])('rejects invalid key input %j', async key => {
+  it.each(['', ' ', 'bad key', 'key\n', 'x'.repeat(1025), 42])('rejects invalid key input %j', async key => {
     const keyStore = keyStoreFixture().reload();
     const verifyBetaKey = vi.fn(async () => 'valid');
     const { handlers } = ipcFor(configFor(validManifest), keyStore, { './blurDetectionService': { verifyBetaKey } });
@@ -232,6 +232,15 @@ describe('beta key setup', () => {
     expect(await save('wrong-key')).toEqual({ enabled: true, configured: true, error: expect.stringMatching(/not accepted/) });
     expect(keyStore.get()).toBe('good-key');
     expect(verifyBetaKey).toHaveBeenLastCalledWith('wrong-key');
+  });
+  it('removes the saved key when asked with key null, without calling ai-api', async () => {
+    const keyStore = keyStoreFixture().reload();
+    keyStore.set('stub-key');
+    const verifyBetaKey = vi.fn(async () => 'valid');
+    const { handlers } = ipcFor(configFor(validManifest), keyStore, { './blurDetectionService': { verifyBetaKey } });
+    expect(await handlers.get('blur-beta-key')({}, { key: null })).toEqual({ enabled: true, configured: false });
+    expect(keyStore.get()).toBe('');
+    expect(verifyBetaKey).not.toHaveBeenCalled();
   });
   it('forgets a saved key with clear()', () => {
     const fixture = keyStoreFixture();

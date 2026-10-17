@@ -25,6 +25,7 @@ vi.mock('react', () => {
 import ImagePreviewModal from '../src/components/Modals/ImagePreviewModal.jsx';
 import BatchPreview from '../src/components/PreviewPanel/BatchPreview.jsx';
 import SettingsPanel from '../src/components/PreviewPanel/SettingsPanel.jsx';
+import { ConfirmDialog } from '../src/components/Modals';
 import StatsGrid from '../src/components/PreviewPanel/StatsGrid.jsx';
 import PreviewPanel from '../src/components/PreviewPanel/PreviewPanel.jsx';
 import { useBlurDetection } from '../src/hooks/useBlurDetection.js';
@@ -572,6 +573,86 @@ describe('explicit beta feedback consent', () => {
     await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
     expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenLastCalledWith('new-beta-key');
     expect(nodes(render(SettingsPanel, p)).find(n => n.type === 'input' && n.props.type === 'password')).toBeUndefined();
+  });
+
+  describe('removing a saved beta key', () => {
+    const dialog = tree => nodes(tree).find(n => n.type === ConfirmDialog);
+    async function savedCard(extra = {}) {
+      globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+      const p = { isBeta: true, ...extra };
+      render(SettingsPanel, p); await effects();
+      return p;
+    }
+    it('offers Remove key next to Replace, and disables it during an analysis', async () => {
+      const p = await savedCard();
+      const tree = render(SettingsPanel, p);
+      expect(button(tree, 'Replace beta key')).toBeDefined();
+      expect(button(tree, 'Remove key').props.disabled).toBeFalsy();
+      expect(button(render(SettingsPanel, { ...p, isAnalyzingBlur: true }), 'Remove key').props.disabled).toBe(true);
+    });
+    it('asks first, and Cancel in the dialog keeps the key', async () => {
+      const p = await savedCard();
+      expect(dialog(render(SettingsPanel, p)).props.isOpen).toBe(false);
+      button(render(SettingsPanel, p), 'Remove key').props.onClick();
+      const open = dialog(render(SettingsPanel, p));
+      expect(open.props).toMatchObject({ isOpen: true, danger: true, title: 'Remove the blur beta key?', confirmLabel: 'Remove key', cancelLabel: 'Cancel' });
+      expect(globalThis.window.electronAPI.blurBetaKey).not.toHaveBeenCalledWith(null);
+      open.props.onCancel();
+      const tree = render(SettingsPanel, p);
+      expect(dialog(tree).props.isOpen).toBe(false);
+      expect(globalThis.window.electronAPI.blurBetaKey).not.toHaveBeenCalledWith(null);
+      expect(text(tree)).toContain('Beta key saved on this device.');
+    });
+    it('Confirm removes the key, shows the empty form, and switches blur off', async () => {
+      const onChange = vi.fn();
+      const p = await savedCard({ blurDetectionEnabled: true, onChange });
+      button(render(SettingsPanel, p), 'Remove key').props.onClick();
+      globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: false });
+      await dialog(render(SettingsPanel, p)).props.onConfirm();
+      expect(globalThis.window.electronAPI.blurBetaKey).toHaveBeenCalledWith(null);
+      let tree = render(SettingsPanel, p); await effects();
+      tree = render(SettingsPanel, p);
+      expect(dialog(tree).props.isOpen).toBe(false);
+      expect(nodes(tree).find(n => n.type === 'input' && n.props.type === 'password')).toBeDefined();
+      expect(onChange).toHaveBeenCalledWith('blurDetectionEnabled', false);
+    });
+    it('Replace then Cancel returns to the saved state without a save call', async () => {
+      const p = await savedCard();
+      const calls = () => globalThis.window.electronAPI.blurBetaKey.mock.calls.length;
+      const before = calls();
+      button(render(SettingsPanel, p), 'Replace beta key').props.onClick();
+      let tree = render(SettingsPanel, p);
+      nodes(tree).find(n => n.type === 'input' && n.props.type === 'password').props.onChange({ target: { value: 'typed-key' } });
+      button(render(SettingsPanel, p), 'Cancel').props.onClick();
+      tree = render(SettingsPanel, p);
+      expect(text(tree)).toContain('Beta key saved on this device.');
+      expect(calls()).toBe(before);
+      button(tree, 'Replace beta key').props.onClick();
+      expect(nodes(render(SettingsPanel, p)).find(n => n.props.id === 'blur-beta-key').props.value).toBe('');
+    });
+    it('shows a failed removal in the saved card, and Replace clears that message', async () => {
+      const p = await savedCard();
+      button(render(SettingsPanel, p), 'Remove key').props.onClick();
+      globalThis.window.electronAPI.blurBetaKey.mockRejectedValue(new Error('private detail'));
+      await dialog(render(SettingsPanel, p)).props.onConfirm();
+      let tree = render(SettingsPanel, p);
+      expect(text(tree)).toContain('Beta key saved on this device.');
+      expect(text(tree)).toContain('Could not remove the beta key. Try again.');
+      button(tree, 'Replace beta key').props.onClick();
+      expect(text(render(SettingsPanel, p))).not.toContain('Could not remove the beta key');
+    });
+    it('keeps the Remove question outside the key card, so the card styles do not shrink it', async () => {
+      const p = await savedCard();
+      const tree = render(SettingsPanel, p);
+      const card = nodes(tree).find(n => n.type === 'div' && String(n.props.className).startsWith('blur-beta-key'));
+      expect(card).toBeDefined();
+      expect(dialog(tree)).toBeDefined();
+      expect(nodes(card).includes(dialog(tree))).toBe(false);
+    });
+    it('shows no Cancel on the first-time key form', async () => {
+      render(SettingsPanel, { isBeta: true }); await effects();
+      expect(button(render(SettingsPanel, { isBeta: true }), 'Cancel')).toBeUndefined();
+    });
   });
 
   it('uses advisory beta stats while preserving release wording', () => {
