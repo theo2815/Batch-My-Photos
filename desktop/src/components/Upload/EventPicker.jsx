@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Archive, CalendarClock, CalendarX, RefreshCw, SearchX } from 'lucide-react';
 import { STRINGS, formatString } from '../../constants/strings';
 
 const MANILA_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
@@ -11,7 +11,23 @@ const TABS = [
   ['upcoming', STRINGS.QP_EVENT_TAB_UPCOMING],
   ['closed', STRINGS.QP_EVENT_TAB_CLOSED],
 ];
-const EMPTY = { open: STRINGS.QP_NO_EVENTS, upcoming: STRINGS.QP_NO_UPCOMING, closed: STRINGS.QP_NO_CLOSED };
+const EMPTY = {
+  open: { Icon: CalendarX, title: STRINGS.QP_EMPTY_OPEN, help: STRINGS.QP_EMPTY_OPEN_HELP },
+  upcoming: { Icon: CalendarClock, title: STRINGS.QP_EMPTY_UPCOMING, help: STRINGS.QP_EMPTY_UPCOMING_HELP },
+  closed: { Icon: Archive, title: STRINGS.QP_EMPTY_CLOSED, help: STRINGS.QP_EMPTY_CLOSED_HELP },
+};
+
+/** The card a tab shows when it has nothing to list. A plain function, like eventRow, so the tests see inside it. */
+function emptyCard({ Icon, title, help, action }) {
+  return (
+    <div className="upload-empty">
+      <Icon size={28} strokeWidth={1.5} aria-hidden="true" />
+      <span className="upload-kicker">{title}</span>
+      {help && <p className="upload-muted">{help}</p>}
+      {action && <button type="button" className="upload-link" onClick={action.onClick} disabled={action.disabled}>{action.label}</button>}
+    </div>
+  );
+}
 
 /** "10 Oct 2026" from a YYYY-MM-DD date. */
 function raceDate(dateIso) {
@@ -98,7 +114,16 @@ function EventPicker({ events, value, onChange, onRefresh, disabled, loading, lo
   const firstLoad = loading && events.length === 0;
 
   let empty = null;
-  if (!firstLoad && list.length === 0) empty = query.trim() ? formatString(STRINGS.QP_NO_MATCH, { query: query.trim() }) : EMPTY[tab];
+  if (!firstLoad && list.length === 0) {
+    const q = query.trim();
+    if (q) {
+      const clear = () => { setQuery(''); setPage(0); };
+      empty = { Icon: SearchX, title: formatString(STRINGS.QP_NO_MATCH, { query: q }), action: { label: STRINGS.QP_BTN_CLEAR_SEARCH, onClick: clear } };
+    } else {
+      const refresh = { label: STRINGS.QP_BTN_REFRESH_EVENTS, onClick: onRefresh, disabled: disabled || loading };
+      empty = { ...EMPTY[tab], action: tab === 'open' ? refresh : null };
+    }
+  }
 
   return (
     <div className="upload-event">
@@ -136,7 +161,7 @@ function EventPicker({ events, value, onChange, onRefresh, disabled, loading, lo
           {shown.map(event => eventRow(event, { chosen: event.id === value, disabled, onChange }))}
         </div>
       )}
-      {empty && <p className="upload-muted">{empty}</p>}
+      {empty && emptyCard(empty)}
 
       {list.length > PAGE_SIZE && (
         <nav className="upload-pager" aria-label={STRINGS.QP_PAGER_LABEL}>

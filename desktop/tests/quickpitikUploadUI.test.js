@@ -70,6 +70,7 @@ describe('EventPicker', () => {
   const tabFor = (tree, label) => nodes(tree).find(n => n.props?.className === 'upload-tab' && text(n).startsWith(label));
   const tabs = (tree) => nodes(tree).filter(n => n.props?.className === 'upload-tab').map(text);
   const search = (tree) => nodes(tree).find(n => n.type === 'input');
+  const emptyCard = (tree) => nodes(tree).find(n => n.props?.className === 'upload-empty');
 
   it('asks which event the photos are for and says what the choice means', () => {
     const shown = text(picker());
@@ -147,9 +148,14 @@ describe('EventPicker', () => {
     expect(names(tree)).toEqual(['Mandaue Dash']);
   });
 
-  it('says so when nothing matches the search', () => {
+  it('says so when nothing matches the search, and Clear search brings the list back', () => {
     search(picker()).props.onChange({ target: { value: 'zzz ' } });
-    expect(text(picker())).toContain('No event matches "zzz".');
+    const card = emptyCard(picker());
+    expect(text(card)).toContain('No event matches "zzz"');
+    button(card, 'Clear search').props.onClick();
+    const tree = picker();
+    expect(search(tree).props.value).toBe('');
+    expect(names(tree)).toEqual(['Cebu Marathon 2026', 'Mandaue Dash', 'My Fun Run']);
   });
 
   describe('pages of five', () => {
@@ -196,7 +202,7 @@ describe('EventPicker', () => {
     const tree = picker({ events: [], loading: true });
     expect(nodes(tree).filter(n => n.props?.className === 'upload-skeleton')).toHaveLength(3);
     expect(nodes(tree).find(n => n.props?.role === 'status').props['aria-label']).toBe('Loading events…');
-    expect(text(tree)).not.toContain('No event is open');
+    expect(emptyCard(tree)).toBeUndefined();
     expect(button(tree, 'Refreshing…').props.disabled).toBe(true);
   });
 
@@ -212,16 +218,25 @@ describe('EventPicker', () => {
     expect(text(picker({ loadedAt: new Date('2026-10-10T07:42:00Z') }))).toMatch(/Updated 3:42\sPM/);
   });
 
-  it('explains each empty tab, and keeps Refresh', () => {
+  it('explains each empty tab in a card, with Refresh on the Open tab only', () => {
     const onRefresh = vi.fn();
     const tree = picker({ events: [], onRefresh });
-    expect(text(tree)).toContain('No event is open for upload right now. Public events take photos on race day and for 3 days after; your own events for one month.');
-    button(tree, 'Refresh').props.onClick();
+    let card = emptyCard(tree);
+    expect(text(card)).toContain('Nothing open right now');
+    expect(text(card)).toContain('Public events take photos on race day and for 3 days after; your own events for one month.');
+    button(card, 'Refresh').props.onClick();
     expect(onRefresh).toHaveBeenCalledTimes(1);
+    // While a Refresh runs over a list with no open event, the card's Refresh waits too.
+    expect(button(emptyCard(picker({ events: [soon], loading: true, loadedAt: new Date() })), 'Refresh').props.disabled).toBe(true);
     tabFor(tree, 'Upcoming').props.onClick();
-    expect(text(picker({ events: [] }))).toContain('No upcoming events. Public events show here before race day.');
+    card = emptyCard(picker({ events: [] }));
+    expect(text(card)).toContain('No upcoming events');
+    expect(text(card)).toContain('Public events show here before race day.');
+    expect(nodes(card).filter(n => n.type === 'button')).toEqual([]);
     tabFor(picker({ events: [] }), 'Closed').props.onClick();
-    expect(text(picker({ events: [] }))).toContain('No closed events. Your events, and events you uploaded to, show here after uploads close.');
+    card = emptyCard(picker({ events: [] }));
+    expect(text(card)).toContain('No closed events');
+    expect(text(card)).toContain('Your events, and events you uploaded to, show here after uploads close.');
   });
 
   it('cannot be used while the view is busy', () => {

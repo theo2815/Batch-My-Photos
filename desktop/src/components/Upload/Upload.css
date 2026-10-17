@@ -424,10 +424,41 @@
   animation: upload-row-in 220ms ease-out both;
 }
 
+/* An empty tab or search: a dashed paper card, the same frame as the drop zone's idea of "nothing here yet". */
+.upload-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  animation: upload-row-in 220ms ease-out both;
+}
+
+.upload-empty svg {
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.upload-empty .upload-muted {
+  max-width: 42ch;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.upload-empty .upload-link {
+  margin-top: var(--space-xs);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .upload-spin,
   .upload-skeleton,
   .upload-chosen,
+  .upload-empty,
   .upload-event-list > * {
     animation: none;
   }
