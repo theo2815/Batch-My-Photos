@@ -16,6 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--space-md);
   z-index: 10000;
   animation: fadeIn var(--transition-fast);
 }
@@ -28,6 +29,9 @@
   padding: var(--space-2xl);
   max-width: 400px;
   width: 90%;
+  /* Never taller than the window: scroll inside instead of spilling off-screen. */
+  max-height: 100%;
+  overflow-y: auto;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   animation: slideUp var(--transition-normal);
@@ -1034,10 +1038,59 @@
 
 .blur-sensitivity-modal {
   max-width: 420px;
+  padding: var(--space-xl) var(--space-lg);
+}
+
+.blur-sensitivity-modal .modal-icon {
+  line-height: 0;
+  margin-bottom: var(--space-sm);
 }
 
 .blur-sensitivity-modal h3 {
   color: var(--accent-primary);
+}
+
+.blur-sensitivity-modal .sensitivity-options {
+  margin: var(--space-md) 0;
+}
+
+.blur-sensitivity-modal .sensitivity-card {
+  padding: var(--space-sm) var(--space-md);
+}
+
+/* The data notice is fine print, not the loudest text in the modal. */
+.blur-sensitivity-modal .confirmation-details {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-md) 0 0;
+}
+
+.blur-sensitivity-modal .modal-buttons {
+  margin-top: var(--space-md);
+}
+
+/* "Start Analysis" plus its icon is wider than the shared 140px button. */
+.blur-sensitivity-modal .modal-buttons .btn {
+  width: auto;
+  max-width: none;
+  white-space: nowrap;
+}
+
+/* Short windows (including the default 900x700 one): drop the decorative icon and tighten spacing. */
+@media (max-height: 720px) {
+  .blur-sensitivity-modal {
+    padding: var(--space-lg) var(--space-lg) var(--space-md);
+  }
+
+  .blur-sensitivity-modal .modal-icon {
+    display: none;
+  }
+
+  .blur-sensitivity-modal p {
+    margin-bottom: var(--space-sm);
+  }
 }
 
 .sensitivity-options {
