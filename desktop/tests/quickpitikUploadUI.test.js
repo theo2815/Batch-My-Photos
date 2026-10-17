@@ -22,6 +22,7 @@ vi.mock('react', () => {
 });
 
 import ReviewTable from '../src/components/Upload/ReviewTable.jsx';
+import UploadProgress from '../src/components/Upload/UploadProgress.jsx';
 import UploadSummary from '../src/components/Upload/UploadSummary.jsx';
 import UploadView from '../src/components/Upload/UploadView.jsx';
 import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
@@ -623,6 +624,67 @@ describe('UploadView', () => {
     tree = render(UploadView, {});
     expect(button(tree, 'Disconnect').props.disabled).toBe(true);
     expect(find(tree, ChosenEvent).props.disabled).toBe(true);
+  });
+});
+
+describe('Cancel upload asks first', () => {
+  const live = { phase: 'uploading', folder: null, counts: { uploaded: 5, alreadyThere: 0, failed: 0, total: 40 }, bytes: { sent: 5, total: 40 } };
+  const find = (tree, type) => nodes(tree).find(n => n.type === type);
+  const card = (onCancel) => render(UploadProgress, { progress: live, onCancel });
+
+  it('keeps the question outside the status card, so the card text styles do not reach it', () => {
+    const tree = card(vi.fn());
+    const statusCard = nodes(tree).find(n => String(n.props?.className).includes('status-card'));
+    expect(statusCard).toBeDefined();
+    expect(find(tree, ConfirmDialog)).toBeDefined();
+    expect(nodes(statusCard).some(n => n.type === ConfirmDialog)).toBe(false);
+  });
+
+  it('pressing Cancel upload shows the question and does not stop anything', () => {
+    const onCancel = vi.fn();
+    button(card(onCancel), 'Cancel upload').props.onClick();
+    const dialog = find(card(onCancel), ConfirmDialog);
+    expect(dialog.props).toMatchObject({
+      isOpen: true, danger: true, title: 'Stop this upload?', confirmLabel: 'Stop upload', cancelLabel: 'Keep uploading',
+      message: 'Photos already sent stay on QuickPitik. Upload the folder again later and the app skips them.',
+    });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('Stop upload cancels once and closes the question', () => {
+    const onCancel = vi.fn();
+    button(card(onCancel), 'Cancel upload').props.onClick();
+    find(card(onCancel), ConfirmDialog).props.onConfirm();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(find(card(onCancel), ConfirmDialog).props.isOpen).toBe(false);
+  });
+
+  it('Keep uploading (also Escape or a click outside) cancels nothing and closes the question', () => {
+    const onCancel = vi.fn();
+    button(card(onCancel), 'Cancel upload').props.onClick();
+    find(card(onCancel), ConfirmDialog).props.onCancel();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(find(card(onCancel), ConfirmDialog).props.isOpen).toBe(false);
+  });
+
+  it('the question lives in the progress card, so it is gone when the upload leaves "uploading"', async () => {
+    let progress;
+    vi.stubGlobal('window', { electronAPI: {
+      qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
+      onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn((cb) => { progress = cb; return () => {}; }),
+      qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event] }), qpUploadCancel: vi.fn(),
+    } });
+    render(UploadView, {}); await effects();
+    render(UploadView, {}); await effects();
+    for (let i = 0; i < 5; i++) await effects(); // let the session and events answers land first
+    progress(live);
+    let tree = render(UploadView, {});
+    expect(tree.type).toBe(UploadProgress);
+    expect(find(tree, ConfirmDialog)).toBeUndefined(); // not in the view's own tree
+    progress({ ...live, phase: 'done' }); // no effects() here: the test React re-runs the mount effect, which would put the view back to ready
+    tree = render(UploadView, {});
+    expect(tree.type).toBe(UploadSummary);
+    expect(find(tree, ConfirmDialog)).toBeUndefined();
   });
 });
 
