@@ -662,9 +662,10 @@ async function analyzeBlurAI(fileGroups, folderPath, categories = null, sensitiv
         if (!err.retryable || (retried && !busy)) throw err;
         let delay = err.retryDelayMs ?? 2000;
         if (busy) {
-          // Another analysis holds the server: wait our turn (at least 1 s), doubling up to 10 s,
-          // plus 0–50% jitter so waiting users do not retry in lockstep.
-          delay = Math.min(Math.max(err.retryDelayMs ?? 0, 1000) * 2 ** busyTries++, 10000) * (1 + Math.random() / 2);
+          // Another analysis holds the server: wait our turn (at least 1 s), doubling up to 3 s so a
+          // long waiter asks about as often as the holder, plus 0–50% jitter so waiting users do not
+          // retry in lockstep. In production a refused try costs little upload (the proxy ends it early).
+          delay = Math.min(Math.max(err.retryDelayMs ?? 0, 1000) * 2 ** busyTries++, 3000) * (1 + Math.random() / 2);
           busyWaitMs += delay;
           if (busyWaitMs > BLUR_AI_BUSY_WAIT_MS) throw new Error(unavailable);
           waiting = true;

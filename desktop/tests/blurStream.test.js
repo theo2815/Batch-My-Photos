@@ -371,7 +371,7 @@ describe('real blur stream client', () => {
     expect(progress.mock.calls[0][0]).toEqual({ current: 0, total: 1, waiting: true });
   });
 
-  it('waits at least 1 s on busy (even with Retry-After: 0), doubling up to 10 s', async () => {
+  it('waits at least 1 s on busy (even with Retry-After: 0), doubling up to 3 s', async () => {
     vi.useFakeTimers();
     const random = vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
@@ -383,12 +383,33 @@ describe('real blur stream client', () => {
       // vi.waitFor already moved the fake clock up to 50 ms, so checkpoints leave 100 ms of slack.
       await vi.advanceTimersByTimeAsync(900);
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      for (const [wait, calls] of [[100, 2], [2000, 3], [4000, 4], [8000, 5], [9900, 5], [100, 6], [10000, 7]]) {
+      for (const [wait, calls] of [[100, 2], [2000, 3], [2900, 3], [100, 4], [3000, 5], [3000, 6]]) {
         await vi.advanceTimersByTimeAsync(wait);
         expect(fetchMock).toHaveBeenCalledTimes(calls);
       }
       await vi.advanceTimersByTimeAsync(300000);
       await pending;
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('never waits longer than 3 s x 1.5 between busy tries, so a long waiter still gets turns', async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.9999);   // largest jitter
+    try {
+      const tries = [];
+      fetchMock.mockImplementation(async () => {
+        tries.push(Date.now());
+        return refusal(503, 'BLUR_BUSY');
+      });
+      const pending = blur.analyzeBlur({ FIRST: ['FIRST.jpg'] }, folder).catch(() => {});
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(300000);
+      await pending;
+      const gaps = tries.slice(1).map((t, i) => t - tries[i]);
+      expect(gaps.length).toBeGreaterThan(20);
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(3000 * 1.5);
     } finally {
       random.mockRestore();
     }
