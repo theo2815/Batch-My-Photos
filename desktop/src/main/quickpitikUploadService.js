@@ -295,7 +295,7 @@ function retryDelay(error, attempt) {
 }
 
 /**
- * Run one phase with the retry rules: offline → wait, retry, do not count;
+ * Run one phase with the retry rules: really offline → wait, retry, do not count;
  * commit busy (UPLOAD_IN_PROGRESS / 429) → capped waits inside
  * QP_COMMIT_BUSY_WINDOW_MS; retryable → backoff, at most
  * QP_MAX_RETRIES_PER_PHASE per phase; anything else is thrown to the caller.
@@ -308,7 +308,7 @@ async function withRetries(run, phase, state, ctx, canRetry = isRetryable) {
     } catch (error) {
       ctx.assertActive();
       if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError) throw error;
-      if (isOffline(error)) { await ctx.waitForConnection(); continue; }
+      if (isOffline(error) && !net.isOnline()) { await ctx.waitForConnection(); continue; }
       if (phase === 'commit' && (codeOf(error) === 'UPLOAD_IN_PROGRESS' || (error instanceof qpAuth.QpApiError && error.status === 429))) {
         state.busyUntil = state.busyUntil || internals.now() + QP_COMMIT_BUSY_WINDOW_MS;
         if (internals.now() < state.busyUntil) {
@@ -321,6 +321,8 @@ async function withRetries(run, phase, state, ctx, canRetry = isRetryable) {
       const attempt = state[phase] || 0;
       if (attempt >= QP_MAX_RETRIES_PER_PHASE) throw error;
       state[phase] = attempt + 1;
+      // Windows says online but the host is unreachable (firewall, DNS filter): say so, only when another try follows.
+      if (isOffline(error)) ctx.emit({ phase: 'waiting' }, true);
       await ctx.sleep(retryDelay(error, attempt));
     }
   }

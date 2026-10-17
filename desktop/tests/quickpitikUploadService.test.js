@@ -525,6 +525,28 @@ describe('upload engine', () => {
     expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
   });
 
+  it('a host that cannot be reached while Windows says online fails the file after the normal retries', async () => {
+    const root = tempRoot('qp-blocked-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let attempts = 0;
+    routes({ ...directTable(), begin: async () => { attempts += 1; throw netError('ENOTFOUND'); } });
+    service._internals.sleep = () => new Promise(resolve => setTimeout(resolve, 1)); // a real tick, so a runaway loop shows as a timeout
+    const last = await (await run(root, [''])).finished();
+    expect(attempts).toBe(4); // the first try and QP_MAX_RETRIES_PER_PHASE (3) retries
+    expect(last.counts).toMatchObject({ uploaded: 0, failed: 1 });
+  }, 3000);
+
+  it('does not leave "Waiting for connection" as the last word after the final failed try', async () => {
+    const root = tempRoot('qp-blocked-last-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes({ ...directTable(), begin: async () => { throw netError('ENOTFOUND'); } });
+    let t = 1e6; // time moves only when the retry wait sleeps, so the 250 ms throttle is the same as in real use
+    service._internals.now = () => t;
+    service._internals.sleep = async () => { t += 5000; };
+    const { events, finished } = await run(root, ['']);
+    await finished();
+    const beforeEnd = events.slice(0, events.findIndex(event => event.phase === 'folder-done'));
+    expect(beforeEnd.at(-1).phase).toBe('uploading');
+  });
+
   it('refuses to start while another upload is running', async () => {
     const root = tempRoot('qp-twice-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
     let release;
