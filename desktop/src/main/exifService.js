@@ -171,6 +171,11 @@ const positiveInt = (v) => {
 const inRange = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : null);
 const xmpInt = (v) => (typeof v === 'string' && /^-?\d+$/.test(v.trim()) ? Number(v) : Number.isInteger(v) ? v : null);
 const pad2 = (n) => String(n).padStart(2, '0');
+// EXIF text ends at its first NUL, as in metadata-extractor ("Jo Smith\0Ed Co" → "Jo Smith").
+const exifText = (v) => nonBlank(typeof v === 'string' ? v.split('\0')[0] : v);
+// exifr turns number-like XMP text into numbers ("12345" → 12345); turn it back.
+// ponytail: "007" comes back as "7" (exifr drops the original text); reading raw XMP would fix it.
+const xmpString = (v) => (typeof v === 'number' ? String(v) : v);
 
 /** NFC, drop control and format/bidi characters (B6), trim, cap at `limit` code points. */
 function cleanText(value, limit) {
@@ -181,7 +186,7 @@ function cleanText(value, limit) {
 
 /** exifr decodes IPTC text as Latin-1; like metadata-extractor, use UTF-8 when the bytes are valid UTF-8. */
 function iptcText(value) {
-  const text = nonBlank(value);
+  const text = nonBlank(Array.isArray(value) ? value.join(' ') : value); // repeated By-lines, joined like the backend
   if (!text || [...text].some((c) => c.codePointAt(0) > 0xff)) return text;
   const bytes = Buffer.from(text, 'latin1');
   const utf8 = bytes.toString('utf8');
@@ -203,7 +208,7 @@ function xmlDecoded(text) {
 function xmpText(value) {
   const items = Array.isArray(value) ? value : [value];
   for (const item of items) {
-    const text = nonBlank(item && typeof item === 'object' ? item.value : item);
+    const text = nonBlank(xmpString(item && typeof item === 'object' ? item.value : item));
     if (text) return xmlDecoded(text);
   }
   return null;
@@ -212,8 +217,8 @@ function xmpText(value) {
 /** XMP language list: the x-default entry, else the first entry with text. */
 function xmpLocalized(value) {
   const items = Array.isArray(value) ? value : [value];
-  const fallback = items.find((item) => item && item.lang === 'x-default' && nonBlank(item.value));
-  return fallback ? xmlDecoded(fallback.value) : xmpText(value);
+  const fallback = items.find((item) => item && item.lang === 'x-default' && nonBlank(xmpString(item.value)));
+  return fallback ? xmlDecoded(xmpString(fallback.value)) : xmpText(value);
 }
 
 function rationalText(value) {
@@ -243,6 +248,7 @@ function exposureFromNumber(value) {
 }
 
 function exposureFromXmp(value) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? `${value} s` : null; // "1.50" → 1.5
   if (typeof value !== 'string') return null;
   const parts = value.trim().split('/');
   if (parts.length === 2) {
@@ -332,19 +338,19 @@ function normalizeMetadata(tiff = {}, xmpIptc = {}) {
   const xExif = xmpIptc.exif || {}; // XMP exif: namespace
   const iptc = xmpIptc.iptc || {};
 
-  const make = cleanText(nonBlank(ifd0.Make), 256) ?? cleanText(xmpText(xIfd0.Make), 256);
-  const rawModel = cleanText(nonBlank(ifd0.Model), 256) ?? cleanText(xmpText(xIfd0.Model), 256);
+  const make = cleanText(exifText(ifd0.Make), 256) ?? cleanText(xmpText(xIfd0.Make), 256);
+  const rawModel = cleanText(exifText(ifd0.Model), 256) ?? cleanText(xmpText(xIfd0.Model), 256);
   const model = rawModel && make && rawModel.toLowerCase().startsWith(`${make.toLowerCase()} `)
     ? rawModel.slice(make.length + 1) : rawModel;
-  const lens = cleanText(nonBlank(exif.LensModel), 256)
+  const lens = cleanText(exifText(exif.LensModel), 256)
     ?? cleanText(xmpText(xmpIptc.exifEX?.LensModel), 256)
     ?? cleanText(xmpText(xmpIptc.aux?.Lens), 256);
   const author = cleanText(xmpText(xmpIptc.dc?.creator), 500)
     ?? cleanText(iptcText(iptc.Byline), 500)
-    ?? cleanText(nonBlank(ifd0.Artist), 500);
+    ?? cleanText(exifText(ifd0.Artist), 500);
   const copyright = cleanText(xmpLocalized(xmpIptc.dc?.rights), 1000)
     ?? cleanText(iptcText(iptc.CopyrightNotice), 1000)
-    ?? cleanText(nonBlank(ifd0.Copyright), 1000);
+    ?? cleanText(exifText(ifd0.Copyright), 1000);
   const taken = exifTaken(exif) ?? xmpTaken(xExif.DateTimeOriginal) ?? iptcTaken(iptc);
   const flashBits = inRange(exif.Flash, 0x7f);
   const mode = inRange(exif.ExposureMode, 2) ?? xmpInt(xExif.ExposureMode);

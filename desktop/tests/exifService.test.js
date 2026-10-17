@@ -190,4 +190,33 @@ describe('readPhotoMetadata', () => {
     expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
       author: 'Juan & Maria', copyright: '\u00a9 2026 J&M', lens: '24-70 "Art" A &#169; &#9999999999;' });
   });
+
+  // The exifr shapes below were measured with real exifr 7.1.3 on hand-built JPEGs (plan \u00a712, parity gaps a-c).
+  it('joins several IPTC authors with spaces, like QuickPitik', async () => {
+    const iptc = { Byline: ['Ana Cruz', 'Ben Lim'] };
+    const parse = vi.fn(async (_file, options) => (options.tiff ? undefined : { iptc }));
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({ author: 'Ana Cruz Ben Lim' });
+  });
+
+  it('stops EXIF text at a hidden NUL character, like QuickPitik', async () => {
+    const nul = String.fromCharCode(0);
+    const tiff = { ifd0: { Artist: `Jo Smith${nul}Ed Co`, Copyright: `Jo${nul}Editor` } };
+    const parse = vi.fn(async (_file, options) => (options.tiff ? tiff : undefined));
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
+      author: 'Jo Smith', copyright: 'Jo' });
+  });
+
+  it('keeps number-like XMP text that exifr turned into numbers', async () => {
+    const xmp = { exif: { ExposureTime: 1.5 }, ifd0: { Make: 7, Model: 1234 }, aux: { Lens: 50 },
+      dc: { creator: 12345, rights: [{ lang: 'en', value: 'Other' }, { lang: 'x-default', value: 2026 }] } };
+    const parse = vi.fn(async (_file, options) => (options.tiff ? undefined : xmp));
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    expect((await readPhotoMetadata(path.join(folder, 'x.jpg'))).fields).toEqual({
+      exposureTime: '1.5 s', cameraMake: '7', cameraModel: '1234', lens: '50', author: '12345', copyright: '2026' });
+  });
 });
