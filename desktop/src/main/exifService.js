@@ -379,14 +379,18 @@ function normalizeMetadata(tiff = {}, xmpIptc = {}) {
 }
 
 /**
- * PNG XMP comes from sharp, which also unpacks compressed XMP (zTXt), as QuickPitik does; exifr reads only
- * plain iTXt. Past 64 KB (more than a JPEG can hold) it is skipped: exifr parses broken XMP in squared time
- * and froze the app (512 KB took ~18 s). Always a Buffer: exifr.sidecar fetches a string as a URL.
+ * exifr parses broken XMP in squared time (512 KB froze the app ~18 s), so the file read hands over the raw
+ * text and only up to 64 KB (what one JPEG block holds) is parsed, whatever the file's name. A PNG with no
+ * plain XMP gets sharp's, which also unpacks compressed XMP (zTXt), as QuickPitik does.
  */
-async function pngXmp(filePath) {
-  const { xmp } = await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).metadata();
-  if (!xmp || xmp.length > 65535) return {};
-  const parsed = await exifr.sidecar(xmp, XMP_IPTC_OPTIONS, 'xmp'); // 'xmp': never try other parsers on it
+async function parsedXmp(filePath, raw) {
+  let xml = typeof raw === 'string' ? Buffer.from(raw) : undefined;
+  if (!xml && path.extname(filePath).toLowerCase() === '.png') {
+    xml = (await sharp(filePath, { limitInputPixels: SHARP_MAX_INPUT_PIXELS }).metadata()).xmp;
+  }
+  if (!xml || xml.length > 65535) return {};
+  // A Buffer, never a string (sidecar fetches a string as a URL); 'xmp' stops it trying other parsers.
+  const parsed = await exifr.sidecar(xml, XMP_IPTC_OPTIONS, 'xmp');
   return parsed ? { ...parsed, ifd0: parsed.tiff } : {}; // sidecar names the XMP tiff: namespace 'tiff'
 }
 
@@ -406,11 +410,14 @@ async function readPhotoMetadata(filePath) {
   try {
     if (!METADATA_EXTENSIONS.includes(path.extname(filePath).toLowerCase())) return withSize({ status: 'unavailable' });
     if (await startsWithZeroZero(filePath)) return withSize({ status: 'unavailable' });
-    const tiff = await exifr.parse(filePath, TIFF_OPTIONS);
-    const xmpIptc = path.extname(filePath).toLowerCase() === '.png'
-      ? await pngXmp(filePath).catch(() => ({})) // damaged XMP loses only the XMP; exifr reads no PNG IPTC
-      : await exifr.parse(filePath, XMP_IPTC_OPTIONS);
-    const fields = normalizeMetadata(tiff || {}, xmpIptc || {});
+    // exifr reads a cut-short block past its buffer's end, so it gets the bytes in memory of their own: past the
+    // end is then an error, not other data. Node pools files under 4 KB into a shared slab; those are copied.
+    const file = await fs.readFile(filePath);
+    const bytes = file.buffer.byteLength === file.length ? file : new Uint8Array(file);
+    const tiff = await exifr.parse(bytes, TIFF_OPTIONS);
+    const { xmp: rawXmp, ...iptc } = (await exifr.parse(bytes, { ...XMP_IPTC_OPTIONS, xmp: { parse: false } })) || {};
+    const xmp = await parsedXmp(filePath, rawXmp).catch(() => ({})); // damaged XMP loses only the XMP
+    const fields = normalizeMetadata(tiff || {}, { ...iptc, ...xmp });
     return withSize(Object.keys(fields).length > 0 ? { status: 'ready', fields } : { status: 'empty' });
   } catch (_err) {
     return withSize({ status: 'failed' });

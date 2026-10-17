@@ -226,21 +226,57 @@ describe('readPhotoMetadata', () => {
     + `<rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/">${body}</rdf:Description></rdf:RDF></x:xmpmeta>`;
   const blankPng = () => sharp({ create: { width: 1, height: 1, channels: 3, background: '#888' } }).png().toBuffer();
 
-  // exifr parses broken XMP in squared time: 256 KB froze the app ~4.6 s, 512 KB ~18 s (review 2026-10-17).
-  it('skips a broken PNG XMP block bigger than a JPEG can hold, and answers fast', async () => {
-    const xml = Buffer.from(xmpOf('<dc:creator><rdf:Seq><rdf:li>Ana Cebu</rdf:li></rdf:Seq></dc:creator>'
-      + '<x:a>'.repeat(52000)));
-    const body = Buffer.concat([Buffer.from('iTXtXML:com.adobe.xmp\0\0\0\0\0', 'latin1'), xml]);
+  /** A plain (uncompressed) iTXt XMP chunk, inserted into `png` at byte `at` (33 = right after IHDR). */
+  function withXmpChunk(png, xml, at = 33) {
+    const body = Buffer.concat([Buffer.from('iTXtXML:com.adobe.xmp\0\0\0\0\0', 'latin1'), Buffer.from(xml)]);
     const head = Buffer.alloc(4);
     head.writeUInt32BE(body.length - 4);
     const crc = Buffer.alloc(4);
     crc.writeUInt32BE(zlib.crc32(body));
-    const base = await blankPng();
-    const folder = folderWith({ 'x.png': Buffer.concat([base.subarray(0, 33), head, body, crc, base.subarray(33)]) });
+    return Buffer.concat([png.subarray(0, at), head, body, crc, png.subarray(at)]);
+  }
+  const creator = name => `<dc:creator><rdf:Seq><rdf:li>${name}</rdf:li></rdf:Seq></dc:creator>`;
+
+  // exifr parses broken XMP in squared time: 256 KB froze the app ~4.6 s, 512 KB ~18 s (review 2026-10-17).
+  // exifr picks its parser by content, so a PNG named .jpg must be capped too.
+  it.each(['x.png', 'x.jpg'])('skips a broken XMP block bigger than a JPEG can hold, and answers fast (%s)', async name => {
+    const folder = folderWith({ [name]: withXmpChunk(await blankPng(), xmpOf(creator('Ana Cebu') + '<x:a>'.repeat(52000))) });
     const started = Date.now();
-    const result = await realExif().readPhotoMetadata(path.join(folder, 'x.png'));
+    const result = await realExif().readPhotoMetadata(path.join(folder, name));
     expect(Date.now() - started).toBeLessThan(1000);
     expect(result.fields?.author).toBeUndefined();
+  });
+
+  it('reads PNG XMP stored after the image data, as exifr and QuickPitik do', async () => {
+    const png = await blankPng();
+    const folder = folderWith({ 'x.png': withXmpChunk(png, xmpOf(creator('Ana Cebu')), png.length - 12) }); // before IEND
+    expect((await realExif().readPhotoMetadata(path.join(folder, 'x.png'))).fields).toEqual({ author: 'Ana Cebu' });
+  });
+
+  it('a PNG with plain and compressed XMP keeps the plain one, as before', async () => {
+    const zipped = await sharp(await blankPng()).withXmp(xmpOf(creator('Zipped'))).png().toBuffer();
+    const folder = folderWith({ 'x.png': withXmpChunk(zipped, xmpOf(creator('Plain'))) });
+    expect((await realExif().readPhotoMetadata(path.join(folder, 'x.png'))).fields).toEqual({ author: 'Plain' });
+  });
+
+  // exifr reads a cut-short block past the end of its buffer into the rest of the shared memory slab, where
+  // other recent data sits (review 2026-10-17). The spy puts "8"s right after each slab slice, like that data.
+  it('a cut-short file never shows memory from past its end', async () => {
+    const folder = folderWith({ 'cut.jpg': fs.readFileSync(path.join(fixtures, 'iptc-only.jpg')).subarray(0, 96) });
+    const allocUnsafe = Buffer.allocUnsafe;
+    const spy = vi.spyOn(Buffer, 'allocUnsafe').mockImplementation(size => allocUnsafe(size + 4096).fill('8').subarray(0, size));
+    try {
+      const { fields } = await realExif().readPhotoMetadata(path.join(folder, 'cut.jpg'));
+      expect(JSON.stringify(fields ?? {})).not.toContain('8');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a JPEG named .png keeps its IPTC', async () => {
+    const folder = folderWith({ 'x.png': fs.readFileSync(path.join(fixtures, 'iptc-only.jpg')) });
+    expect((await realExif().readPhotoMetadata(path.join(folder, 'x.png'))).fields)
+      .toEqual(evidence.vectors['iptc-only.jpg']);
   });
 
   it('reads compressed PNG XMP (zTXt), like QuickPitik', async () => {
