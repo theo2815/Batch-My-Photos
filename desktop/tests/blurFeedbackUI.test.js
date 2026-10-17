@@ -309,6 +309,44 @@ describe('explicit beta feedback consent', () => {
     button(render(SettingsPanel, p), 'Replace beta key').props.onClick();
     expect(field(render(SettingsPanel, p)).props.type).toBe('password');
   });
+  it('shows why a key was not saved, keeps what was typed, and keeps blur locked', async () => {
+    const p = { isBeta: true };
+    const field = tree => nodes(tree).find(n => n.type === 'input' && n.props.id === 'blur-beta-key');
+    const blurSwitch = tree => nodes(tree).find(n => n.type === 'input' && n.props.role === 'switch');
+    render(SettingsPanel, p); await effects();
+    field(render(SettingsPanel, p)).props.onChange({ target: { value: 'wrong-key' } });
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue(
+      { enabled: true, configured: false, error: 'This beta key was not accepted. Check it and try again.' });
+    await button(render(SettingsPanel, p), 'Save beta key').props.onClick();
+    const tree = render(SettingsPanel, p);
+    expect(text(tree)).toContain('This beta key was not accepted');
+    expect(field(tree).props.value).toBe('wrong-key');
+    expect(blurSwitch(tree).props.disabled).toBe(true);
+  });
+  it('turns blur off whenever no beta key is saved (a preset, or a key the server rejected)', async () => {
+    const onChange = vi.fn();
+    const p = { isBeta: true, blurDetectionEnabled: true, onChange };
+    render(SettingsPanel, p); await effects();
+    render(SettingsPanel, p); await effects();
+    expect(onChange).toHaveBeenCalledWith('blurDetectionEnabled', false);
+    expect(text(render(SettingsPanel, p))).toContain('needs a valid beta key');
+    hooks.values = []; hooks.deps = []; hooks.effects = []; onChange.mockClear();
+    globalThis.window.electronAPI.blurBetaKey.mockResolvedValue({ enabled: true, configured: true });
+    render(SettingsPanel, p); await effects();
+    render(SettingsPanel, p); await effects();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+  it('checks the key again when an analysis ends, so a rejected key locks blur', async () => {
+    const calls = () => globalThis.window.electronAPI.blurBetaKey.mock.calls.length;
+    // This harness re-runs the mount check on every effects() call, so compare increments.
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    const steady = calls();
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: true }); await effects();
+    const perRender = calls() - steady;
+    render(SettingsPanel, { isBeta: true, isAnalyzingBlur: false }); await effects();
+    expect(calls() - steady - perRender).toBe(perRender + 1);
+  });
   it('reloads the selected beta preview when a new analysis replaces results', async () => {
     const firstVersion = {};
     renderPreview({ ...props, previewVersion: firstVersion }); await effects();

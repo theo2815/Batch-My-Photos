@@ -79,6 +79,19 @@ function SettingsPanel({
   useEffect(() => {
     if (isBeta) loadBetaKeyStatus();
   }, [isBeta, loadBetaKeyStatus]);
+  // Re-check when an analysis ends: the main process forgets a key ai-api refused.
+  const wasAnalyzingRef = React.useRef(isAnalyzingBlur);
+  useEffect(() => {
+    if (wasAnalyzingRef.current && !isAnalyzingBlur && isBeta) loadBetaKeyStatus();
+    wasAnalyzingRef.current = isAnalyzingBlur;
+  }, [isAnalyzingBlur, isBeta, loadBetaKeyStatus]);
+  // Blur cannot stay on without a saved key (a preset can switch it on).
+  useEffect(() => {
+    if (isBeta && betaKeyStatus?.enabled && !betaKeyStatus.configured && blurDetectionEnabled) {
+      onChange('blurDetectionEnabled', false);
+      setBetaKeyError('Blur detection needs a valid beta key. Enter it to turn blur on.');
+    }
+  }, [isBeta, betaKeyStatus, blurDetectionEnabled, onChange]);
 
   const saveBetaKey = async () => {
     if (!betaKey.trim() || savingBetaKey) return;
@@ -86,6 +99,10 @@ function SettingsPanel({
     setBetaKeyError('');
     try {
       const status = await window.electronAPI.blurBetaKey(betaKey.trim());
+      if (status.error) {
+        setBetaKeyError(status.error);
+        return;
+      }
       if (!status.configured) throw new Error('Key was not saved');
       setBetaKeyStatus(status);
       setBetaKey('');

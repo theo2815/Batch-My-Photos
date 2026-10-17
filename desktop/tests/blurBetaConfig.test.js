@@ -193,7 +193,8 @@ describe('beta key setup', () => {
   it('stores through SecureStore, survives reload, and exposes only status through preload', async () => {
     const fixture = keyStoreFixture();
     const keyStore = fixture.reload();
-    const { handlers } = ipcFor(configFor(validManifest), keyStore);
+    const { handlers } = ipcFor(configFor(validManifest), keyStore,
+      { './blurDetectionService': { verifyBetaKey: async () => 'valid' } });
     let api;
     load('preload.js', { electron: {
       contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } },
@@ -209,10 +210,34 @@ describe('beta key setup', () => {
   });
   it.each(['', ' ', 'bad key', 'key\n', 'x'.repeat(1025), null, 42])('rejects invalid key input %j', async key => {
     const keyStore = keyStoreFixture().reload();
-    const { handlers } = ipcFor(configFor(validManifest), keyStore);
+    const verifyBetaKey = vi.fn(async () => 'valid');
+    const { handlers } = ipcFor(configFor(validManifest), keyStore, { './blurDetectionService': { verifyBetaKey } });
     expect(typeof handlers.get('blur-beta-key')).toBe('function');
     await expect(handlers.get('blur-beta-key')({}, { key })).rejects.toThrow(/key/i);
     expect(keyStore.get()).toBe('');
+    expect(verifyBetaKey).not.toHaveBeenCalled();
+  });
+  it('saves only a key the ai-api accepts; a refused or unchecked key leaves the stored one alone', async () => {
+    const keyStore = keyStoreFixture().reload();
+    const verifyBetaKey = vi.fn(async () => 'invalid');
+    const { handlers } = ipcFor(configFor(validManifest), keyStore, { './blurDetectionService': { verifyBetaKey } });
+    const save = key => handlers.get('blur-beta-key')({}, { key });
+    expect(await save('wrong-key')).toEqual({ enabled: true, configured: false, error: expect.stringMatching(/not accepted/) });
+    verifyBetaKey.mockResolvedValue('unreachable');
+    expect(await save('maybe-key')).toEqual({ enabled: true, configured: false, error: expect.stringMatching(/could not check/i) });
+    expect(keyStore.get()).toBe('');
+    verifyBetaKey.mockResolvedValue('valid');
+    expect(await save('good-key')).toEqual({ enabled: true, configured: true });
+    verifyBetaKey.mockResolvedValue('invalid');
+    expect(await save('wrong-key')).toEqual({ enabled: true, configured: true, error: expect.stringMatching(/not accepted/) });
+    expect(keyStore.get()).toBe('good-key');
+    expect(verifyBetaKey).toHaveBeenLastCalledWith('wrong-key');
+  });
+  it('forgets a saved key with clear()', () => {
+    const fixture = keyStoreFixture();
+    fixture.reload().set('stub-key');
+    fixture.reload().clear();
+    expect(fixture.reload().get()).toBe('');
   });
   it('does not write secrets when OS encryption is unavailable', () => {
     const fixture = keyStoreFixture();
@@ -262,6 +287,45 @@ describe('analysis needs a beta key', () => {
     expect(result).toMatchObject({ success: false });
     expect(result.error).toMatch(/beta key/i);
     expect(analyzeBlur).not.toHaveBeenCalled();
+  });
+  it.each([[401, true], [403, true], [503, false]])('an analysis answered %i forgets the stored key: %s', async (status, forgotten) => {
+    const keyStore = { get: () => 'stored-key', clear: vi.fn() };
+    const analyzeBlur = vi.fn(async () => { throw new Error(`AI service returned ${status}: nope`); });
+    const { handlers } = ipcFor(configFor(storeManifest), keyStore, {
+      './blurDetectionService': { analyzeBlur },
+      './securityManager': { isPathAllowedAsync: async () => true },
+      './batchEngine': { groupFilesByBaseName: async () => ({}) },
+    });
+    const result = await handlers.get('analyze-blur')({ sender: { send() {} } }, { folderPath: temporaryFolder() });
+    expect(analyzeBlur).toHaveBeenCalled();
+    expect(keyStore.clear).toHaveBeenCalledTimes(forgotten ? 1 : 0);
+    expect(result).toMatchObject(forgotten
+      ? { success: false, aiUnavailable: false, error: expect.stringMatching(/not accepted/) }
+      : { success: false, aiUnavailable: true });
+  });
+});
+
+describe('beta key check against the ai-api', () => {
+  const checkWith = answer => {
+    const fetch = vi.fn(async () => { if (answer instanceof Error) throw answer; return answer; });
+    const blur = load('src/main/blurDetectionService.js', {
+      electron: { net: { fetch } }, './config': configFor(storeManifest), '../utils/logger': logger,
+    });
+    return { fetch, verify: key => blur.verifyBetaKey(key) };
+  };
+  it('asks with a job lookup (no photo) and never follows a redirect', async () => {
+    const { fetch, verify } = checkWith(new Response('{}', { status: 200 }));
+    expect(await verify('stub-key')).toBe('valid');
+    const [url, init] = fetch.mock.lastCall;
+    expect(url).toBe('https://blur.example.test/api/v1/jobs/00000000-0000-0000-0000-000000000000');
+    expect(init).toMatchObject({ headers: { 'X-API-Key': 'stub-key' }, redirect: 'error' });
+    expect(init.body).toBeUndefined();
+  });
+  it.each([[401, 'invalid'], [403, 'invalid'], [429, 'unreachable'], [503, 'unreachable']])('reads %i as %s', async (status, verdict) => {
+    expect(await checkWith(new Response('', { status })).verify('stub-key')).toBe(verdict);
+  });
+  it('reads a network failure as unreachable', async () => {
+    expect(await checkWith(new TypeError('fetch failed')).verify('stub-key')).toBe('unreachable');
   });
 });
 

@@ -852,8 +852,30 @@ async function analyzeBlur(fileGroups, folderPath, threshold = 'moderate', categ
   return blurMap;
 }
 
+/**
+ * Ask ai-api whether it accepts a beta key, without sending a photo: a job
+ * lookup needs only the key's jobs:read scope (401/403 = refused). This only
+ * keeps a refused key from unlocking the UI; ai-api checks the key on every
+ * blur request regardless. Redirects are refused so the key cannot be passed
+ * on to another host.
+ * @returns {Promise<'valid'|'invalid'|'unreachable'>}
+ */
+async function verifyBetaKey(key) {
+  const base = (config.features.BLUR_AI_URL || '').replace(/\/+$/, '');
+  try {
+    const response = await net.fetch(`${base}/api/v1/jobs/00000000-0000-0000-0000-000000000000`, {
+      headers: { 'X-API-Key': key }, redirect: 'error', signal: AbortSignal.timeout(BLUR_AI_TIMEOUT_MS),
+    });
+    if (response.status === 401 || response.status === 403) return 'invalid';
+    return response.ok ? 'valid' : 'unreachable';
+  } catch {
+    return 'unreachable';
+  }
+}
+
 module.exports = {
   analyzeBlur,
+  verifyBetaKey,
   clearCache,
   getCachedBlurResult,
   prepareImageForUpload,

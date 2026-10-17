@@ -932,6 +932,11 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalGroups: Object.keys(blurResults).length,
       };
     } catch (error) {
+      // ai-api refused the saved beta key (revoked or wrong): forget it so Settings asks again.
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 40[13]\b/.test(error.message || '')) {
+        require('./blurBetaKeyStore').clear();
+        return { success: false, error: 'Your blur beta key was not accepted. Enter it again in Settings.', aiUnavailable: false };
+      }
       // Check if this is an AI service unavailability error
       const isAiError = error.message?.includes('AI service');
       return {
@@ -1138,7 +1143,17 @@ function registerPreferenceHandlers(ipcMain, store) {
   handle(ipcMain, 'blur-beta-key', async (_event, { key } = {}) => {
     if (!config.features.BLUR_BETA_ENABLED) return { enabled: false, configured: false };
     const keyStore = require('./blurBetaKeyStore');
-    if (key !== undefined) keyStore.set(key);
+    if (key !== undefined) {
+      keyStore.check(key);
+      // Save only a key ai-api accepts; a refused or unchecked key leaves the stored one alone.
+      const verdict = await blurDetectionService.verifyBetaKey(key);
+      if (verdict !== 'valid') {
+        return { enabled: true, configured: !!keyStore.get(), error: verdict === 'invalid'
+          ? 'This beta key was not accepted. Check it and try again.'
+          : 'Could not check this key with the blur service. Check your connection and try again.' };
+      }
+      keyStore.set(key);
+    }
     return { enabled: true, configured: !!keyStore.get() };
   });
 
