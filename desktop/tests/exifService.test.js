@@ -170,7 +170,7 @@ describe('readPhotoMetadata', () => {
   });
 
   it('cleans text, strips the make from the model, and keeps exact fractions and offsets', async () => {
-    const tiff = { ifd0: { Make: 'Ca‮non​', Model: 'canon EOS R5', Artist: 'A\u0007b' },
+    const tiff = { ifd0: { Make: 'Ca\u202enon\u200b', Model: 'canon EOS R5', Artist: 'A\u0007b' },
       exif: { DateTimeOriginal: '2026:01:02 03:04:05', SubSecTimeOriginal: '500', OffsetTimeOriginal: '+00:00',
         ExposureTime: 0.3, ISO: [200, 0] } };
     const parse = vi.fn(async (_file, options) => (options.tiff ? tiff : undefined));
