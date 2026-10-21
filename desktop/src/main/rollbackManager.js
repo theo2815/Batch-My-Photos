@@ -881,7 +881,7 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
 
   if (mode === 'copy') {
     const batchDirs = new Set(outputFolder ? (batchFolders || []).map(f => normPath(path.join(outputFolder, f))) : []);
-    if (operations.some(op => !batchDirs.has(normPath(path.dirname(op.currentPath))))) {
+    if ((batchFolders || []).some(f => !f || f === '.' || f === '..' || path.basename(f) !== f) || operations.some(op => !batchDirs.has(normPath(path.dirname(op.currentPath))))) {
       logger.warn('🔒 [SECURITY] Copy undo record points outside its batch folders — refusing');
       return { success: false, mode, error: 'This undo record does not match its batch folders, so nothing was deleted.' };
     }

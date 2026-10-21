@@ -166,6 +166,18 @@ describe('copy undo', () => {
     expect(fs.existsSync(run.operations[0].sourcePath)).toBe(true);
   });
 
+  it('refuses a record whose batch folder names are odd and deletes nothing', async () => {
+    const run = makeRun(['A.jpg']);
+    const outside = path.join(run.O, '..', 'A.jpg');
+    fs.copyFileSync(run.operations[0].sourcePath, outside);
+    run.operations[0].destPath = outside;
+    await saveCopy(run, { batchFolders: ['..'] });
+    const result = await rm.executeRollback(appState());
+    expect(result.success).toBe(false);
+    expect(fs.existsSync(outside)).toBe(true);
+    expect(fs.existsSync(run.operations[0].sourcePath)).toBe(true);
+  });
+
   it('undoes a copy entry from History and removes the entry', async () => {
     const run = makeRun(['A.jpg', 'A.CR3', 'B.jpg']);
     await saveCopy(run);
