@@ -134,6 +134,16 @@ describe('copy undo', () => {
     expect(fs.existsSync(run.operations[0].destPath)).toBe(true);
   });
 
+  it('keeps a file whose copy path is its own original path', async () => {
+    const run = makeRun(['A.jpg']);
+    const own = run.operations[0].destPath;
+    run.operations[0].sourcePath = own;
+    await saveCopy(run);
+    const result = await rm.executeRollback(appState());
+    expect(result).toMatchObject({ success: true, mode: 'copy', restoredFiles: 0, keptFiles: 1 });
+    expect(fs.readFileSync(own, 'utf8')).toBe('photo-A.jpg');
+  });
+
   it('counts a copy already deleted by hand as removed', async () => {
     const run = makeRun(['A.jpg', 'B.jpg']);
     await saveCopy(run);
