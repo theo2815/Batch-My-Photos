@@ -10,6 +10,7 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
   const [rollbackInfo, setRollbackInfo] = useState(null);
   const [showUndoConfirmation, setShowUndoConfirmation] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
+  const [undoMode, setUndoMode] = useState('move');
 
   // Persistent history
   const [operationHistory, setOperationHistory] = useState([]);
@@ -56,6 +57,7 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
 
   const handleExecuteUndo = useCallback(async () => {
     setShowUndoConfirmation(false);
+    setUndoMode(rollbackInfo?.mode || 'move');
     setIsRollingBack(true);
     setAppState(STATES.EXECUTING);
     setProgress({ current: 0, total: rollbackInfo?.totalFiles || 0 });
@@ -79,6 +81,8 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
         setExecutionResults(null);
         // Show undo complete screen instead of going to IDLE
         setUndoCompleteResult({
+          mode: results.mode,
+          keptFiles: results.keptFiles,
           restoredFiles: results.restoredFiles,
           totalFiles: results.totalFiles,
           sourceFolder: results.sourceFolder,
@@ -167,6 +171,7 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
     setShowHistoryUndoConfirmation(false);
     setShowHistoryModal(false);
     setPendingHistoryUndo(null);
+    setUndoMode(entry.mode || 'move');
     setIsRollingBack(true);
     setAppState(STATES.EXECUTING);
     setProgress({ current: 0, total: entry.totalFiles || 0 });
@@ -193,6 +198,8 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
         setExecutionResults(null);
         // Show undo complete screen
         setUndoCompleteResult({
+          mode: results.mode,
+          keptFiles: results.keptFiles,
           restoredFiles: results.restoredFiles,
           totalFiles: results.totalFiles,
           sourceFolder: results.sourceFolder,
@@ -284,6 +291,7 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
   /** Resume an interrupted rollback */
   const handleResumeRollback = useCallback(async () => {
     setShowResumeRollbackModal(false);
+    setUndoMode(interruptedRollback?.mode || 'move');
     setIsRollingBack(true);
     setAppState(STATES.EXECUTING);
     setProgress({ current: interruptedRollback?.restoredFiles || 0, total: interruptedRollback?.totalFiles || 0 });
@@ -303,6 +311,8 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
       if (result.success) {
         setExecutionResults(null);
         setUndoCompleteResult({
+          mode: result.mode,
+          keptFiles: result.keptFiles,
           restoredFiles: result.restoredFiles,
           totalFiles: result.totalFiles,
           sourceFolder: result.sourceFolder,
@@ -349,6 +359,7 @@ export function useRollback({ appState, setAppState, setError, setProgress, setE
     rollbackInfo,
     showUndoConfirmation,
     isRollingBack,
+    undoMode,
     handleUndoClick,
     handleExecuteUndo,
     setShowUndoConfirmation,

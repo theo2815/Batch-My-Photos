@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { CheckCircle, AlertCircle, FolderOpen, RotateCcw, Undo2, History, Download } from 'lucide-react';
+import { STRINGS } from '../../constants/strings';
 import './StatusCards.css';
 
 /**
@@ -99,7 +100,9 @@ function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenF
       </div>
       {wasCancelled && (
         <p className="cancel-note">
-          Files already moved/copied will remain in their new location.
+          {executionResults?.mode === 'copy' && rollbackAvailable
+            ? STRINGS.COPY_UNDO_CANCELLED_NOTE
+            : 'Files already moved/copied will remain in their new location.'}
         </p>
       )}
       <div className="complete-actions">

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { AlertTriangle, XCircle } from 'lucide-react';
+import { STRINGS } from '../../constants/strings';
 import './Modals.css';
 
 /**
@@ -31,7 +32,7 @@ function CancelConfirmationModal({ isOpen, onConfirm, onClose }) {
           <ul className="params-list">
             <li>Files already processed will <strong>remain in their new location</strong>.</li>
             <li>The operation will stop immediately after the current file.</li>
-            <li>You may need to manually clean up partial batches.</li>
+            <li>{STRINGS.COPY_UNDO_CANCEL_BULLET}</li>
           </ul>
         </div>
         <div className="modal-buttons">
