@@ -98,7 +98,7 @@ function App() {
     blurCategories,
   });
   const {
-    isAnalyzing: isAnalyzingBlur,
+    blurryGroups, isAnalyzing: isAnalyzingBlur,
     runBlurAnalysis, resetBlurState, clearAnalysisCache,
   } = blurDetection;
 
@@ -264,8 +264,11 @@ function App() {
     previewCancelledRef.current = false;
     setIsRefreshingPreview(true);
 
+    // Pass blurry groups as excludeGroups if blur detection is enabled
+    const excludeGroups = blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null;
+
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, null);
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, excludeGroups);
       if (!previewCancelledRef.current) {
         if (preview.success) {
           setPreviewResults(preview);
@@ -281,7 +284,7 @@ function App() {
         setRefreshingField(null);
       }
     }
-  }, [folderPath, maxFilesPerBatch, sortBy, setRefreshingField]);
+  }, [folderPath, maxFilesPerBatch, sortBy, blurDetectionEnabled, blurryGroups, setRefreshingField]);
 
   useEffect(() => {
     if (appStateRef.current !== STATES.READY) return;
@@ -346,6 +349,24 @@ function App() {
     setShowBlurSensitivityModal(true);
   }, []);
 
+  // Refresh preview when blurry groups change (after analysis completes or user un-flags)
+  useEffect(() => {
+    if (appStateRef.current !== STATES.READY) return;
+    if (!blurDetectionEnabled) return;
+
+    // Debounce to avoid rapid re-renders when multiple groups are un-flagged
+    const timer = setTimeout(() => {
+      if (appStateRef.current === STATES.READY) {
+        refreshPreview();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // We intentionally exclude refreshPreview from deps to avoid infinite loops.
+    // This effect should only fire when blurryGroups changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blurryGroups, blurDetectionEnabled]);
+
   // ============================================================================
   // VALIDATION & EXECUTION WRAPPERS
   // ============================================================================
@@ -397,7 +418,7 @@ function App() {
       sortBy,
       selectedPresetName,
       previewBatchCount: previewResults?.batchCount || 0,
-      blurryGroups: null,
+      blurryGroups: blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null,
     });
   };
 
