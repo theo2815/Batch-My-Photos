@@ -36,7 +36,7 @@ const props = {
 };
 
 describe('blur analysis start disclosure', () => {
-  it('shows the beta upload and advisory notice before Start Analysis, then starts with chosen settings', () => {
+  it('shows the beta upload and _Blurry folder notice before Start Analysis, then starts with chosen settings', () => {
     const onStart = vi.fn();
     const tree = BlurSensitivityModal({ ...props, isBeta: true, onStart });
     const start = walk(tree, node => node.type === 'button' && textOf(node).includes('Start Analysis'));
@@ -45,7 +45,7 @@ describe('blur analysis start disclosure', () => {
     expect(notice).not.toBeNull();
     expect(textOf(notice)).toMatch(/resized photos.*QuickPitik blur service/i);
     expect(textOf(notice)).not.toMatch(/staging/i);
-    expect(textOf(notice)).toMatch(/suggestions.*(move|exclude)/i);
+    expect(textOf(notice)).toMatch(/flagged photos go to a separate _Blurry folder/i);
     expect(textOf(tree)).not.toContain('Sharp photos are always kept.');
     expect(textOf(tree).indexOf('Resized photos')).toBeLessThan(textOf(tree).indexOf('Start Analysis'));
     expect(start).not.toBeNull();

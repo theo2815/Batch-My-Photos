@@ -659,11 +659,35 @@ describe('explicit beta feedback consent', () => {
     expect(text(StatsGrid({ blurDetectionEnabled: true, isBeta: true }))).toContain('Blur suggestions');
     expect(text(StatsGrid({ blurDetectionEnabled: true, isBeta: false }))).toContain('Blurry Photos');
   });
-  it('shows advisory status at beta batch confirmation only', () => {
+  it('names the _Blurry folder at batch confirmation, or warns while analysis is running', () => {
     const settings = { outputPrefix: 'Batch', batchMode: 'copy' };
-    const beta = render(PreviewPanel, { settings, blurDetection: { isBeta: true } });
-    expect(text(beta)).toContain('Every photo stays in the ordinary batches');
-    expect(text(render(PreviewPanel, { settings, blurDetection: { isBeta: false } })))
-      .not.toContain('Every photo stays in the ordinary batches');
+    const flagged = text(render(PreviewPanel, { settings, blurDetection: { isBeta: false, blurryCount: 2 } }));
+    expect(flagged).toContain('2 flagged groups will go to Batch_Blurry. Review that folder after the batch.');
+    expect(text(render(PreviewPanel, { settings, blurDetection: { blurryCount: 1 } })))
+      .toContain('1 flagged group will go to Batch_Blurry.');
+    expect(text(render(PreviewPanel, { settings, blurDetection: { isAnalyzing: true, blurryCount: 2 } })))
+      .toContain('Blur analysis is still running. No photos will go to Batch_Blurry.');
+    const none = text(render(PreviewPanel, { settings, blurDetection: { blurryCount: 0 } }));
+    expect(none).not.toContain('_Blurry');
+    expect(none).not.toContain('Blur analysis is still running');
+  });
+  it('shows where a flagged group will go and lets the user restore it', () => {
+    const toggleBlurFlag = vi.fn();
+    const blurDetection = { blurResults: { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' } }, blurryGroups: ['A'], blurryCount: 1,
+      analyzedCount: 1, unanalyzedCount: 0, isAnalyzing: false, unflaggedGroups: new Set(), toggleBlurFlag };
+    const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection };
+    const section = nodes(render(BatchPreview, batch)).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = [true]; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    const tree = render(section.type, section.props);
+    expect(text(tree)).toContain('Will be placed in Beta_Blurry');
+    const restore = nodes(tree).find(n => n.type === 'button' && n.props.title === 'Restore to normal batches');
+    expect(restore.props['aria-label']).toBe('Restore A to normal batches');
+    restore.props.onClick();
+    expect(toggleBlurFlag).toHaveBeenCalledWith('A');
+
+    const onImageClick = vi.fn();
+    const again = render(section.type, { ...section.props, onImageClick });
+    nodes(again).find(n => n.type === 'button' && n.props['aria-label'] === 'Preview A.jpg').props.onClick();
+    expect(onImageClick.mock.calls[0][2]).toBe(toggleBlurFlag);
   });
 });

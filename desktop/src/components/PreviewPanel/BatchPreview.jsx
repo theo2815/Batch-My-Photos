@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle, ScanEye, X, CheckCircle, Loader2 } from 'lucide-react';
+import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle, ScanEye, X, Undo2, CheckCircle, Loader2 } from 'lucide-react';
 import ImagePreviewModal from '../Modals/ImagePreviewModal';
 import './PreviewPanel.css';
 // Default import: the shared CJS module exposes its exports as the default
@@ -35,7 +35,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
   const [visibleBatchesCount, setVisibleBatchesCount] = useState(10); // Number of batches to show
 
   // Image preview modal state
-  const [previewImage, setPreviewImage] = useState(null); // { fileName, fileList, imageInfo, blurInfoMap, onRestore }
+  const [previewImage, setPreviewImage] = useState(null); // { fileName, fileList, onRestore }
 
   const blurInfoMap = {};
   for (const [baseName, result] of Object.entries(blurDetection?.blurResults || {})) {
@@ -208,10 +208,11 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
       {blurDetectionEnabled && blurDetection && (
         <BlurryPhotosSection
           blurDetection={blurDetection}
+          outputPrefix={outputPrefix}
           folderPath={folderPath}
           thumbnails={thumbnails}
-          onImageClick={(fileName, fileList, imageInfo, blurInfoMap) =>
-            setPreviewImage({ fileName, fileList, imageInfo, blurInfoMap })
+          onImageClick={(fileName, fileList, onRestore) =>
+            setPreviewImage({ fileName, fileList, onRestore })
           }
         />
       )}
@@ -240,7 +241,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
 /**
  * Blur suggestions section - shows flagged groups for optional review
  */
-function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThumbnails, onImageClick }) {
+function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnails: parentThumbnails, onImageClick }) {
   const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag, cancelAnalysis } = blurDetection;
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
@@ -340,7 +341,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
           {analyzedCount === 0 ? 'No blur results available' : blurryCount > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
         </span>
         {analyzedCount > 0 && unanalyzedCount === 0 && blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
-        <span className="blurry-folder-hint">Analysis does not move or exclude photos</span>
+        {blurryCount > 0 && <span className="blurry-folder-hint">Will be placed in {outputPrefix}_Blurry</span>}
         <span className="expand-icon">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
@@ -370,7 +371,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
               <div key={baseName} className="blurry-item">
                 <button type="button" className="thumbnail-button" aria-label={`Preview ${thumbFile || baseName}`}
                   disabled={!thumbFile}
-                  onClick={() => onImageClick?.(thumbFile, blurryFileList)}>
+                  onClick={() => onImageClick?.(thumbFile, blurryFileList, toggleBlurFlag)}>
                 {thumbSrc ? (
                   <img
                     src={thumbSrc}
@@ -417,11 +418,11 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
                 <button
                   className="unflag-btn"
                   onClick={() => toggleBlurFlag(baseName)}
-                  title="Dismiss blur suggestion"
-                  aria-label={`Dismiss blur suggestion for ${baseName}`}
+                  title="Restore to normal batches"
+                  aria-label={`Restore ${baseName} to normal batches`}
                 >
-                  <X size={14} />
-                  <span>Dismiss</span>
+                  <Undo2 size={14} />
+                  <span>Restore</span>
                 </button>
               </div>
             );
@@ -449,7 +450,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       {/* Show dismissed suggestions count */}
       {unflaggedGroups.size > 0 && (
         <div className="blurry-restored-note">
-          {unflaggedGroups.size} suggestion{unflaggedGroups.size > 1 ? 's' : ''} dismissed; photos remain in normal batches
+          {unflaggedGroups.size} group{unflaggedGroups.size > 1 ? 's' : ''} restored to normal batches
         </div>
       )}
     </div>
