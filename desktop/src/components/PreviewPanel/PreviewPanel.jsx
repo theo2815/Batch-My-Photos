@@ -123,7 +123,13 @@ function PreviewPanel({
       
       {/* Confirmation Box */}
       <div className="confirmation-box">
-        {blurDetection?.isBeta && <p className="note">Blur suggestions are advisory. Every photo stays in the ordinary batches.</p>}
+        {blurDetection?.isAnalyzing ? (
+          <p className="note">Blur analysis is still running. No photos will go to {outputPrefix}_Blurry.</p>
+        ) : blurDetection?.blurryCount > 0 && (
+          <p className="note">
+            {blurDetection.blurryCount} flagged group{blurDetection.blurryCount > 1 ? 's' : ''} will go to <strong>{outputPrefix}_Blurry</strong>. Review that folder after the batch.
+          </p>
+        )}
         <p>
           This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
           named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
