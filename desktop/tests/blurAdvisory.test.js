@@ -25,7 +25,7 @@ const stubs = {
     saveProgressToDisk: async () => {},
     clearProgress: async () => {},
   },
-  './rollbackManager': { init: noop },
+  './rollbackManager': { init: noop, clearRollbackManifest: noop, saveRollbackManifest: async () => {} },
   './blurDetectionService': {},
   './windowManager': { isAppUrl: () => true },
 };
