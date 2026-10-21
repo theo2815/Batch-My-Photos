@@ -307,9 +307,10 @@ async function deleteManifestFromDisk(operationId) {
  * @param {string} [params.sortBy] - Sort order used (e.g. 'name-asc')
  * @param {Array<Object>} [params.batchResults] - Per-batch results [{ folder, fileCount }]
  * @param {string|null} [params.progressId] - Id of the run's resume record (kept so Undo can drop it)
+ * @param {boolean} [params.resumed] - True when the record covers a job that was stopped and resumed
  * @returns {Promise<boolean>} True if manifest was saved
  */
-async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operations, batchFolders, totalFiles, outputPrefix, maxFilesPerBatch, sortBy, batchResults, progressId = null }) {
+async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operations, batchFolders, totalFiles, outputPrefix, maxFilesPerBatch, sortBy, batchResults, progressId = null, resumed = false }) {
   if (mode !== 'move' && mode !== 'copy') {
     logger.log('🔄 [ROLLBACK] Skipping manifest save - only move and copy modes are supported');
     return false;
@@ -336,6 +337,7 @@ async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operatio
     sortBy: sortBy || 'name-asc',
     batchResults: batchResults || [],
     progressId,
+    resumed,
     operations: mappedOperations
   };
 
@@ -366,6 +368,7 @@ async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operatio
         sortBy: sortBy || 'name-asc',
         batchResults: batchResults || [],
         progressId,
+        resumed,
       };
 
       history.unshift(summary); // Newest first
@@ -520,7 +523,8 @@ async function executeHistoryRollback(operationId, appState, progressCallback) {
     sourceFolder: summary.sourceFolder,
     mode: summary.mode || 'move',
     createdAt: summary.createdAt,
-    progressId: summary.progressId || null
+    progressId: summary.progressId || null,
+    resumed: summary.resumed || false
   };
 
   // Execute rollback using the shared logic
@@ -808,7 +812,8 @@ async function resumeInterruptedRollback(appState, progressCallback) {
     sourceFolder: state.sourceFolder,
     mode,
     createdAt: summary?.createdAt || state.createdAt,
-    progressId: summary?.progressId || null
+    progressId: summary?.progressId || null,
+    resumed: summary?.resumed || state.resumed || false
   };
 
   const result = await executeRollbackInternal(partialManifest, appState, progressCallback, {
@@ -868,7 +873,7 @@ async function judgeCopy(op, runEndMs) {
  * @returns {Promise<Object>} Result object with success status
  */
 async function executeRollbackInternal(manifest, appState, progressCallback, resumeState = null) {
-  const { operations, batchFolders, outputFolder, sourceFolder, mode = 'move', createdAt, progressId = null } = manifest;
+  const { operations, batchFolders, outputFolder, sourceFolder, mode = 'move', createdAt, progressId = null, resumed = false } = manifest;
 
   logger.log('🔄 [ROLLBACK] Starting rollback operation');
   logger.log('   - Files to restore:', operations.length);
@@ -931,6 +936,7 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
         restoredFiles,
         mode,
         createdAt,
+        resumed,
         sourceFolder,
         outputFolder,
         batchFolders: batchFolders || [],
@@ -967,7 +973,8 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
     // COPY: delete each copy only when judgeCopy proves it is a spare
     // ================================================================
     logger.log('🗑️ [ROLLBACK] Copy undo with', MAX_FILE_CONCURRENCY, 'concurrent workers');
-    const runEndMs = Date.parse(createdAt);
+    // A resumed job spans the stop, so only the same-time test is safe.
+    const runEndMs = resumed ? NaN : Date.parse(createdAt);
 
     const cursor = { index: 0 };
     const getNextIndex = () => cursor.index++;

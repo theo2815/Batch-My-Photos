@@ -1543,6 +1543,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           maxFilesPerBatch: progress.maxFilesPerBatch,
           batchResults: countCopiedPerFolder(batchInfo || [], undoOps),
           progressId: progress.operationId,
+          resumed: true,
         }).catch(err => { logger.error('💾 [ROLLBACK] Manifest save after resume failed:', err.message); return false; });
         if (saved) {
           // The stopped run's own entry is now covered by this one.

@@ -204,6 +204,22 @@ describe('copy runs keep an undo record', () => {
     expect(history.map(e => e.operationId)).toEqual([stoppedEntry.operationId]);
   });
 
+  it('keeps a copy edited between Cancel and Resume when the job is undone', async () => {
+    const job = newJob(200);
+    await stoppedCopy(job);
+    const edited = copiesIn(job.out)[0];
+    fs.writeFileSync(edited, 'x'.repeat(fs.statSync(edited).size));
+    const tenSecondsAgo = new Date(Date.now() - 10_000);
+    fs.utimesSync(edited, tenSecondsAgo, tenSecondsAgo);
+
+    expect((await call('resume-batch')).success).toBe(true);
+    expect((await call('get-operation-history'))[0].resumed).toBe(true);
+
+    const undo = await call('rollback-batch');
+    expect(undo).toMatchObject({ success: true, keptFiles: 1 });
+    expect(copiesIn(job.out)).toEqual([edited]);
+  });
+
   it('still saves a record for a finished Move and none for a cancelled Move', async () => {
     const finished = newJob(5);
     expect((await run(finished, 'move')).success).toBe(true);

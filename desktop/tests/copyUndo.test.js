@@ -208,6 +208,24 @@ describe('copy undo', () => {
     for (const op of run.operations) expect(fs.existsSync(op.destPath)).toBe(false);
   });
 
+  it('deletes a same-size copy with an older, different time unless the record is resumed', async () => {
+    const stamp = (run) => {
+      fs.utimesSync(run.operations[0].sourcePath, new Date(Date.now() - 100_000), new Date(Date.now() - 100_000));
+      fs.utimesSync(run.operations[0].destPath, new Date(Date.now() - 50_000), new Date(Date.now() - 50_000));
+    };
+    const plain = makeRun(['A.jpg']);
+    stamp(plain);
+    await saveCopy(plain);
+    expect(await rm.executeRollback(appState())).toMatchObject({ success: true, restoredFiles: 1, keptFiles: 0 });
+    expect(fs.existsSync(plain.operations[0].destPath)).toBe(false);
+
+    const resumed = makeRun(['A.jpg']);
+    stamp(resumed);
+    await saveCopy(resumed, { resumed: true });
+    expect(await rm.executeRollback(appState())).toMatchObject({ success: true, restoredFiles: 0, keptFiles: 1 });
+    expect(fs.existsSync(resumed.operations[0].destPath)).toBe(true);
+  });
+
   it('undoes a copy entry from History and removes the entry', async () => {
     const run = makeRun(['A.jpg', 'A.CR3', 'B.jpg']);
     await saveCopy(run);
