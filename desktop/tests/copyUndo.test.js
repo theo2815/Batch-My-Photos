@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Module from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -176,6 +176,36 @@ describe('copy undo', () => {
     expect(result.success).toBe(false);
     expect(fs.existsSync(outside)).toBe(true);
     expect(fs.existsSync(run.operations[0].sourcePath)).toBe(true);
+  });
+
+  it('fails and keeps the History entry when a copy cannot be deleted, then succeeds on retry', async () => {
+    const run = makeRun(['A.jpg', 'B.jpg', 'C.jpg']);
+    await saveCopy(run);
+    const id = rm.getOperationHistory()[0].operationId;
+    const busy = run.operations[1];
+    const realUnlink = fs.promises.unlink;
+    let failed = false;
+    const spy = vi.spyOn(fs.promises, 'unlink').mockImplementation((file) => {
+      if (!failed && file === busy.destPath) {
+        failed = true;
+        return Promise.reject(Object.assign(new Error('resource busy'), { code: 'EBUSY' }));
+      }
+      return realUnlink.call(fs.promises, file);
+    });
+    let result;
+    try {
+      result = await rm.executeHistoryRollback(id, appState());
+    } finally {
+      spy.mockRestore();
+    }
+    expect(result.success).toBe(false);
+    expect(result.errors.map(e => e.file)).toEqual(['B.jpg']);
+    expect(rm.getOperationHistory()).toHaveLength(1);
+    expect(fs.existsSync(busy.destPath)).toBe(true);
+
+    const retry = await rm.executeHistoryRollback(id, appState());
+    expect(retry.success).toBe(true);
+    for (const op of run.operations) expect(fs.existsSync(op.destPath)).toBe(false);
   });
 
   it('undoes a copy entry from History and removes the entry', async () => {
