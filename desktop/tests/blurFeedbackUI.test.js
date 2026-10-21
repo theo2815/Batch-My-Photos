@@ -690,4 +690,19 @@ describe('explicit beta feedback consent', () => {
     nodes(again).find(n => n.type === 'button' && n.props['aria-label'] === 'Preview A.jpg').props.onClick();
     expect(onImageClick.mock.calls[0][2]).toBe(toggleBlurFlag);
   });
+  it('restores a group from the photo preview once and closes the preview', () => {
+    const toggleBlurFlag = vi.fn();
+    const blurDetection = { blurResults: { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' } }, blurryGroups: ['A'], blurryCount: 1,
+      analyzedCount: 1, unanalyzedCount: 0, isAnalyzing: false, unflaggedGroups: new Set(), toggleBlurFlag };
+    const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection };
+    const modal = tree => nodes(tree).find(n => n.type === ImagePreviewModal);
+    let tree = render(BatchPreview, batch);
+    expect(modal(tree)).toBeUndefined();
+    nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection').props.onImageClick('A.jpg', ['A.jpg'], toggleBlurFlag);
+    tree = render(BatchPreview, batch);
+    modal(tree).props.onRestore('A');
+    expect(toggleBlurFlag).toHaveBeenCalledTimes(1);
+    expect(toggleBlurFlag).toHaveBeenCalledWith('A');
+    expect(modal(render(BatchPreview, batch))).toBeUndefined();
+  });
 });

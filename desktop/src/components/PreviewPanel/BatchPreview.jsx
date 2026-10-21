@@ -231,7 +231,10 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
         onLabel={blurDetection?.setLabel}
         getSubmission={blurDetection?.getSubmission}
         onSubmit={blurDetection?.submitExample}
-        onRestore={previewImage?.onRestore}
+        onRestore={previewImage?.onRestore && (baseName => {
+          previewImage.onRestore(baseName);
+          setPreviewImage(null);
+        })}
         onClose={() => setPreviewImage(null)}
       />}
     </div>
