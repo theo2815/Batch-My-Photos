@@ -191,6 +191,33 @@ describe('copy undo', () => {
     for (const op of run.operations) expect(fs.existsSync(op.destPath)).toBe(false);
   });
 
+  it('keeps a History copy entry when its output folder is missing', async () => {
+    const run = makeRun(['A.jpg', 'B.jpg']);
+    await saveCopy(run);
+    const id = rm.getOperationHistory()[0].operationId;
+    fs.renameSync(run.O, `${run.O}-away`);
+    const result = await rm.executeHistoryRollback(id, appState());
+    expect(result).toMatchObject({ success: false, error: 'Cannot find the output folder. Connect the drive and try again.' });
+    expect(rm.getOperationHistory()).toHaveLength(1);
+    fs.renameSync(`${run.O}-away`, run.O);
+    for (const op of run.operations) expect(fs.existsSync(op.destPath)).toBe(true);
+  });
+
+  it('keeps an interrupted copy undo while its output folder is missing, then finishes it', async () => {
+    const run = makeRun(Array.from({ length: 20 }, (_, i) => `P${i}.jpg`));
+    await saveCopy(run);
+    let reads = 0;
+    await rm.executeRollback({ get batchCancelled() { return ++reads > 5; } });
+    fs.renameSync(run.O, `${run.O}-away`);
+    const missing = await rm.resumeInterruptedRollback(appState());
+    expect(missing.success).toBe(false);
+    expect(await rm.checkInterruptedRollback()).not.toBeNull();
+    fs.renameSync(`${run.O}-away`, run.O);
+    const result = await rm.resumeInterruptedRollback(appState());
+    expect(result).toMatchObject({ success: true, mode: 'copy' });
+    for (const op of run.operations) expect(fs.existsSync(op.destPath)).toBe(false);
+  });
+
   it('still undoes a History entry with no mode field as a Move', async () => {
     const dir = path.join(root, `case-${caseCount++}`);
     const S = path.join(dir, 'S');

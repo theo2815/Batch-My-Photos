@@ -746,8 +746,14 @@ async function resumeInterruptedRollback(appState, progressCallback) {
   let alreadyRestored;
   if (mode === 'copy') {
     // Copy undo: a copy is done once it is gone from its batch folder
+    try {
+      await fsPromises.stat(summary?.outputFolder || state.outputFolder);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      return { success: false, mode, error: 'Cannot find the output folder. Connect the drive and try again.' };
+    }
     const stillThere = await Promise.all(
-      manifest.operations.map(op => fsPromises.access(op.currentPath).then(() => true, () => false))
+      manifest.operations.map(op => fsPromises.access(op.currentPath).then(() => true, err => err.code !== 'ENOENT'))
     );
     remainingOps = manifest.operations.filter((_, i) => stillThere[i]);
     alreadyRestored = manifest.operations.length - remainingOps.length;
@@ -878,6 +884,14 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
     if (operations.some(op => !batchDirs.has(normPath(path.dirname(op.currentPath))))) {
       logger.warn('🔒 [SECURITY] Copy undo record points outside its batch folders — refusing');
       return { success: false, mode, error: 'This undo record does not match its batch folders, so nothing was deleted.' };
+    }
+    if (outputFolder) {
+      try {
+        await fsPromises.stat(outputFolder);
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+        return { success: false, mode, error: 'Cannot find the output folder. Connect the drive and try again.' };
+      }
     }
   }
 
