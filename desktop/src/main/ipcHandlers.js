@@ -1547,8 +1547,11 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         if (saved) {
           // The stopped run's own entry is now covered by this one.
           const newId = rollbackManager.getRollbackManifest()?.operationId;
-          const older = rollbackManager.getOperationHistory().filter(e => e.progressId === progress.operationId && e.operationId !== newId);
-          for (const entry of older) await rollbackManager.removeHistoryEntry(entry.operationId);
+          const history = rollbackManager.getOperationHistory();
+          if (history.some(e => e.operationId === newId)) {
+            const older = history.filter(e => e.progressId === progress.operationId && e.operationId !== newId);
+            for (const entry of older) await rollbackManager.removeHistoryEntry(entry.operationId);
+          }
         }
       }
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Module from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -177,6 +177,31 @@ describe('copy runs keep an undo record', () => {
     const undo = await call('rollback-batch');
     expect(undo).toMatchObject({ success: true, restoredFiles: 200 });
     expect(fs.readdirSync(job.out)).toHaveLength(0);
+  });
+
+  it('keeps the stopped run\'s History entry when the resumed run\'s record fails to save', async () => {
+    const job = newJob(200);
+    await stoppedCopy(job);
+    const stoppedEntry = (await call('get-operation-history'))[0];
+
+    const realWrite = fs.promises.writeFile;
+    let failed = false;
+    const spy = vi.spyOn(fs.promises, 'writeFile').mockImplementation((file, ...rest) => {
+      if (!failed && String(file).includes('batch-history')) {
+        failed = true;
+        return Promise.reject(new Error('disk full'));
+      }
+      return realWrite.call(fs.promises, file, ...rest);
+    });
+    try {
+      const resumed = await call('resume-batch');
+      expect(resumed.success).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(failed).toBe(true);
+    const history = await call('get-operation-history');
+    expect(history.map(e => e.operationId)).toEqual([stoppedEntry.operationId]);
   });
 
   it('still saves a record for a finished Move and none for a cancelled Move', async () => {
