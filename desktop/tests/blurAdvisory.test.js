@@ -63,7 +63,7 @@ afterAll(() => {
 });
 
 describe('beta batch safety', () => {
-  it('keeps a flagged photo in an ordinary copy batch even if the renderer supplies its group', async () => {
+  it('copies a flagged photo into <prefix>_Blurry in beta mode', async () => {
     const handlers = new Map();
     const ipcMain = { handle: (name, fn) => handlers.set(name, fn) };
     registerIpcHandlers(ipcMain, {}, () => ({}), {
@@ -81,9 +81,44 @@ describe('beta batch safety', () => {
     });
 
     expect(result.success, JSON.stringify(result)).toBe(true);
-    expect(result.blurryFileCount).toBe(0);
-    expect(fs.existsSync(path.join(fixtureOutput, 'Beta_Blurry'))).toBe(false);
-    expect(fs.existsSync(path.join(fixtureOutput, 'Beta_001', 'IMG.jpg'))).toBe(true);
+    expect(result.blurryFileCount).toBe(1);
+    expect(fs.existsSync(path.join(fixtureOutput, 'Beta_Blurry', 'IMG.jpg'))).toBe(true);
+    expect(fs.existsSync(path.join(fixtureOutput, 'Beta_001', 'IMG.jpg'))).toBe(false);
+  });
+
+  it('moves a flagged photo into <prefix>_Blurry and records it for Undo', async () => {
+    const source = path.join(fixtureRoot, 'move-source');
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, 'SHARP.jpg'), 'photo');
+    fs.writeFileSync(path.join(source, 'BLUR.jpg'), 'photo');
+    registerAllowedPath(source);
+
+    let manifest;
+    stubs['./rollbackManager'].saveRollbackManifest = async arg => { manifest = arg; };
+
+    try {
+      const handlers = new Map();
+      registerIpcHandlers({ handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {
+        batchCancelled: false,
+        resetBatchCancellation: noop,
+      });
+      const result = await handlers.get('execute-batch')({ sender: { send: noop } }, {
+        folderPath: source,
+        maxFilesPerBatch: 10,
+        outputPrefix: 'Mv',
+        mode: 'move',
+        blurryGroups: ['BLUR'],
+      });
+
+      expect(result.success, JSON.stringify(result)).toBe(true);
+      expect(fs.existsSync(path.join(source, 'Mv_Blurry', 'BLUR.jpg'))).toBe(true);
+      expect(fs.existsSync(path.join(source, 'Mv_001', 'SHARP.jpg'))).toBe(true);
+      expect(fs.existsSync(path.join(source, 'BLUR.jpg'))).toBe(false);
+      const blurOp = manifest.operations.find(op => op.fileName === 'BLUR.jpg');
+      expect(blurOp.destPath).toBe(path.join(source, 'Mv_Blurry', 'BLUR.jpg'));
+    } finally {
+      delete stubs['./rollbackManager'].saveRollbackManifest;
+    }
   });
 
   it('makes a completed move visible in History before returning its result', async () => {
