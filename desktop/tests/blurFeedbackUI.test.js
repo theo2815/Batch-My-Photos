@@ -712,10 +712,14 @@ describe('explicit beta feedback consent', () => {
     blurryGroups: ['A', 'B'].filter((g) => !restored.includes(g)), blurryCount: 2 - restored.length,
     analyzedCount: 3, unanalyzedCount: 0, isAnalyzing: false, unflaggedGroups: new Set(restored), toggleBlurFlag: vi.fn(),
   });
+  // The blur section element BatchPreview renders, so a test can render it again with the same hook state.
+  const sectionOf = (blurDetection) => {
+    const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection };
+    return nodes(render(BatchPreview, batch)).find(n => n.type?.name === 'BlurryPhotosSection');
+  };
   // Renders the open list the way the tests above do (first state = expanded).
   const list = (blurDetection, extra = {}) => {
-    const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection };
-    const section = nodes(render(BatchPreview, batch)).find(n => n.type?.name === 'BlurryPhotosSection');
+    const section = sectionOf(blurDetection);
     hooks.values = [true]; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
     return render(section.type, { ...section.props, ...extra });
   };
@@ -779,6 +783,32 @@ describe('explicit beta feedback consent', () => {
     list(flagged(['A']));
     await effects();
     expect(globalThis.window.electronAPI.getThumbnails).toHaveBeenCalledWith('C:/fixture', ['A.jpg', 'B.jpg']);
+  });
+  it('keeps a restored row past the first 20 in place, with its thumbnail, after Load More', async () => {
+    const names = Array.from({ length: 25 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`);
+    const d = { ...flagged([]),
+      blurResults: Object.fromEntries(names.map((g) => [g, { score: 0.8, isBlurry: true, analyzedFile: `${g}.jpg` }])),
+      blurryGroups: names.filter((g) => g !== 'G22'), blurryCount: 24, analyzedCount: 25, unflaggedGroups: new Set(['G22']) };
+    const getThumbnails = vi.fn().mockResolvedValue({});
+    globalThis.window.electronAPI.getThumbnails = getThumbnails;
+    const section = sectionOf(d);
+    let tree = list(d);
+    await effects();
+    expect(rows(tree)).toHaveLength(20);
+    expect(text(tree)).toContain('Blur suggestions (24 groups)');
+    expect(getThumbnails).toHaveBeenNthCalledWith(1, 'C:/fixture', names.slice(0, 20).map((g) => `${g}.jpg`));
+
+    button(tree, 'Load More (5 remaining)').props.onClick();
+    tree = render(section.type, section.props); // same hook state, so the list now shows up to 40 rows
+    await effects();
+    const shown = rows(tree);
+    expect(shown.map((r) => r.props.key)).toEqual(names);
+    expect(shown[21].props.className).toBe('blurry-item blurry-item-restored');
+    expect(button(shown[21], 'Flag again')).toBeDefined();
+    expect(shown[20].props.className).toBe('blurry-item');
+    expect(getThumbnails).toHaveBeenCalledTimes(2);
+    expect(getThumbnails).toHaveBeenLastCalledWith('C:/fixture', ['G21.jpg', 'G22.jpg', 'G23.jpg', 'G24.jpg', 'G25.jpg']);
+    expect(button(tree, 'Load More (5 remaining)')).toBeUndefined();
   });
 });
 
