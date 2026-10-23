@@ -21,6 +21,7 @@ const config = require('./config')
 const { QP_API_TIMEOUT_MS, QP_CONNECT_PENDING_TTL_MS } = require('./constants')
 const { getMainWindow } = require('./windowManager')
 const logger = require('../utils/logger')
+const uploadRecord = require('./quickpitikUploadRecord')
 
 const store = new SecureStore({ name: 'quickpitik-session' })
 
@@ -312,6 +313,7 @@ async function disconnect() {
   const refreshToken = store.get('refresh_token', null)
   const accessToken = store.get('access_token', null)
   clearSession()
+  uploadRecord.clear() // an unfinished upload does not outlive the account on this PC
   if (refreshToken) {
     request(`${API_URL}/auth/logout`, {
       method: 'POST',

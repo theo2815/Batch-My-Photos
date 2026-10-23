@@ -17,7 +17,7 @@ const https = require('https');
 const { net } = require('electron');
 const path = require('path');
 const logger = require('../utils/logger');
-const { isPathAllowedAsync } = require('./securityManager');
+const { isPathAllowedAsync, registerAllowedPath } = require('./securityManager');
 const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const {
   STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH, QP_UPLOAD_CONCURRENCY, QP_HASH_CONCURRENCY,
@@ -599,6 +599,7 @@ let current = null; // one upload per process
  */
 async function startUpload(request, send) {
   if (current) return { success: false, error: 'An upload is already running.' };
+  if (request?.resume === true) return resumeUpload(send); // the saved record decides; the screen's paths are not used
   const slot = current = { stop() {} }; // holds the place while the folders are listed
   try {
     return await beginUpload(request, send);
@@ -634,6 +635,51 @@ async function beginUpload(request, send) {
   return { success: true, total };
 }
 
+// ── Resume after a crash or a quit ────────────────────────────────────────────
+
+const isFolder = (dir) => fsPromises.stat(dir).then(stat => stat.isDirectory(), () => false);
+
+/** The saved record if it belongs to the connected account (another account's stays hidden, not deleted). */
+function ownRecord() {
+  const record = uploadRecord.load();
+  return record && record.account === qpAuth.getAccountId() ? record : null;
+}
+
+/**
+ * For the screen: an upload still running (the screen may have reloaded), or
+ * this account's unfinished one. No token, no file list.
+ */
+async function getPending() {
+  if (current) return { running: true, pending: null };
+  const record = ownRecord();
+  if (!record) return { running: false, pending: null };
+  return { running: false, pending: {
+    eventId: record.eventId, eventName: record.eventName, folder: record.root, folderMissing: !(await isFolder(record.root)),
+  } };
+}
+
+/** Re-allow the saved folder (this one only, only now), scan it, then upload the subfolders that did not finish. */
+async function resumeUpload(send) {
+  const record = ownRecord();
+  if (!record) return { success: false, error: 'There is no upload to resume.' };
+  if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
+  registerAllowedPath(record.root);
+  const scan = await scanFolder(record.root);
+  if (!scan.success) return scan;
+  const folders = record.selected.filter(rel => !record.finished.includes(rel));
+  const started = await startUpload({ rootPath: record.root, eventId: record.eventId, eventName: record.eventName, folders }, send);
+  return started.success ? { ...started, eventId: record.eventId, folders, scan } : started;
+}
+
+/** Discard: forget the unfinished upload. A running upload keeps its record. */
+function discardPending() {
+  if (!current) uploadRecord.clear();
+  return { success: true };
+}
+
+/** For the quit question. */
+const isUploading = () => current !== null;
+
 /** Cooperative cancel: no new file starts, in-flight PUTs are destroyed, the summary reports what finished. */
 function cancelUpload() {
   if (!current) return { success: false };
@@ -646,5 +692,6 @@ module.exports = {
   scanFolder,
   listEvents,
   sha256File, startUpload, cancelUpload,
+  getPending, discardPending, isUploading,
   _internals: { listFolder, runPool, ACCESS_DENIED, RAW_EXTENSIONS, VIDEO_EXTENSIONS, HEIC_EXTENSIONS, canUploadPublic, canUploadOwned, ownerCloseDate, get sleep() { return internals.sleep; }, set sleep(fn) { internals.sleep = fn; }, get now() { return internals.now; }, set now(fn) { internals.now = fn; } },
 };
