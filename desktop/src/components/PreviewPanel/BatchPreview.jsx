@@ -242,7 +242,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
 }
 
 /**
- * Blur suggestions section - shows flagged groups for optional review
+ * Blur suggestions section - lists flagged groups; restored ones stay, dimmed, with Flag again
  */
 function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnails: parentThumbnails, onImageClick }) {
   const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag, cancelAnalysis } = blurDetection;
@@ -452,7 +452,7 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
         </div>
       )}
 
-      {/* Show dismissed suggestions count */}
+      {/* Count of restored groups (they go to the normal batches) */}
       {unflaggedGroups.size > 0 && (
         <div className="blurry-restored-note">
           {unflaggedGroups.size} group{unflaggedGroups.size > 1 ? 's' : ''} restored to normal batches
