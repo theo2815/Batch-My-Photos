@@ -682,7 +682,7 @@ describe('explicit beta feedback consent', () => {
     expect(text(tree)).toContain('Will be placed in Beta_Blurry');
     const restore = nodes(tree).find(n => n.type === 'button' && n.props.title === 'Restore to normal batches');
     expect(restore.props['aria-label']).toBe('Restore A to normal batches');
-    restore.props.onClick();
+    restore.props.onClick({ detail: 1 });
     expect(toggleBlurFlag).toHaveBeenCalledWith('A');
 
     const onImageClick = vi.fn();
@@ -704,5 +704,79 @@ describe('explicit beta feedback consent', () => {
     expect(toggleBlurFlag).toHaveBeenCalledTimes(1);
     expect(toggleBlurFlag).toHaveBeenCalledWith('A');
     expect(modal(render(BatchPreview, batch))).toBeUndefined();
+  });
+
+  const flagged = (restored) => ({
+    blurResults: { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.7, isBlurry: true, analyzedFile: 'B.jpg' }, C: { score: 0.1, isBlurry: false, analyzedFile: 'C.jpg' } },
+    blurryGroups: ['A', 'B'].filter((g) => !restored.includes(g)), blurryCount: 2 - restored.length,
+    analyzedCount: 3, unanalyzedCount: 0, isAnalyzing: false, unflaggedGroups: new Set(restored), toggleBlurFlag: vi.fn(),
+  });
+  // Renders the open list the way the tests above do (first state = expanded).
+  const list = (blurDetection, extra = {}) => {
+    const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection };
+    const section = nodes(render(BatchPreview, batch)).find(n => n.type?.name === 'BlurryPhotosSection');
+    hooks.values = [true]; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+    return render(section.type, { ...section.props, ...extra });
+  };
+  const rows = (tree) => nodes(tree).filter((n) => n.type === 'div' && n.props.className?.split(' ')[0] === 'blurry-item');
+
+  it('keeps a restored group in its place, dimmed, with a Flag again button', () => {
+    const d = flagged(['A']);
+    const tree = list(d);
+    const [rowA, rowB] = rows(tree);
+    expect(rows(tree).map((r) => r.props.key)).toEqual(['A', 'B']);
+    expect(rowA.props.className).toBe('blurry-item blurry-item-restored');
+    expect(rowB.props.className).toBe('blurry-item');
+    const again = button(rowA, 'Flag again');
+    expect(again.props.title).toBe('Send back to Beta_Blurry');
+    expect(again.props['aria-label']).toBe('Flag A as blurry again');
+    expect(button(rowB, 'Restore')).toBeDefined();
+    expect(text(tree)).toContain('Blur suggestions (1 groups)');
+    expect(text(tree)).toContain('1 group restored to normal batches');
+    again.props.onClick({ detail: 1 });
+    expect(d.toggleBlurFlag).toHaveBeenCalledWith('A');
+  });
+  it('counts a double-click on Restore or Flag again as one click', () => {
+    const d = flagged(['A']);
+    const [rowA, rowB] = rows(list(d));
+    const restore = button(rowB, 'Restore');
+    restore.props.onClick({ detail: 2 });
+    expect(d.toggleBlurFlag).not.toHaveBeenCalled();
+    restore.props.onClick({ detail: 1 });
+    expect(d.toggleBlurFlag).toHaveBeenCalledTimes(1);
+    expect(d.toggleBlurFlag).toHaveBeenCalledWith('B');
+    restore.props.onClick({ detail: 0 });
+    expect(d.toggleBlurFlag).toHaveBeenCalledTimes(2);
+    button(rowA, 'Flag again').props.onClick({ detail: 2 });
+    expect(d.toggleBlurFlag).toHaveBeenCalledTimes(2);
+  });
+  it('opens a restored photo alone in the preview, with no Restore button', () => {
+    const d = flagged(['A']);
+    const onImageClick = vi.fn();
+    const tree = list(d, { onImageClick });
+    const click = (file) => { nodes(tree).find(n => n.type === 'button' && n.props['aria-label'] === `Preview ${file}`).props.onClick(); return onImageClick.mock.calls.at(-1); };
+    const a = click('A.jpg');
+    expect(a[0]).toBe('A.jpg');
+    expect(a[1]).toEqual(['A.jpg']);
+    expect(a[2]).toBeUndefined();
+    const b = click('B.jpg');
+    expect(b[0]).toBe('B.jpg');
+    expect(b[1]).toEqual(['B.jpg']);
+    expect(b[2]).toBe(d.toggleBlurFlag);
+  });
+  it('keeps the list when every flagged group is restored', () => {
+    const tree = list(flagged(['A', 'B']));
+    expect(text(tree)).toContain('Blur suggestions (0 groups)');
+    expect(text(tree)).toContain('2 groups restored to normal batches');
+    expect(text(tree)).not.toContain('Will be placed in');
+    expect(text(tree)).not.toContain('No blur suggestions for this analysis.');
+    expect(nodes(tree).some(n => n.type === CheckCircle)).toBe(false);
+    expect(nodes(tree).filter(n => n.type === 'button' && text(n) === 'Flag again')).toHaveLength(2);
+  });
+  it('loads thumbnails for restored rows too', async () => {
+    globalThis.window.electronAPI.getThumbnails = vi.fn().mockResolvedValue({});
+    list(flagged(['A']));
+    await effects();
+    expect(globalThis.window.electronAPI.getThumbnails).toHaveBeenCalledWith('C:/fixture', ['A.jpg', 'B.jpg']);
   });
 });

@@ -906,6 +906,10 @@
   background: var(--bg-secondary);
 }
 
+.blurry-item-restored > :not(.unflag-btn) {
+  opacity: 0.45;
+}
+
 .blurry-thumb {
   opacity: 0.7;
   border: 1px solid rgba(217, 119, 6, 0.4);
