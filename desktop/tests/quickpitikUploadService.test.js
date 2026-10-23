@@ -15,7 +15,9 @@ class QpApiError extends Error {
   }
 }
 class QpAuthError extends Error {}
-const authStub = { authorizedFetch: vi.fn(), fetchJson: vi.fn(), QpApiError, QpAuthError };
+const authStub = { authorizedFetch: vi.fn(), fetchJson: vi.fn(), getAccountId: vi.fn(() => 'u1'), QpApiError, QpAuthError };
+const memory = new Map(); // the resume record's SecureStore
+class FakeStore { get(k, d) { return memory.has(k) ? memory.get(k) : d; } set(k, v) { memory.set(k, v); } clear() { memory.clear(); } }
 let online = true;
 const stubs = {
   electron: { app: { isPackaged: false }, net: { fetch: (...a) => fetchMock(...a), isOnline: () => online } },
@@ -25,10 +27,12 @@ const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (stubs[request]) return stubs[request];
   if (request.endsWith('/quickpitikAuthService')) return authStub;
+  if (request.endsWith('/secureStore')) return FakeStore;
   return origLoad.call(this, request, ...rest);
 };
 const cjs = createRequire(import.meta.url);
 const service = cjs('../src/main/quickpitikUploadService.js');
+const uploadRecord = cjs('../src/main/quickpitikUploadRecord.js');
 const { registerAllowedPath } = cjs('../src/main/securityManager.js');
 const { ALLOWED_EXTENSIONS } = cjs('../src/main/batchEngine.js');
 const { QP_MAX_FILE_BYTES } = cjs('../src/main/constants.js');
@@ -60,7 +64,7 @@ function shootFolder() {
   return root;
 }
 afterAll(() => { for (const dir of temp) fs.rmSync(dir, { recursive: true, force: true }); });
-beforeEach(() => { authStub.authorizedFetch.mockReset(); authStub.fetchJson.mockReset(); httpsMock.request.mockReset(); fetchMock.mockReset(); online = true; });
+beforeEach(() => { authStub.authorizedFetch.mockReset(); authStub.fetchJson.mockReset(); httpsMock.request.mockReset(); fetchMock.mockReset(); online = true; memory.clear(); });
 
 describe('classifyFile', () => {
   it('sorts names by what QuickPitik can take', () => {
@@ -665,5 +669,82 @@ describe('upload engine', () => {
     await asleep;
     service.cancelUpload();
     expect((await finished()).phase).toBe('cancelled');
+  });
+});
+
+describe('resume record', () => {
+  beforeEach(() => { service._internals.sleep = async () => {}; service._internals.now = () => Date.now(); });
+
+  const start = (root, folders, send, extra = {}) => service.startUpload({ rootPath: root, eventId: 'event-1', eventName: 'Cebu Marathon 2026', folders, ...extra }, send);
+  function shoot(prefix) {
+    const root = tempRoot(prefix);
+    write(root, 'A/a.jpg', 'a'); write(root, 'B/bad.jpg', 'bad'); write(root, 'B/good.jpg', 'good'); write(root, 'C/c.jpg', 'c');
+    registerAllowedPath(root);
+    return root;
+  }
+  const failBad = (table) => ({ ...table, begin: async (body) => {
+    if (body.originalFilename === 'bad.jpg') throw new QpApiError({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.' });
+    return table.begin(body);
+  } });
+
+  it('is saved at the start and lists each subfolder that finished with no failed photo', async () => { // R1, R2
+    const root = shoot('qp-record-');
+    routes(failBad(directTable())); fakeHttps();
+    const events = []; const atFolderDone = [];
+    expect(await start(root, ['A', 'B', 'C'], (payload) => {
+      events.push(payload);
+      if (payload.phase === 'folder-done') atFolderDone.push(uploadRecord.load().finished);
+    })).toEqual({ success: true, total: 4 });
+    expect(uploadRecord.load()).toEqual({ version: 1, account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root,
+      selected: ['A', 'B', 'C'], finished: [], startedAt: expect.any(String), updatedAt: expect.any(String) });
+    expect((await untilSettled(events)).phase).toBe('done');
+    expect(atFolderDone).toEqual([['A'], ['A'], ['A', 'C']]); // B had a failed photo: a resume reads it again
+  });
+
+  it('a run that reaches done clears it, even with failed photos', async () => { // D5
+    const root = shoot('qp-record-done-');
+    routes(failBad(directTable())); fakeHttps();
+    const events = []; const kept = [];
+    await start(root, ['A', 'B', 'C'], (payload) => { events.push(payload); if (payload.phase === 'folder-done') kept.push(uploadRecord.load() !== null); });
+    const last = await untilSettled(events);
+    expect(last.counts.failed).toBe(1);
+    expect(kept).toEqual([true, true, true]);
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('Cancel clears it', async () => { // R3
+    const root = shoot('qp-record-cancel-');
+    let before;
+    routes(directTable({ commit: async (body) => { before ??= uploadRecord.load(); service.cancelUpload(); return { id: body.photoId }; } })); fakeHttps();
+    const events = [];
+    await start(root, ['A', 'B', 'C'], (payload) => events.push(payload));
+    expect((await untilSettled(events)).phase).toBe('cancelled');
+    expect(before).toMatchObject({ eventId: 'event-1' });
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('an error that stops the run, or an expired sign-in, keeps it', async () => { // R3, R9
+    for (const failure of [new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'closed' }), new QpAuthError('expired')]) {
+      memory.clear();
+      const root = shoot('qp-record-kept-');
+      routes(directTable({ begin: async () => { throw failure; } })); fakeHttps();
+      const events = [];
+      await start(root, ['A', 'B'], (payload) => events.push(payload));
+      expect((await untilSettled(events)).phase).toBe('error');
+      expect(uploadRecord.load()).toMatchObject({ eventId: 'event-1', selected: ['A', 'B'], finished: [] });
+    }
+  });
+
+  it('a new upload replaces it, named by its id when the screen sent no name', async () => { // R11
+    const root = shoot('qp-record-new-');
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'closed' }); } })); fakeHttps();
+    let events = [];
+    await start(root, ['A', 'B'], (payload) => events.push(payload));
+    await untilSettled(events);
+    events = [];
+    await service.startUpload({ rootPath: root, eventId: 'event-2', folders: ['C'] }, (payload) => events.push(payload));
+    expect(uploadRecord.load()).toMatchObject({ eventId: 'event-2', eventName: 'event-2', selected: ['C'], finished: [] });
+    service.cancelUpload(); // still reading photos: nothing reaches the server
+    expect((await untilSettled(events)).phase).toBe('cancelled');
   });
 });

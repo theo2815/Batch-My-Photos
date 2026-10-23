@@ -407,3 +407,14 @@ describe('disconnect', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/api/v1/auth/logout');
   });
 });
+
+describe('getAccountId', () => {
+  it('gives the main process the connected account id, which the screen status never carries', async () => { // R1
+    expect(qp.getAccountId()).toBeNull();
+    const { state } = await connect();
+    fetchMock.mockResolvedValue(pair('a1', 'r1'));
+    await qp.completeConnect(CODE, state);
+    expect(qp.getAccountId()).toBe('u1');
+    expect(qp.getStatus()).toEqual({ connected: true, email: 'p@test.local', name: 'P' });
+  });
+});

@@ -26,6 +26,7 @@ const {
 } = require('./constants');
 const config = require('./config');
 const qpAuth = require('./quickpitikAuthService');
+const uploadRecord = require('./quickpitikUploadRecord');
 
 const ACCESS_DENIED = 'Access denied: folder not selected through dialog';
 const UNREADABLE = 'Could not read this folder.';
@@ -532,6 +533,7 @@ async function runUpload(ctx) {
     for (let index = 0; index < ctx.plan.length; index++) {
       const folder = ctx.plan[index];
       ctx.folder = { relPath: folder.relPath, index, count: ctx.plan.length };
+      const failedBefore = ctx.failures.length;
       ctx.emit({ phase: 'hashing' }, true);
       // A worker never throws: the pool then ends only when every file in
       // flight has finished, so nothing is reported after the last event.
@@ -570,12 +572,15 @@ async function runUpload(ctx) {
         ctx.emit({ phase: 'uploading' });
       });
       ctx.assertActive();
+      if (ctx.failures.length === failedBefore) uploadRecord.markFinished(folder.relPath); // a folder with a failure is read again on resume
       ctx.emit({ phase: 'folder-done' }, true);
     }
+    uploadRecord.clear(); // even with failed photos: Retry failed covers them in this session
     ctx.emit({ phase: 'done', failures: ctx.failures }, true);
   } catch (caught) {
     const error = ctx.stopError || caught;
     if (error instanceof CancelledError) {
+      uploadRecord.clear();
       ctx.emit({ phase: 'cancelled', failures: ctx.failures }, true);
     } else if (error instanceof qpAuth.QpAuthError) {
       ctx.emit({ phase: 'error', error: { code: 'SESSION_EXPIRED', message: 'Your QuickPitik sign-in expired.' }, failures: ctx.failures }, true);
@@ -603,7 +608,7 @@ async function startUpload(request, send) {
 }
 
 async function beginUpload(request, send) {
-  const { rootPath, eventId, folders } = request || {};
+  const { rootPath, eventId, eventName, folders } = request || {};
   if (typeof rootPath !== 'string' || typeof eventId !== 'string' || !Array.isArray(folders)
       || folders.some(rel => typeof rel !== 'string' || rel.split('/').includes('..') || path.isAbsolute(rel))) {
     return { success: false, error: 'Invalid upload request.' };
@@ -620,6 +625,11 @@ async function beginUpload(request, send) {
   const total = plan.reduce((sum, folder) => sum + folder.files.length, 0);
   if (total === 0) return { success: false, error: 'Nothing to upload.' };
   current = makeContext({ eventId, plan, total, send });
+  // Errors, a crash or a quit keep this record; done, Cancel, Discard and Disconnect clear it.
+  uploadRecord.save({
+    account: qpAuth.getAccountId(), eventId, eventName: typeof eventName === 'string' && eventName ? eventName.slice(0, 200) : eventId,
+    root, selected: folders,
+  });
   runUpload(current).finally(() => { current = null; });
   return { success: true, total };
 }

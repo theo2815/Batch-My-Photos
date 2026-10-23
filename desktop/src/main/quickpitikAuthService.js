@@ -203,6 +203,15 @@ function getStatus() {
   }
 }
 
+/**
+ * The connected account's QuickPitik user id, for the resume record. Main
+ * process only: getStatus, which goes to the screen, does not carry it.
+ * @returns {string|null}
+ */
+function getAccountId() {
+  return store.get('user_profile', null)?.id ?? null
+}
+
 // ============================================================================
 // Token Refresh
 // ============================================================================
@@ -323,6 +332,7 @@ module.exports = {
   startConnect,
   completeConnect,
   getStatus,
+  getAccountId,
   refreshAccessToken,
   authorizedFetch,
   fetchJson: request,
