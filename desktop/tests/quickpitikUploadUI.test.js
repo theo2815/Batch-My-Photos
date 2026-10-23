@@ -29,7 +29,7 @@ import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
 import ConnectCard from '../src/components/Upload/ConnectCard.jsx';
 import ConfirmDialog from '../src/components/Modals/ConfirmDialog.jsx';
 import EventPicker, { ChosenEvent } from '../src/components/Upload/EventPicker.jsx';
-import { ResumeCard } from '../src/components/Upload/UploadResume.jsx';
+import UploadResumeModal, { ResumeCard } from '../src/components/Upload/UploadResume.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
 import { useFolderSelection } from '../src/hooks/useFolderSelection.js';
 
@@ -937,5 +937,40 @@ describe('resume an unfinished upload', () => {
     expect(shown.props).toMatchObject({ state: 'resume', pending, event });
     const kids = nodes(tree).filter(n => n.type === ResumeCard || n.type === EventPicker).map(n => n.type);
     expect(kids).toEqual([ResumeCard, EventPicker]);
+  });
+
+  describe('UploadResumeModal (at launch)', () => {
+    async function modal(props) { render(UploadResumeModal, props); await effects(); return render(UploadResumeModal, props); }
+
+    it('asks about the unfinished upload: Resume hands over and closes, starting on Resume', async () => { // D3
+      resumeApi();
+      const props = { onResume: vi.fn(), onRunning: vi.fn() };
+      const tree = await modal(props);
+      expect(nodes(tree).find(n => n.props?.role === 'dialog').props['aria-modal']).toBe('true');
+      expect(text(tree)).toContain('Your upload to Cebu Marathon 2026 did not finish.');
+      expect(button(tree, 'Resume').props.autoFocus).toBe(true);
+      button(tree, 'Resume').props.onClick();
+      expect(props.onResume).toHaveBeenCalledTimes(1);
+      expect(render(UploadResumeModal, props)).toBeNull();
+    });
+
+    it('Discard forgets the upload and closes', async () => { // R3
+      const api = resumeApi();
+      const props = { onResume: vi.fn(), onRunning: vi.fn() };
+      button(await modal(props), 'Discard').props.onClick();
+      expect(api.qpUploadDiscard).toHaveBeenCalledTimes(1);
+      expect(props.onResume).not.toHaveBeenCalled();
+      expect(render(UploadResumeModal, props)).toBeNull();
+    });
+
+    it('shows nothing when there is nothing to resume, and opens the Upload view for a running upload', async () => { // R10
+      resumeApi({ qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }) });
+      const props = { onResume: vi.fn(), onRunning: vi.fn() };
+      expect(await modal(props)).toBeNull();
+      fresh();
+      resumeApi({ qpUploadPending: vi.fn().mockResolvedValue({ running: true, pending: null }) });
+      expect(await modal(props)).toBeNull();
+      expect(props.onRunning).toHaveBeenCalledTimes(1);
+    });
   });
 });

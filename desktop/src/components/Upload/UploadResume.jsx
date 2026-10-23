@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { STRINGS, formatString } from '../../constants/strings';
 import { daysFromToday, raceDate } from './EventPicker';
+import '../Modals/Modals.css';
 
 /**
  * In the Upload view: the unfinished upload, as useQuickPitikUpload's resumeState says.
@@ -31,3 +32,37 @@ export function ResumeCard({ state, pending, event, onResume, onDiscard, onChoos
     </section>
   );
 }
+
+/**
+ * At launch, over whichever view is open (D3): "Your upload to <Event> did not finish."
+ * Resume hands over to the Upload view; a running upload (the screen reloaded) goes straight there (R10).
+ * No Escape or click-outside answer: either one would have to mean Resume or Discard.
+ */
+function UploadResumeModal({ onResume, onRunning }) {
+  const [pending, setPending] = useState(null);
+  useEffect(() => {
+    window.electronAPI.qpUploadPending().then((upload) => {
+      if (upload.running) onRunning();
+      else setPending(upload.pending);
+    }).catch(() => {});
+  }, [onRunning]);
+
+  if (!pending) return null;
+  const discard = () => { setPending(null); window.electronAPI.qpUploadDiscard().catch(() => {}); };
+  const resume = () => { setPending(null); onResume(); };
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content confirmation-modal confirm-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="qp-resume-title" aria-describedby="qp-resume-body">
+        <h3 id="qp-resume-title">{formatString(STRINGS.QP_RESUME_TITLE, { event: pending.eventName })}</h3>
+        <p id="qp-resume-body">{STRINGS.QP_RESUME_BODY}</p>
+        <div className="modal-buttons">
+          <button type="button" className="btn secondary" onClick={discard}>{STRINGS.QP_BTN_DISCARD}</button>
+          <button type="button" className="btn primary" onClick={resume} autoFocus>{STRINGS.BTN_RESUME}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default UploadResumeModal;
