@@ -258,3 +258,32 @@ describe('dialogs remember the last folder (Electron 43+ would open Downloads)',
     }
   });
 });
+
+describe('QuickPitik upload resume channels', () => {
+  it('reach the upload service through preload; qpUploadStart passes the event name and the resume flag', async () => {
+    const upload = { ...uploadMock(),
+      getPending: vi.fn(async () => ({ running: false, pending: { eventId: 'e1', eventName: 'Cebu Marathon 2026', folder: 'C:/shoot', folderMissing: false } })),
+      discardPending: vi.fn(() => ({ success: true })) };
+    const { api } = preloadFor(ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload }).handlers);
+    expect(await api.qpUploadPending()).toEqual({ running: false, pending: { eventId: 'e1', eventName: 'Cebu Marathon 2026', folder: 'C:/shoot', folderMissing: false } });
+    expect(await api.qpUploadDiscard()).toEqual({ success: true });
+    expect(upload.discardPending).toHaveBeenCalledTimes(1);
+    await api.qpUploadStart({ rootPath: 'C:/shoot', eventId: 'e1', eventName: 'Cebu Marathon 2026', folders: [''] });
+    expect(upload.startUpload.mock.calls[0][0]).toEqual({ rootPath: 'C:/shoot', eventId: 'e1', eventName: 'Cebu Marathon 2026', folders: [''] });
+    await api.qpUploadStart({ resume: true });
+    expect(upload.startUpload.mock.calls[1][0]).toEqual({ resume: true });
+  });
+
+  it('a read that fails answers "nothing to show"', async () => {
+    const upload = { ...uploadMock(), getPending: vi.fn(async () => { throw new Error('store unreadable'); }) };
+    const { handlers } = ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload });
+    expect(await handlers.get('qp-upload-pending')({})).toEqual({ running: false, pending: null });
+  });
+
+  it('rate-limits the new channels; Resume goes through the strict qp-upload-start', () => { // D7
+    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
+    expect(limiter.CHANNEL_TIERS['qp-upload-pending']).toBe('RELAXED');
+    expect(limiter.CHANNEL_TIERS['qp-upload-discard']).toBe('RELAXED');
+    expect(limiter.CHANNEL_TIERS['qp-upload-start']).toBe('STRICT');
+  });
+});

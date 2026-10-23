@@ -6,9 +6,11 @@ import vm from 'node:vm';
 
 const filename = path.resolve(import.meta.dirname, '../src/main/windowManager.js');
 
-function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), urlModule = url }) {
+// upload: the upload service as require.cache holds it once the Upload view was used (absent = never loaded).
+function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), urlModule = url, upload, dialog = {} }) {
   const loads = [];
   const handlers = {};
+  const windowHandlers = {};
   class BrowserWindow {
     constructor() {
       this.webContents = {
@@ -21,27 +23,30 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
     loadFile(file) { loads.push(['file', file]); }
     loadURL(url) { loads.push(['url', url]); }
     once() {}
-    on() {}
+    on(name, fn) { windowHandlers[name] = fn; }
   }
   const module = { exports: {} };
+  function requireStub(name) {
+    if (name === 'electron') return { BrowserWindow, Menu: { setApplicationMenu() {} }, dialog };
+    if (name === 'path') return path;
+    if (name === 'url') return urlModule;
+    if (name === 'fs') return { existsSync: () => true };
+    if (name === '../utils/logger') return { log() {}, warn() {} };
+    if (name === './config') return { isProduction: packaged };
+    throw new Error(`Unexpected import: ${name}`);
+  }
+  requireStub.resolve = (name) => name;
+  requireStub.cache = upload ? { './quickpitikUploadService': { exports: upload } } : {};
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module,
     exports: module.exports,
     __dirname: dirname,
     URL,
     process: { env: { npm_lifecycle_event: npmScript } },
-    require(name) {
-      if (name === 'electron') return { BrowserWindow, Menu: { setApplicationMenu() {} } };
-      if (name === 'path') return path;
-      if (name === 'url') return urlModule;
-      if (name === 'fs') return { existsSync: () => true };
-      if (name === '../utils/logger') return { log() {}, warn() {} };
-      if (name === './config') return { isProduction: packaged };
-      throw new Error(`Unexpected import: ${name}`);
-    },
+    require: requireStub,
   }, { filename });
   module.exports.createWindow();
-  return { loads, handlers, api: module.exports };
+  return { loads, handlers, windowHandlers, api: module.exports };
 }
 
 function loadedPage(options) {
@@ -127,5 +132,38 @@ describe('window navigation guard', () => {
     expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html#/x')).toBe(true);
     expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/evil.html')).toBe(false);
     expect(api.isAppUrl('http://localhost:5173/C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html')).toBe(false);
+  });
+});
+
+describe('closing the window during a QuickPitik upload', () => { // R12
+  const uploading = () => ({ isUploading: () => true, cancelUpload: vi.fn() });
+  const close = (windowHandlers) => { const event = { preventDefault: vi.fn() }; windowHandlers.close(event); return event; };
+
+  it('asks first, with Keep uploading as the safe answer; Keep uploading keeps the window open', () => {
+    const upload = uploading();
+    const dialog = { showMessageBoxSync: vi.fn(() => 0) };
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    expect(dialog.showMessageBoxSync.mock.calls[0][1]).toMatchObject({
+      message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
+      buttons: ['Keep uploading', 'Stop and quit'], defaultId: 0, cancelId: 0,
+    });
+    expect(upload.cancelUpload).not.toHaveBeenCalled();
+  });
+
+  it('Stop and quit lets the window close without cancelling, so the resume record stays', () => { // R4
+    const upload = uploading();
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog: { showMessageBoxSync: () => 1 } });
+    expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+    expect(upload.cancelUpload).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when no upload runs, or when the Upload view was never used', () => { // R12, R13
+    const dialog = { showMessageBoxSync: vi.fn() };
+    for (const upload of [{ isUploading: () => false }, undefined]) {
+      const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+      expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+    }
+    expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
   });
 });

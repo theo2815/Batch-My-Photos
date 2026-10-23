@@ -2152,6 +2152,18 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   });
 
   handle(ipcMain, 'qp-upload-cancel', async () => qpUpload().cancelUpload());
+
+  /** { running, pending }: an upload still running, or this account's unfinished one. Resume is qp-upload-start with { resume: true }. */
+  handle(ipcMain, 'qp-upload-pending', async () => {
+    try {
+      return await qpUpload().getPending();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-upload-pending failed:', error);
+      return { running: false, pending: null };
+    }
+  });
+
+  handle(ipcMain, 'qp-upload-discard', async () => qpUpload().discardPending());
 }
 
 /**

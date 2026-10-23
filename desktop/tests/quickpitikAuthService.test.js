@@ -23,6 +23,7 @@ const win = {
   webContents: { send: vi.fn() },
 };
 const shell = { openExternal: vi.fn() };
+const recordStub = { clear: vi.fn() };
 const stubs = {
   electron: { app: { isPackaged: false }, net: { fetch: (...a) => fetchMock(...a) }, shell },
 };
@@ -37,6 +38,7 @@ Module._load = function (request, ...rest) {
   if (request.endsWith('/secureStore')) return FakeStore;
   if (request.endsWith('/windowManager')) return { getMainWindow: () => win };
   if (request.endsWith('/config')) return config;
+  if (request.endsWith('/quickpitikUploadRecord')) return recordStub;
   return origLoad.call(this, request, ...rest);
 };
 
@@ -405,5 +407,26 @@ describe('disconnect', () => {
     expect(outcome).toBe('done');
     expect(memory.size).toBe(0);
     expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/api/v1/auth/logout');
+  });
+});
+
+describe('getAccountId', () => {
+  it('gives the main process the connected account id, which the screen status never carries', async () => { // R1
+    expect(qp.getAccountId()).toBeNull();
+    const { state } = await connect();
+    fetchMock.mockResolvedValue(pair('a1', 'r1'));
+    await qp.completeConnect(CODE, state);
+    expect(qp.getAccountId()).toBe('u1');
+    expect(qp.getStatus()).toEqual({ connected: true, email: 'p@test.local', name: 'P' });
+  });
+});
+
+describe('disconnect and the resume record', () => {
+  it('disconnect also forgets an unfinished upload', async () => { // D6
+    memory.set('refresh_token', 'r1');
+    fetchMock.mockResolvedValue(json(200, { success: true, data: null }));
+    recordStub.clear.mockClear();
+    await qp.disconnect();
+    expect(recordStub.clear).toHaveBeenCalledTimes(1);
   });
 });

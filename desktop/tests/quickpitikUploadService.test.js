@@ -15,7 +15,9 @@ class QpApiError extends Error {
   }
 }
 class QpAuthError extends Error {}
-const authStub = { authorizedFetch: vi.fn(), fetchJson: vi.fn(), QpApiError, QpAuthError };
+const authStub = { authorizedFetch: vi.fn(), fetchJson: vi.fn(), getAccountId: vi.fn(() => 'u1'), QpApiError, QpAuthError };
+const memory = new Map(); // the resume record's SecureStore
+class FakeStore { get(k, d) { return memory.has(k) ? memory.get(k) : d; } set(k, v) { memory.set(k, v); } clear() { memory.clear(); } }
 let online = true;
 const stubs = {
   electron: { app: { isPackaged: false }, net: { fetch: (...a) => fetchMock(...a), isOnline: () => online } },
@@ -25,10 +27,12 @@ const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (stubs[request]) return stubs[request];
   if (request.endsWith('/quickpitikAuthService')) return authStub;
+  if (request.endsWith('/secureStore')) return FakeStore;
   return origLoad.call(this, request, ...rest);
 };
 const cjs = createRequire(import.meta.url);
 const service = cjs('../src/main/quickpitikUploadService.js');
+const uploadRecord = cjs('../src/main/quickpitikUploadRecord.js');
 const { registerAllowedPath } = cjs('../src/main/securityManager.js');
 const { ALLOWED_EXTENSIONS } = cjs('../src/main/batchEngine.js');
 const { QP_MAX_FILE_BYTES } = cjs('../src/main/constants.js');
@@ -60,7 +64,7 @@ function shootFolder() {
   return root;
 }
 afterAll(() => { for (const dir of temp) fs.rmSync(dir, { recursive: true, force: true }); });
-beforeEach(() => { authStub.authorizedFetch.mockReset(); authStub.fetchJson.mockReset(); httpsMock.request.mockReset(); fetchMock.mockReset(); online = true; });
+beforeEach(() => { authStub.authorizedFetch.mockReset(); authStub.fetchJson.mockReset(); httpsMock.request.mockReset(); fetchMock.mockReset(); online = true; memory.clear(); });
 
 describe('classifyFile', () => {
   it('sorts names by what QuickPitik can take', () => {
@@ -665,5 +669,156 @@ describe('upload engine', () => {
     await asleep;
     service.cancelUpload();
     expect((await finished()).phase).toBe('cancelled');
+  });
+});
+
+describe('resume record', () => {
+  beforeEach(() => { service._internals.sleep = async () => {}; service._internals.now = () => Date.now(); });
+
+  const start = (root, folders, send, extra = {}) => service.startUpload({ rootPath: root, eventId: 'event-1', eventName: 'Cebu Marathon 2026', folders, ...extra }, send);
+  function shoot(prefix) {
+    const root = tempRoot(prefix);
+    write(root, 'A/a.jpg', 'a'); write(root, 'B/bad.jpg', 'bad'); write(root, 'B/good.jpg', 'good'); write(root, 'C/c.jpg', 'c');
+    registerAllowedPath(root);
+    return root;
+  }
+  const failBad = (table) => ({ ...table, begin: async (body) => {
+    if (body.originalFilename === 'bad.jpg') throw new QpApiError({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Not an image.' });
+    return table.begin(body);
+  } });
+
+  it('is saved at the start and lists each subfolder that finished with no failed photo', async () => { // R1, R2
+    const root = shoot('qp-record-');
+    routes(failBad(directTable())); fakeHttps();
+    const events = []; const atFolderDone = [];
+    expect(await start(root, ['A', 'B', 'C'], (payload) => {
+      events.push(payload);
+      if (payload.phase === 'folder-done') atFolderDone.push(uploadRecord.load().finished);
+    })).toEqual({ success: true, total: 4 });
+    expect(uploadRecord.load()).toEqual({ version: 1, account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root,
+      selected: ['A', 'B', 'C'], finished: [], startedAt: expect.any(String), updatedAt: expect.any(String) });
+    expect((await untilSettled(events)).phase).toBe('done');
+    expect(atFolderDone).toEqual([['A'], ['A'], ['A', 'C']]); // B had a failed photo: a resume reads it again
+  });
+
+  it('a run that reaches done clears it, even with failed photos', async () => { // D5
+    const root = shoot('qp-record-done-');
+    routes(failBad(directTable())); fakeHttps();
+    const events = []; const kept = [];
+    await start(root, ['A', 'B', 'C'], (payload) => { events.push(payload); if (payload.phase === 'folder-done') kept.push(uploadRecord.load() !== null); });
+    const last = await untilSettled(events);
+    expect(last.counts.failed).toBe(1);
+    expect(kept).toEqual([true, true, true]);
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('Cancel clears it', async () => { // R3
+    const root = shoot('qp-record-cancel-');
+    let before;
+    routes(directTable({ commit: async (body) => { before ??= uploadRecord.load(); service.cancelUpload(); return { id: body.photoId }; } })); fakeHttps();
+    const events = [];
+    await start(root, ['A', 'B', 'C'], (payload) => events.push(payload));
+    expect((await untilSettled(events)).phase).toBe('cancelled');
+    expect(before).toMatchObject({ eventId: 'event-1' });
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('an error that stops the run, or an expired sign-in, keeps it', async () => { // R3, R9
+    for (const failure of [new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'closed' }), new QpAuthError('expired')]) {
+      memory.clear();
+      const root = shoot('qp-record-kept-');
+      routes(directTable({ begin: async () => { throw failure; } })); fakeHttps();
+      const events = [];
+      await start(root, ['A', 'B'], (payload) => events.push(payload));
+      expect((await untilSettled(events)).phase).toBe('error');
+      expect(uploadRecord.load()).toMatchObject({ eventId: 'event-1', selected: ['A', 'B'], finished: [] });
+    }
+  });
+
+  it('a new upload replaces it, named by its id when the screen sent no name', async () => { // R11
+    const root = shoot('qp-record-new-');
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 403, code: 'EVENT_NOT_UPLOADABLE', message: 'closed' }); } })); fakeHttps();
+    let events = [];
+    await start(root, ['A', 'B'], (payload) => events.push(payload));
+    await untilSettled(events);
+    events = [];
+    await service.startUpload({ rootPath: root, eventId: 'event-2', folders: ['C'] }, (payload) => events.push(payload));
+    expect(uploadRecord.load()).toMatchObject({ eventId: 'event-2', eventName: 'event-2', selected: ['C'], finished: [] });
+    service.cancelUpload(); // still reading photos: nothing reaches the server
+    expect((await untilSettled(events)).phase).toBe('cancelled');
+  });
+});
+
+describe('resume', () => {
+  beforeEach(() => { service._internals.sleep = async () => {}; service._internals.now = () => Date.now(); });
+
+  // A shoot folder that was dropped in an earlier session: on disk, but not allowed in this one.
+  function earlierRun(prefix, finished = ['A']) {
+    const root = tempRoot(prefix);
+    write(root, 'A/a.jpg', 'a'); write(root, 'B/b.jpg', 'b'); write(root, 'C/c.jpg', 'c');
+    uploadRecord.save({ account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root, selected: ['A', 'B', 'C'] });
+    for (const rel of finished) uploadRecord.markFinished(rel);
+    return root;
+  }
+
+  it("offers the connected account's unfinished upload, and hides another account's without deleting it", async () => { // R5
+    const root = earlierRun('qp-pending-');
+    expect(await service.getPending()).toEqual({ running: false,
+      pending: { eventId: 'event-1', eventName: 'Cebu Marathon 2026', folder: root, folderMissing: false } });
+    authStub.getAccountId.mockReturnValueOnce('u2');
+    expect(await service.getPending()).toEqual({ running: false, pending: null });
+    authStub.getAccountId.mockReturnValueOnce(null); // signed out: Reconnect first (R9)
+    expect(await service.getPending()).toEqual({ running: false, pending: null });
+    expect(uploadRecord.load()).not.toBeNull();
+  });
+
+  it('says when the saved folder is gone, refuses to resume it, and keeps the record', async () => { // R7
+    const root = earlierRun('qp-missing-');
+    fs.rmSync(root, { recursive: true, force: true });
+    expect((await service.getPending()).pending.folderMissing).toBe(true);
+    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' });
+    expect(uploadRecord.load()).not.toBeNull();
+  });
+
+  it('reports a running upload instead of an offer, and Discard leaves its record alone', async () => { // R10
+    const root = tempRoot('qp-running-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable()); fakeHttps();
+    const events = [];
+    await service.startUpload({ rootPath: root, eventId: 'event-1', eventName: 'Cebu Marathon 2026', folders: [''] }, (payload) => events.push(payload));
+    expect(await service.getPending()).toEqual({ running: true, pending: null });
+    expect(service.isUploading()).toBe(true);
+    expect(service.discardPending()).toEqual({ success: true });
+    expect(uploadRecord.load()).not.toBeNull();
+    await untilSettled(events);
+    expect(service.isUploading()).toBe(false);
+  });
+
+  it('Discard clears the record', async () => { // R3
+    earlierRun('qp-discard-');
+    expect(service.discardPending()).toEqual({ success: true });
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('re-allows only the saved folder, ignores every path the screen sends, and uploads only the unfinished subfolders', async () => { // D2, R2
+    const root = earlierRun('qp-resume-');
+    const elsewhere = tempRoot('qp-not-mine-'); write(elsewhere, 'x.jpg', 'x');
+    expect((await service.scanFolder(root)).success).toBe(false); // not allowed before Resume
+    routes(directTable()); fakeHttps();
+    const events = [];
+    const answer = await service.startUpload({ resume: true, rootPath: elsewhere, eventId: 'event-9', folders: [''] }, (payload) => events.push(payload));
+    expect(answer).toMatchObject({ success: true, total: 2, eventId: 'event-1', folders: ['B', 'C'], scan: { success: true, root } });
+    expect((await untilSettled(events)).phase).toBe('done');
+    expect([...new Set(events.map(e => e.folder?.relPath).filter(Boolean))]).toEqual(['B', 'C']); // A is not read again
+    expect(calls('begin')).toHaveLength(2);
+    expect(calls('begin').every(([p]) => p.includes('/events/event-1/'))).toBe(true);
+    expect(await service.scanFolder(elsewhere)).toEqual({ success: false, error: 'Access denied: folder not selected through dialog' });
+    expect(uploadRecord.load()).toBeNull();
+  });
+
+  it("has nothing to resume without a record or for another account's", async () => { // R5
+    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'There is no upload to resume.' });
+    earlierRun('qp-other-account-');
+    authStub.getAccountId.mockReturnValueOnce('u2');
+    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'There is no upload to resume.' });
   });
 });

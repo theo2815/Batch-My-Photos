@@ -438,6 +438,27 @@
   animation: upload-row-in 220ms ease-out both;
 }
 
+/* An unfinished upload: the same paper card as the chosen event, above the event list. */
+.upload-resume {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-lg);
+  animation: upload-row-in 220ms ease-out both;
+}
+
+.upload-resume h3,
+.upload-resume p {
+  margin: 0;
+}
+
+.upload-resume .upload-actions {
+  margin-top: var(--space-sm);
+}
+
 /* An empty tab or search: a dashed paper card, the same frame as the drop zone's idea of "nothing here yet". */
 .upload-empty {
   display: flex;
@@ -472,6 +493,7 @@
   .upload-spin,
   .upload-skeleton,
   .upload-chosen,
+  .upload-resume,
   .upload-empty,
   .upload-event-list > * {
     animation: none;

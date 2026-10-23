@@ -17,7 +17,7 @@ const https = require('https');
 const { net } = require('electron');
 const path = require('path');
 const logger = require('../utils/logger');
-const { isPathAllowedAsync } = require('./securityManager');
+const { isPathAllowedAsync, registerAllowedPath } = require('./securityManager');
 const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const {
   STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH, QP_UPLOAD_CONCURRENCY, QP_HASH_CONCURRENCY,
@@ -26,6 +26,7 @@ const {
 } = require('./constants');
 const config = require('./config');
 const qpAuth = require('./quickpitikAuthService');
+const uploadRecord = require('./quickpitikUploadRecord');
 
 const ACCESS_DENIED = 'Access denied: folder not selected through dialog';
 const UNREADABLE = 'Could not read this folder.';
@@ -532,6 +533,7 @@ async function runUpload(ctx) {
     for (let index = 0; index < ctx.plan.length; index++) {
       const folder = ctx.plan[index];
       ctx.folder = { relPath: folder.relPath, index, count: ctx.plan.length };
+      const failedBefore = ctx.failures.length;
       ctx.emit({ phase: 'hashing' }, true);
       // A worker never throws: the pool then ends only when every file in
       // flight has finished, so nothing is reported after the last event.
@@ -570,12 +572,15 @@ async function runUpload(ctx) {
         ctx.emit({ phase: 'uploading' });
       });
       ctx.assertActive();
+      if (ctx.failures.length === failedBefore) uploadRecord.markFinished(folder.relPath); // a folder with a failure is read again on resume
       ctx.emit({ phase: 'folder-done' }, true);
     }
+    uploadRecord.clear(); // even with failed photos: Retry failed covers them in this session
     ctx.emit({ phase: 'done', failures: ctx.failures }, true);
   } catch (caught) {
     const error = ctx.stopError || caught;
     if (error instanceof CancelledError) {
+      uploadRecord.clear();
       ctx.emit({ phase: 'cancelled', failures: ctx.failures }, true);
     } else if (error instanceof qpAuth.QpAuthError) {
       ctx.emit({ phase: 'error', error: { code: 'SESSION_EXPIRED', message: 'Your QuickPitik sign-in expired.' }, failures: ctx.failures }, true);
@@ -594,6 +599,7 @@ let current = null; // one upload per process
  */
 async function startUpload(request, send) {
   if (current) return { success: false, error: 'An upload is already running.' };
+  if (request?.resume === true) return resumeUpload(send); // the saved record decides; the screen's paths are not used
   const slot = current = { stop() {} }; // holds the place while the folders are listed
   try {
     return await beginUpload(request, send);
@@ -603,7 +609,7 @@ async function startUpload(request, send) {
 }
 
 async function beginUpload(request, send) {
-  const { rootPath, eventId, folders } = request || {};
+  const { rootPath, eventId, eventName, folders } = request || {};
   if (typeof rootPath !== 'string' || typeof eventId !== 'string' || !Array.isArray(folders)
       || folders.some(rel => typeof rel !== 'string' || rel.split('/').includes('..') || path.isAbsolute(rel))) {
     return { success: false, error: 'Invalid upload request.' };
@@ -620,9 +626,59 @@ async function beginUpload(request, send) {
   const total = plan.reduce((sum, folder) => sum + folder.files.length, 0);
   if (total === 0) return { success: false, error: 'Nothing to upload.' };
   current = makeContext({ eventId, plan, total, send });
+  // Errors, a crash or a quit keep this record; done, Cancel, Discard and Disconnect clear it.
+  uploadRecord.save({
+    account: qpAuth.getAccountId(), eventId, eventName: typeof eventName === 'string' && eventName ? eventName.slice(0, 200) : eventId,
+    root, selected: folders,
+  });
   runUpload(current).finally(() => { current = null; });
   return { success: true, total };
 }
+
+// ── Resume after a crash or a quit ────────────────────────────────────────────
+
+const isFolder = (dir) => fsPromises.stat(dir).then(stat => stat.isDirectory(), () => false);
+
+/** The saved record if it belongs to the connected account (another account's stays hidden, not deleted). */
+function ownRecord() {
+  const record = uploadRecord.load();
+  return record && record.account === qpAuth.getAccountId() ? record : null;
+}
+
+/**
+ * For the screen: an upload still running (the screen may have reloaded), or
+ * this account's unfinished one. No token, no file list.
+ */
+async function getPending() {
+  if (current) return { running: true, pending: null };
+  const record = ownRecord();
+  if (!record) return { running: false, pending: null };
+  return { running: false, pending: {
+    eventId: record.eventId, eventName: record.eventName, folder: record.root, folderMissing: !(await isFolder(record.root)),
+  } };
+}
+
+/** Re-allow the saved folder (this one only, only now), scan it, then upload the subfolders that did not finish. */
+async function resumeUpload(send) {
+  const record = ownRecord();
+  if (!record) return { success: false, error: 'There is no upload to resume.' };
+  if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
+  registerAllowedPath(record.root);
+  const scan = await scanFolder(record.root);
+  if (!scan.success) return scan;
+  const folders = record.selected.filter(rel => !record.finished.includes(rel));
+  const started = await startUpload({ rootPath: record.root, eventId: record.eventId, eventName: record.eventName, folders }, send);
+  return started.success ? { ...started, eventId: record.eventId, folders, scan } : started;
+}
+
+/** Discard: forget the unfinished upload. A running upload keeps its record. */
+function discardPending() {
+  if (!current) uploadRecord.clear();
+  return { success: true };
+}
+
+/** For the quit question. */
+const isUploading = () => current !== null;
 
 /** Cooperative cancel: no new file starts, in-flight PUTs are destroyed, the summary reports what finished. */
 function cancelUpload() {
@@ -636,5 +692,6 @@ module.exports = {
   scanFolder,
   listEvents,
   sha256File, startUpload, cancelUpload,
+  getPending, discardPending, isUploading,
   _internals: { listFolder, runPool, ACCESS_DENIED, RAW_EXTENSIONS, VIDEO_EXTENSIONS, HEIC_EXTENSIONS, canUploadPublic, canUploadOwned, ownerCloseDate, get sleep() { return internals.sleep; }, set sleep(fn) { internals.sleep = fn; }, get now() { return internals.now; }, set now(fn) { internals.now = fn; } },
 };

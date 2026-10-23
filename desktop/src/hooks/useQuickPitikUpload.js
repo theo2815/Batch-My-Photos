@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { STRINGS } from '../constants/strings';
 
 // A call the main process refuses outright (its rate limit throws) becomes a plain failure answer.
@@ -9,8 +9,9 @@ const ask = (call) => call.catch(() => ({ success: false, error: STRINGS.QP_TRY_
  * call; the renderer only ever sees { connected, email, name }, never a token.
  *
  * status: disconnected | connecting | ready | scanning | reviewing | uploading | done | error
+ * resumeOnOpen: the launch pop-up's Resume; the hook resumes once the offer is ready.
  */
-export function useQuickPitikUpload({ onBusyChange } = {}) {
+export function useQuickPitikUpload({ onBusyChange, resumeOnOpen = false } = {}) {
   const [status, setStatus] = useState('disconnected');
   const [session, setSession] = useState(null);   // { email, name }
   const [events, setEvents] = useState([]);
@@ -22,8 +23,19 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const [progress, setProgress] = useState(null); // last qp-upload-progress event
   const [error, setError] = useState(null);       // { code, message }
   const [isDragOver, setIsDragOver] = useState(false);
+  const [pending, setPending] = useState(null);   // this account's unfinished upload { eventId, eventName, folder, folderMissing }
+  const autoResumed = useRef(false);
 
+  // An upload still running (the screen reloaded), or this account's unfinished one.
+  const readPending = useCallback(async () => {
+    const upload = await ask(window.electronAPI.qpUploadPending());
+    if (upload.running) setStatus('uploading');
+    setPending(upload.pending ?? null);
+  }, []);
+
+  // Also re-reads the unfinished upload: after Connect (whose account it is) and on Refresh (a card plugged back in).
   const loadEvents = useCallback(async () => {
+    readPending();
     setEventsLoading(true);
     const result = await ask(window.electronAPI.qpListEvents());
     setEventsLoading(false);
@@ -35,7 +47,7 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
     }
     if (result.authRejected) { setSession(null); setStatus('disconnected'); }
     setError({ code: result.authRejected ? 'SESSION_EXPIRED' : 'EVENTS', message: result.error });
-  }, []);
+  }, [readPending]);
 
   // Session on mount, and the hand-off result when the browser comes back.
   useEffect(() => {
@@ -127,9 +139,40 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
   const startUpload = useCallback(async (folders = selected) => {
     if (!scan || !eventId || folders.length === 0) return;
     setError(null); setProgress(null); setStatus('uploading');
-    const result = await ask(window.electronAPI.qpUploadStart({ rootPath: scan.root, eventId, folders }));
-    if (!result.success) { setError({ code: 'UPLOAD', message: result.error }); setStatus('reviewing'); }
-  }, [scan, eventId, selected]);
+    const eventName = events.find(e => e.id === eventId)?.name;
+    const result = await ask(window.electronAPI.qpUploadStart({ rootPath: scan.root, eventId, eventName, folders }));
+    if (!result.success) { setError({ code: 'UPLOAD', message: result.error }); setStatus('reviewing'); return; }
+    setPending(null); // the main process replaced the saved upload with this one
+  }, [scan, eventId, selected, events]);
+
+  // The main process takes the folder, event and subfolders from its saved record, never from here.
+  const resume = useCallback(async () => {
+    setError(null); setProgress(null); setStatus('uploading');
+    const result = await ask(window.electronAPI.qpUploadStart({ resume: true }));
+    if (!result.success) { setError({ code: 'UPLOAD', message: result.error }); setStatus('ready'); readPending(); return; }
+    setPending(null); setEventId(result.eventId); setScan(result.scan); setSelected(result.folders);
+  }, [readPending]);
+
+  const discardPending = useCallback(async () => {
+    await ask(window.electronAPI.qpUploadDiscard());
+    setPending(null);
+  }, []);
+
+  // The folder moved or the card is out: keep the event, drop the folder again. The record stays until that upload starts.
+  const chooseFolderAgain = useCallback(() => { setEventId(pending.eventId); setPending(null); }, [pending]);
+
+  // What the resume card offers. "Closed" needs the list (R6); a list that failed to load leaves it to the server.
+  const pendingEvent = events.find(e => e.id === pending?.eventId) || null;
+  const resumeState = !pending || status !== 'ready' || eventsLoading ? null
+    : eventsLoadedAt && pendingEvent?.uploadWindow !== 'open' ? 'closed'
+      : pending.folderMissing ? 'missing' : 'resume';
+
+  useEffect(() => {
+    if (!resumeOnOpen || resumeState !== 'resume' || autoResumed.current) return;
+    autoResumed.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- once per view: the launch pop-up's Resume, when the offer is ready
+    resume();
+  }, [resumeOnOpen, resumeState, resume]);
 
   const cancelUpload = useCallback(() => window.electronAPI.qpUploadCancel(), []);
 
@@ -150,7 +193,8 @@ export function useQuickPitikUpload({ onBusyChange } = {}) {
 
   return {
     status, session, events, eventsLoading, eventsLoadedAt, eventId, setEventId, scan, selected, selectedCount, progress, error, isDragOver,
+    pending, pendingEvent, resumeState,
     connect, disconnect, loadEvents, chooseFolder, handleDragOver, handleDragLeave, handleDrop, toggleFolder,
-    startUpload, cancelUpload, retryFailed, reset,
+    startUpload, cancelUpload, retryFailed, reset, resume, discardPending, chooseFolderAgain,
   };
 }

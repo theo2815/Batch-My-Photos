@@ -37,7 +37,7 @@ import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModa
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
-import { UploadView } from './components/Upload';
+import { UploadView, UploadResumeModal } from './components/Upload';
 import BoxSpinner from './components/common/BoxSpinner';
 import { UpdateBanner } from './components/common/UpdateBanner';
 
@@ -90,6 +90,10 @@ function App() {
   const [view, setView] = useState('sort');
   const [uploadEnabled, setUploadEnabled] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
+  // The launch pop-up's Resume, handed to the Upload view once; a started upload uses it up.
+  const [resumeUpload, setResumeUpload] = useState(false);
+  const handleUploadBusy = useCallback((busy) => { setUploadBusy(busy); if (busy) setResumeUpload(false); }, []);
+  const showUploadView = useCallback(() => setView('upload'), []);
   const blurDetection = useBlurDetection({
     isBeta: blurBetaEnabled,
     folderPath,
@@ -578,7 +582,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {!sortView && <UploadView onBusyChange={setUploadBusy} />}
+        {!sortView && <UploadView onBusyChange={handleUploadBusy} resumeOnOpen={resumeUpload} />}
         {sortView && appState === STATES.IDLE && (
           <IdleScreen
             isDragOver={isDragOver}
@@ -719,6 +723,10 @@ function App() {
         onResume={handleResume}
         onDiscard={handleDiscardProgress}
       />
+
+      {uploadEnabled && (
+        <UploadResumeModal onResume={() => { setResumeUpload(true); setView('upload'); }} onRunning={showUploadView} />
+      )}
 
       <ResumeRollbackModal
         isOpen={showResumeRollbackModal}

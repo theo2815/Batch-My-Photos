@@ -3,7 +3,7 @@
  * Handles the creation and management of the main application window
  */
 
-const { BrowserWindow, Menu } = require('electron');
+const { BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
@@ -129,6 +129,18 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // Closing during a QuickPitik upload asks first. Quitting does not cancel the
+  // upload (a cancel would clear its resume record), so the next launch offers Resume.
+  mainWindow.on('close', (event) => {
+    const upload = require.cache[require.resolve('./quickpitikUploadService')]?.exports; // not loaded = Upload view never used
+    if (!upload?.isUploading()) return;
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'question', buttons: ['Keep uploading', 'Stop and quit'], defaultId: 0, cancelId: 0,
+      message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
+    });
+    if (choice === 0) event.preventDefault();
   });
 
   mainWindow.on('closed', () => {
