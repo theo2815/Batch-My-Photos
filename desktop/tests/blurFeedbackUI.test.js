@@ -247,7 +247,7 @@ describe('explicit beta feedback consent', () => {
 
   it.each([
     ['RAW-only', { RAW1: { score: -1, isBlurry: false }, RAW2: { score: -1, isBlurry: false } }, ['RAW1.CR3', 'RAW2.CR3'], 'No blur results available', '0 groups analyzed · 2 could not be analyzed'],
-    ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 groups)', '2 groups analyzed · 1 could not be analyzed'],
+    ['mixed', { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' }, B: { score: 0.1, isBlurry: false, analyzedFile: 'B.jpg' }, RAW: { score: -1, isBlurry: false } }, ['A.jpg', 'A.CR3', 'B.jpg', 'RAW.CR3'], 'Blur suggestions (1 group)', '2 groups analyzed · 1 could not be analyzed'],
     ['analyzed without suggestions', { A: { score: 0.1, isBlurry: false, analyzedFile: 'A.jpg' } }, ['A.jpg', 'A.CR3'], 'No blur suggestions', '1 group analyzed · 0 could not be analyzed'],
   ])('shows %s coverage while preserving ordinary batch controls', async (_case, blurResults, allFiles, heading, coverage) => {
     const p = { folderPath: 'C:/fixture', blurDetectionEnabled: true, blurSensitivity: 'moderate' };
@@ -736,7 +736,7 @@ describe('explicit beta feedback consent', () => {
     expect(again.props.title).toBe('Send back to Beta_Blurry');
     expect(again.props['aria-label']).toBe('Flag A as blurry again');
     expect(button(rowB, 'Restore')).toBeDefined();
-    expect(text(tree)).toContain('Blur suggestions (1 groups)');
+    expect(text(tree)).toContain('Blur suggestions (1 group)');
     expect(text(tree)).toContain('1 group restored to normal batches');
     again.props.onClick({ detail: 1 });
     expect(d.toggleBlurFlag).toHaveBeenCalledWith('A');

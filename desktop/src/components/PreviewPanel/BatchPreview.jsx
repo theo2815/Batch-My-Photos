@@ -342,7 +342,7 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
       >
         <ScanEye size={18} className="icon-inline" />
         <span className="blurry-title">
-          {analyzedCount === 0 ? 'No blur results available' : flaggedGroups.length > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
+          {analyzedCount === 0 ? 'No blur results available' : flaggedGroups.length > 0 ? `Blur suggestions (${blurryCount} group${blurryCount === 1 ? '' : 's'})` : 'No blur suggestions'}
         </span>
         {analyzedCount > 0 && unanalyzedCount === 0 && flaggedGroups.length === 0 && <CheckCircle size={16} className="blurry-check" />}
         {blurryCount > 0 && <span className="blurry-folder-hint">Will be placed in {outputPrefix}_Blurry</span>}
