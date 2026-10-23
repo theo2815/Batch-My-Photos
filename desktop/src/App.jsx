@@ -353,24 +353,6 @@ function App() {
     setShowBlurSensitivityModal(true);
   }, []);
 
-  // Refresh preview when blurry groups change (after analysis completes or user un-flags)
-  useEffect(() => {
-    if (appStateRef.current !== STATES.READY) return;
-    if (!blurDetectionEnabled) return;
-
-    // Debounce to avoid rapid re-renders when multiple groups are un-flagged
-    const timer = setTimeout(() => {
-      if (appStateRef.current === STATES.READY) {
-        refreshPreview();
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-    // We intentionally exclude refreshPreview from deps to avoid infinite loops.
-    // This effect should only fire when blurryGroups changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blurryGroups, blurDetectionEnabled]);
-
   // ============================================================================
   // VALIDATION & EXECUTION WRAPPERS
   // ============================================================================

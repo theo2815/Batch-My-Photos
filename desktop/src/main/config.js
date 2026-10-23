@@ -140,7 +140,7 @@ const features = {
    */
   BLUR_DETECTION_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_DETECTION_ENABLED', true),
 
-  /** Beta suggestions never change batch routing. */
+  /** Beta blur build: needs a beta key, offers feedback upload, uses beta wording. Flagged photos still go to the _Blurry folder. */
   BLUR_BETA_ENABLED: isProduction ? !!betaManifest : envBool('BATCH_BLUR_BETA_ENABLED', true),
 
   /**
