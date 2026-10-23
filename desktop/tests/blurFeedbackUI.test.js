@@ -29,6 +29,7 @@ import { ConfirmDialog } from '../src/components/Modals';
 import StatsGrid from '../src/components/PreviewPanel/StatsGrid.jsx';
 import PreviewPanel from '../src/components/PreviewPanel/PreviewPanel.jsx';
 import { useBlurDetection } from '../src/hooks/useBlurDetection.js';
+import CompleteCard from '../src/components/StatusCards/CompleteCard.jsx';
 
 function render(component, props) { hooks.cursor = 0; return component(props); }
 // The parent hook outlives each modal instance; resetting modal hooks truly discards its state.
@@ -778,5 +779,29 @@ describe('explicit beta feedback consent', () => {
     list(flagged(['A']));
     await effects();
     expect(globalThis.window.electronAPI.getThumbnails).toHaveBeenCalledWith('C:/fixture', ['A.jpg', 'B.jpg']);
+  });
+});
+
+describe('done screen names the _Blurry folder', () => {
+  const batches = (n) => Array.from({ length: n }, (_, i) => ({ folder: `Run_00${i + 1}`, fileCount: 5 }));
+  const finished = { mode: 'copy', batchesCreated: 7, results: [...batches(6), { folder: 'Run_Blurry', fileCount: 6 }], blurryFileCount: 6, blurryFolderName: 'Run_Blurry' };
+  const card = (executionResults) => text(render(CompleteCard, { executionResults, rollbackAvailable: false, hasHistory: false, onOpenFolder: vi.fn(), onReset: vi.fn(), onUndo: vi.fn(), onShowHistory: vi.fn() }));
+
+  it('names the _Blurry folder and leaves it out of the batch count after a finished run', () => {
+    const t = card(finished);
+    expect(t).toContain('Successfully created 6 batch folders.');
+    expect(t).toContain('6 files flagged as blurry went to Run_Blurry. Check them before you upload.');
+    expect(t).toContain('... and 2 more folders');
+  });
+  it('says file for one flagged file', () => {
+    expect(card({ ...finished, blurryFileCount: 1 })).toContain('1 file flagged as blurry went to Run_Blurry.');
+  });
+  it('shows no _Blurry line after a cancelled run', () => {
+    expect(card({ ...finished, cancelled: true, filesProcessed: 10, totalFiles: 36 })).not.toContain('flagged as blurry');
+  });
+  it('keeps the count and shows no line without a _Blurry folder, as after a resumed run', () => {
+    const t = card({ mode: 'move', batchesCreated: 3, results: batches(3) });
+    expect(t).toContain('Successfully created 3 batch folders.');
+    expect(t).not.toContain('flagged as blurry');
   });
 });

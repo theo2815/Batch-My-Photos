@@ -27,6 +27,7 @@ import './StatusCards.css';
  */
 function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenFolder, onReset, onUndo, onShowHistory, onExportReport }) {
   const wasCancelled = executionResults?.wasCancelled || executionResults?.cancelled;
+  const batchFolderCount = (executionResults?.batchesCreated ?? 0) - (executionResults?.blurryFolderName ? 1 : 0);
   const [exportStatus, setExportStatus] = useState(null); // null | 'exporting' | 'done'
   
   const handleExport = async () => {
@@ -81,7 +82,12 @@ function CompleteCard({ executionResults, rollbackAvailable, hasHistory, onOpenF
         </p>
       ) : (
         <p>
-          Successfully created <strong>{executionResults?.batchesCreated}</strong> batch folders.
+          Successfully created <strong>{batchFolderCount}</strong> batch folders.
+        </p>
+      )}
+      {!wasCancelled && executionResults?.blurryFileCount > 0 && (
+        <p>
+          <strong>{executionResults.blurryFileCount.toLocaleString()}</strong> {executionResults.blurryFileCount === 1 ? 'file' : 'files'} flagged as blurry went to <span className="folder-name">{executionResults.blurryFolderName}</span>. Check them before you upload.
         </p>
       )}
       <div className="results-summary">
