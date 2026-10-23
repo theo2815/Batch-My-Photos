@@ -47,6 +47,7 @@ vi.mock('../src/hooks/useTheme', () => ({ useTheme: () => m.theme }));
 vi.mock('../src/hooks/useUpdateCheck', () => ({ useUpdateCheck: () => m.update }));
 
 import App from '../src/App.jsx';
+import { ConfirmationModal } from '../src/components/Modals';
 
 let tree;
 async function settle() {
@@ -66,7 +67,6 @@ async function ready() {
   await scan;
   return settle();
 }
-// eslint-disable-next-line no-unused-vars
 function nodes(node) { return !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)]; }
 
 beforeEach(() => {
@@ -95,5 +95,34 @@ describe('App blur wiring', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await settle();
     expect(globalThis.window.electronAPI.previewBatches).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the flagged groups to the batch run', async () => {
+    m.blur.state = { ...m.blur.state, blurryGroups: ['IMG_2'] };
+    const tree = await ready();
+    nodes(tree).find((n) => n.type === ConfirmationModal).props.onConfirm();
+    expect(m.batch.handleExecuteBatch).toHaveBeenCalledWith(expect.objectContaining({ folderPath: 'C:/shoot', outputPrefix: 'Run', batchMode: 'copy', blurryGroups: ['IMG_2'] }));
+  });
+
+  it('sends the flagged groups to the preview', async () => {
+    await ready();
+    m.blur.state = { ...m.blur.state, blurryGroups: ['IMG_2'] };
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(globalThis.window.electronAPI.previewBatches).toHaveBeenLastCalledWith('C:/shoot', 10, 'name-asc', ['IMG_2']);
+  });
+
+  it('sends no blur list when blur detection is off', async () => {
+    m.settings.blurDetectionEnabled = false;
+    m.blur.state = { ...m.blur.state, blurryGroups: ['IMG_2'] };
+    const tree = await ready();
+    nodes(tree).find((n) => n.type === ConfirmationModal).props.onConfirm();
+    expect(m.batch.handleExecuteBatch).toHaveBeenCalledWith(expect.objectContaining({ blurryGroups: null }));
+    m.blur.state = { ...m.blur.state, blurryGroups: ['IMG_3'] };
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(globalThis.window.electronAPI.previewBatches.mock.lastCall.at(-1)).toBeNull();
   });
 });
