@@ -29,6 +29,7 @@ import FolderDrop from '../src/components/Upload/FolderDrop.jsx';
 import ConnectCard from '../src/components/Upload/ConnectCard.jsx';
 import ConfirmDialog from '../src/components/Modals/ConfirmDialog.jsx';
 import EventPicker, { ChosenEvent } from '../src/components/Upload/EventPicker.jsx';
+import { ResumeCard } from '../src/components/Upload/UploadResume.jsx';
 import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
 import { useFolderSelection } from '../src/hooks/useFolderSelection.js';
 
@@ -351,6 +352,7 @@ describe('useQuickPitikUpload', () => {
       qpScanFolder: vi.fn().mockResolvedValue(scan),
       qpUploadStart: vi.fn().mockResolvedValue({ success: true, total: 412 }),
       qpUploadCancel: vi.fn(), qpDisconnect: vi.fn().mockResolvedValue({ success: true }),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }),
     };
     vi.stubGlobal('window', { electronAPI: api });
     const busy = vi.fn();
@@ -379,7 +381,7 @@ describe('useQuickPitikUpload', () => {
 
     await qp.startUpload(); qp = render(useQuickPitikUpload, props); await effects();
     expect(qp.status).toBe('uploading');
-    expect(api.qpUploadStart).toHaveBeenCalledWith({ rootPath: 'D:/Shoots/Theo dipolog', eventId: 'e1', folders: ['', 'Race A'] });
+    expect(api.qpUploadStart).toHaveBeenCalledWith({ rootPath: 'D:/Shoots/Theo dipolog', eventId: 'e1', eventName: 'Cebu Marathon 2026', folders: ['', 'Race A'] });
     expect(busy).toHaveBeenLastCalledWith(true);
 
     progress({ phase: 'done', folder: null, counts: { uploaded: 412, alreadyThere: 0, failed: 0, total: 412 }, bytes: { sent: 412, total: 412 }, failures: [] });
@@ -394,6 +396,7 @@ describe('useQuickPitikUpload', () => {
       qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
       onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn(() => () => {}),
       qpListEvents: vi.fn().mockResolvedValue({ success: false, authRejected: true, error: 'Your QuickPitik sign-in expired. Reconnect to continue.' }),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }),
     };
     vi.stubGlobal('window', { electronAPI: api });
     let qp = render(useQuickPitikUpload, {}); await effects();
@@ -413,6 +416,7 @@ describe('useQuickPitikUpload', () => {
       selectFolder: vi.fn().mockResolvedValue('D:/Shoots/Theo dipolog'),
       qpScanFolder: vi.fn().mockResolvedValue(scan),
       qpUploadStart: vi.fn().mockResolvedValue({ success: true, total: 412 }),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }),
       ...over,
     };
     vi.stubGlobal('window', { electronAPI: api });
@@ -548,6 +552,7 @@ describe('UploadView', () => {
       selectFolder: vi.fn().mockResolvedValue('D:/Shoots/Theo dipolog'),
       qpScanFolder: vi.fn().mockResolvedValue(scan),
       qpDisconnect: vi.fn().mockResolvedValue({ success: true }),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }),
       ...over,
     };
     vi.stubGlobal('window', { electronAPI: api });
@@ -673,6 +678,7 @@ describe('Cancel upload asks first', () => {
       qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
       onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn((cb) => { progress = cb; return () => {}; }),
       qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event] }), qpUploadCancel: vi.fn(),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: null }),
     } });
     render(UploadView, {}); await effects();
     render(UploadView, {}); await effects();
@@ -774,5 +780,162 @@ describe('dropped folders get their path from webUtils (File.path is gone in Ele
     await render(useFolderSelection, { setAppState() {}, setError, scanFolder: vi.fn() }).handleDrop(dropEvent());
     expect(setError).not.toHaveBeenCalled();
     expect(api.registerDroppedFolder).not.toHaveBeenCalled();
+  });
+});
+
+describe('resume an unfinished upload', () => {
+  const fresh = () => Object.assign(hooks, { values: [], cursor: 0, effects: [], deps: [], cleanups: [] });
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-20T12:00:00+08:00')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const pending = { eventId: 'e1', eventName: 'Cebu Marathon 2026', folder: 'D:/Shoots/Theo dipolog', folderMissing: false };
+  const resumed = { success: true, total: 400, eventId: 'e1', folders: ['Race A'], scan };
+  function resumeApi(over = {}) {
+    const api = {
+      qpSessionStatus: vi.fn().mockResolvedValue({ connected: true, email: 'p@test.local', name: 'P' }),
+      onQpConnectResult: vi.fn(() => () => {}), onQpUploadProgress: vi.fn(() => () => {}),
+      qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [event] }),
+      qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending }),
+      qpUploadStart: vi.fn().mockResolvedValue(resumed),
+      qpUploadDiscard: vi.fn().mockResolvedValue({ success: true }),
+      ...over,
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    return api;
+  }
+  async function mountedHook(props = {}) {
+    render(useQuickPitikUpload, props); await effects();
+    render(useQuickPitikUpload, props); await effects();
+    return render(useQuickPitikUpload, props);
+  }
+  const closedEvent = { ...event, uploadWindow: 'closed', closesOn: '2026-10-13' };
+
+  it('offers Resume once the list shows the event open; Resume sends only the flag and takes back the saved run', async () => { // R1, D2
+    const api = resumeApi();
+    let qp = await mountedHook();
+    expect(qp.resumeState).toBe('resume');
+    expect(qp.pendingEvent).toEqual(event);
+    await qp.resume(); qp = render(useQuickPitikUpload, {});
+    expect(api.qpUploadStart).toHaveBeenCalledWith({ resume: true });
+    expect(qp).toMatchObject({ status: 'uploading', eventId: 'e1', scan, selected: ['Race A'], pending: null, resumeState: null });
+  });
+
+  it('says the event closed, or that the folder is gone, instead of offering Resume', async () => { // R6, R7
+    resumeApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [closedEvent] }) });
+    expect((await mountedHook()).resumeState).toBe('closed');
+    fresh();
+    resumeApi({ qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: { ...pending, folderMissing: true } }) });
+    let qp = await mountedHook();
+    expect(qp.resumeState).toBe('missing');
+    qp.chooseFolderAgain(); qp = render(useQuickPitikUpload, {});
+    expect(qp).toMatchObject({ eventId: 'e1', pending: null, resumeState: null });
+  });
+
+  it('a list that failed to load leaves the closed check to the server', async () => { // R6
+    resumeApi({ qpListEvents: vi.fn().mockResolvedValue({ success: false, error: 'Request failed' }) });
+    expect((await mountedHook()).resumeState).toBe('resume');
+  });
+
+  it('an upload still running after the screen reloaded shows as uploading and locks the view tabs', async () => { // R10
+    resumeApi({ qpUploadPending: vi.fn().mockResolvedValue({ running: true, pending: null }) });
+    const busy = vi.fn();
+    const qp = await mountedHook({ onBusyChange: busy });
+    expect(qp.status).toBe('uploading');
+    expect(qp.resumeState).toBeNull();
+    render(useQuickPitikUpload, { onBusyChange: busy }); await effects();
+    expect(busy).toHaveBeenLastCalledWith(true);
+  });
+
+  it('a Resume the main process refuses shows why and reads the offer again', async () => {
+    const api = resumeApi({ qpUploadStart: vi.fn().mockResolvedValue({ success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' }) });
+    let qp = await mountedHook();
+    api.qpUploadPending.mockClear();
+    await qp.resume(); qp = render(useQuickPitikUpload, {});
+    expect(qp.status).toBe('ready');
+    expect(qp.error).toEqual({ code: 'UPLOAD', message: 'The folder is not there. Plug in the card or choose the folder again.' });
+    expect(api.qpUploadPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('a new upload replaces the offer', async () => { // R11
+    resumeApi({ qpUploadStart: vi.fn().mockResolvedValue({ success: true, total: 412 }), selectFolder: vi.fn().mockResolvedValue('D:/Shoots/Other'), qpScanFolder: vi.fn().mockResolvedValue(scan) });
+    let qp = await mountedHook();
+    qp.setEventId('e1');
+    await qp.chooseFolder(); qp = render(useQuickPitikUpload, {});
+    await qp.startUpload(); qp = render(useQuickPitikUpload, {});
+    expect(qp.pending).toBeNull();
+  });
+
+  it('Discard forgets the offer', async () => { // R3
+    const api = resumeApi();
+    let qp = await mountedHook();
+    await qp.discardPending(); qp = render(useQuickPitikUpload, {});
+    expect(api.qpUploadDiscard).toHaveBeenCalledTimes(1);
+    expect(qp.resumeState).toBeNull();
+  });
+
+  it('reads the offer again after Connect, so it is always the connected account’s', async () => { // R5, R9
+    let connectResult;
+    const api = resumeApi({
+      qpSessionStatus: vi.fn().mockResolvedValue({ connected: false, email: null, name: null }),
+      onQpConnectResult: vi.fn((cb) => { connectResult = cb; return () => {}; }),
+    });
+    await mountedHook();
+    expect(api.qpUploadPending).not.toHaveBeenCalled();
+    connectResult({ success: true, email: 'p@test.local', name: 'P' }); await effects();
+    expect(api.qpUploadPending).toHaveBeenCalled();
+  });
+
+  it("the launch pop-up's Resume starts the upload once, and only when it can", async () => { // D3
+    let api = resumeApi();
+    await mountedHook({ resumeOnOpen: true });
+    for (let i = 0; i < 3; i++) { render(useQuickPitikUpload, { resumeOnOpen: true }); await effects(); }
+    expect(api.qpUploadStart).toHaveBeenCalledTimes(1);
+    expect(api.qpUploadStart).toHaveBeenCalledWith({ resume: true });
+    fresh();
+    api = resumeApi({ qpListEvents: vi.fn().mockResolvedValue({ success: true, events: [closedEvent] }) });
+    await mountedHook({ resumeOnOpen: true });
+    expect(api.qpUploadStart).not.toHaveBeenCalled();
+  });
+
+  describe('ResumeCard', () => {
+    const card = (props) => render(ResumeCard, { pending, event, onResume: noop, onDiscard: noop, onChooseAgain: noop, ...props });
+
+    it('resume: names the event and the folder, with Discard and Resume', () => {
+      const onResume = vi.fn(); const onDiscard = vi.fn();
+      const tree = card({ state: 'resume', onResume, onDiscard });
+      expect(text(tree)).toContain('Your upload to Cebu Marathon 2026 did not finish.');
+      expect(text(tree)).toContain('D:/Shoots/Theo dipolog');
+      expect(text(tree)).toContain('Resume sends the subfolders that did not finish. Photos already on QuickPitik are skipped.');
+      button(tree, 'Resume').props.onClick();
+      button(tree, 'Discard').props.onClick();
+      expect([onResume.mock.calls.length, onDiscard.mock.calls.length]).toEqual([1, 1]);
+    });
+
+    it('closed: says when uploads closed and offers only Discard', () => { // R6
+      const tree = card({ state: 'closed', event: closedEvent });
+      expect(text(tree)).toContain('Uploads for Cebu Marathon 2026 closed on 13 Oct 2026.');
+      expect(nodes(tree).filter(n => n.type === 'button').map(text)).toEqual(['Discard']);
+      expect(text(card({ state: 'closed', event: null }))).toContain('Uploads for Cebu Marathon 2026 are closed.');
+    });
+
+    it('missing: says the folder is not there, with Choose the folder again', () => { // R7
+      const onChooseAgain = vi.fn();
+      const tree = card({ state: 'missing', pending: { ...pending, folderMissing: true }, onChooseAgain });
+      expect(text(tree)).toContain('The folder D:/Shoots/Theo dipolog is not there. Plug the card or drive back in and press Refresh, or choose the folder again.');
+      expect(nodes(tree).filter(n => n.type === 'button').map(text)).toEqual(['Discard', 'Choose the folder again']);
+      button(tree, 'Choose the folder again').props.onClick();
+      expect(onChooseAgain).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('the Upload view shows the card above the event list', async () => {
+    resumeApi();
+    render(UploadView, {}); await effects();
+    render(UploadView, {}); await effects();
+    const tree = render(UploadView, {});
+    const shown = nodes(tree).find(n => n.type === ResumeCard);
+    expect(shown.props).toMatchObject({ state: 'resume', pending, event });
+    const kids = nodes(tree).filter(n => n.type === ResumeCard || n.type === EventPicker).map(n => n.type);
+    expect(kids).toEqual([ResumeCard, EventPicker]);
   });
 });
