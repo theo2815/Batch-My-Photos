@@ -123,12 +123,12 @@ export const STRINGS = {
 
   // Operation History
   HISTORY_TITLE: 'Operation History',
-  HISTORY_SUBTITLE: 'Move Mode Only',
-  HISTORY_DESCRIPTION: 'Past Move mode batch operations that can be undone. Copy mode operations are not tracked here because original files are preserved.',
+  HISTORY_SUBTITLE: 'Move and Copy',
+  HISTORY_DESCRIPTION: 'Past runs you can undo. Undo puts moved photos back, or deletes the copies a Copy run made.',
   HISTORY_EMPTY: 'No operation history yet.',
-  HISTORY_EMPTY_DETAIL: 'Only Move mode operations are recorded here. Copy mode preserves originals, so no undo is needed.',
+  HISTORY_EMPTY_DETAIL: 'Move and Copy runs are recorded here so you can undo them.',
   HISTORY_VALIDATE: 'Verify files are still in batch locations',
-  HISTORY_UNDO: 'Undo this operation and restore files',
+  HISTORY_UNDO: 'Undo this operation',
   HISTORY_DELETE: 'Remove this entry from history',
   HISTORY_CLEAR_ALL: 'Clear All History',
   HISTORY_CLEAR_CONFIRM: 'Delete all history entries? This cannot be undone.',
@@ -138,6 +138,23 @@ export const STRINGS = {
   HISTORY_SORT_ORDER: 'Sort',
   HISTORY_RESULT_LABEL: 'Result',
   HISTORY_MODE_MOVE: 'Move',
+  HISTORY_MODE_COPY: 'Copy',
+  HISTORY_MODE_COPY_TITLE: 'Copy mode: Undo deletes the copies',
+
+  // Copy-mode Undo
+  COPY_UNDO_EXECUTING_TITLE: 'Removing Copies...',
+  COPY_UNDO_CONFIRM_TITLE: 'Undo This Copy?',
+  COPY_UNDO_CONFIRM_WARNING: 'This deletes the copies this run made. Your original photos stay where they are.',
+  COPY_UNDO_CONFIRM_NOTE: 'A copy is kept if its original is missing or either file changed after the run. Deleted copies cannot be brought back.',
+  COPY_UNDO_COMPLETE_TITLE: 'Copies Removed',
+  COPY_UNDO_COMPLETE_DESC: 'The copies are deleted. Your original photos were not touched.',
+  COPY_UNDO_COMPLETE_KEPT: 'Copies Kept',
+  COPY_UNDO_COMPLETE_KEPT_NOTE: 'Kept because the original is missing or a file changed after the run. Delete them yourself if you do not need them.',
+  COPY_UNDO_COMPLETE_LOCATION: 'Originals In',
+  COPY_UNDO_CANCELLED_NOTE: 'The copies made so far are still in the batch folders. Press Undo to delete them. Your originals are not touched.',
+  COPY_UNDO_CANCEL_BULLET: 'In Copy mode you can undo the copies made so far on the next screen.',
+  COPY_UNDO_RESUME_DESC: 'A previous undo was interrupted while deleting copies. Resume to finish removing them. Your originals are not touched.',
+  COPY_UNDO_RESUME_LABEL: 'Originals in:',
 
   // QuickPitik Upload view (feature-flagged)
   VIEW_SORT: 'Sort',

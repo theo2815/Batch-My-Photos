@@ -52,7 +52,7 @@ BatchMyPhotos/
 ├── main.js                  # Electron entry point — app lifecycle, protocol, store
 ├── preload.js               # Context bridge (electronAPI whitelist)
 ├── progressManager.js       # Crash recovery — encrypted progress persistence
-├── rollbackManager.js       # Session-based undo for move operations
+├── rollbackManager.js       # Session-based undo for Move and Copy runs
 ├── package.json
 ├── vite.config.js           # Vite config for React frontend
 │
@@ -135,7 +135,7 @@ User selects folder ──► IDLE
    Result displayed  ◄─────────────────── COMPLETE
          │
          │  (optional) User clicks Undo
-         │  rollbackBatch() → moves files back
+         │  rollbackBatch() → puts files back (Move) or deletes copies (Copy)
          │
          ▼
        IDLE
@@ -151,7 +151,7 @@ Defined in `src/constants/appStates.js`:
 | `SCANNING`  | Reading folder contents, building file groups      |
 | `READY`     | Preview displayed, settings adjustable             |
 | `EXECUTING` | Files being moved/copied with progress bar         |
-| `COMPLETE`  | Results shown, undo available (if move mode)       |
+| `COMPLETE`  | Results shown, undo available (Move or Copy)       |
 | `ERROR`     | Error occurred, user can retry                     |
 
 ---
@@ -211,7 +211,7 @@ All IPC communication flows through `preload.js` → `ipcHandlers.js`. The handl
 | Channel                    | Direction            | Purpose                               |
 | -------------------------- | -------------------- | ------------------------------------- |
 | `check-rollback-available` | invoke               | Check if undo is possible             |
-| `rollback-batch`           | invoke               | Move files back to original locations |
+| `rollback-batch`           | invoke               | Undo: put files back / delete copies  |
 | `clear-rollback-manifest`  | invoke               | Dismiss undo option                   |
 | `rollback-progress`        | send (main→renderer) | Progress during rollback              |
 | `get-thumbnails`           | invoke               | Generate preview thumbnails (Sharp)   |
@@ -365,9 +365,9 @@ userData/
 ### Rollback (`rollbackManager.js`)
 
 - **Session-based only** — manifest is in-memory, lost on app restart (by design)
-- **Move mode only** — copy mode doesn't need undo (originals are preserved)
+- **Move and Copy runs** — Move puts files back; Copy deletes the copies it can prove are spare (original still in place, same size, neither file changed after the run) and keeps any other copy
 - Stores the full operation list with original source/dest paths
-- Rollback reverses each operation: move files from batch folders → original location → delete empty batch folders
+- Move rollback: move files from batch folders → original location → delete empty batch folders. Copy rollback: delete the provable copies → delete empty batch folders
 
 ---
 

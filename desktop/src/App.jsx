@@ -149,7 +149,7 @@ function App() {
   });
   const {
     rollbackAvailable, rollbackInfo,
-    showUndoConfirmation, isRollingBack,
+    showUndoConfirmation, isRollingBack, undoMode,
     handleUndoClick, handleExecuteUndo, setShowUndoConfirmation,
     clearRollback,
     // History
@@ -627,6 +627,7 @@ function App() {
           <ExecutingCard
             progress={progress}
             isRollback={isRollingBack}
+            rollbackMode={undoMode}
             onCancel={(isRollingBack || batchMode === 'move') ? undefined : handleCancelBatch}
           />
         )}
@@ -741,6 +742,7 @@ function App() {
       <UndoConfirmationModal
         isOpen={showHistoryUndoConfirmation}
         rollbackInfo={pendingHistoryUndo ? {
+          mode: pendingHistoryUndo.mode,
           totalFiles: pendingHistoryUndo.totalFiles,
           batchFolderCount: pendingHistoryUndo.batchFolderCount,
         } : null}

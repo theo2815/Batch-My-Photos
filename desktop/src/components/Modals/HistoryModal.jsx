@@ -1,12 +1,13 @@
 /**
  * HistoryModal Component
  * 
- * Displays a list of past Move mode batch operations with the ability to
+ * Displays a list of past Move and Copy mode batch operations with the ability to
  * undo (rollback) or delete individual entries. Shows operation details
  * including folder, date, file count, batch settings used, and result summary.
  * 
- * NOTE: Only Move mode operations are tracked. Copy mode preserves originals
- * and therefore doesn't need rollback/history.
+ * NOTE: Move and Copy runs are both tracked. Undoing a Move puts the files back;
+ * undoing a Copy deletes the copies and leaves the originals alone. Entries
+ * saved by older app versions have no mode and are Move.
  */
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -183,10 +184,17 @@ function HistoryEntry({ entry, onUndo, onDelete, onValidate }) {
           </div>
         )}
         <div className="history-entry-header-right">
-          <span className="history-mode-badge move" title="Move mode — files were moved, undo is available">
-            <Zap size={10} />
-            {STRINGS.HISTORY_MODE_MOVE}
-          </span>
+          {entry.mode === 'copy' ? (
+            <span className="history-mode-badge copy" title={STRINGS.HISTORY_MODE_COPY_TITLE}>
+              <Copy size={10} />
+              {STRINGS.HISTORY_MODE_COPY}
+            </span>
+          ) : (
+            <span className="history-mode-badge move" title="Move mode — files were moved, undo is available">
+              <Zap size={10} />
+              {STRINGS.HISTORY_MODE_MOVE}
+            </span>
+          )}
           <div className="history-entry-time" title={new Date(entry.createdAt).toLocaleString()}>
             <Clock size={12} />
             <span>{formatRelativeTime(entry.createdAt)}</span>

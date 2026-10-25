@@ -49,6 +49,23 @@ const {
 // Kept in main process memory to avoid sending large arrays through IPC.
 let lastBatchOperations = null;
 
+/** Real per-folder counts for a run that may have stopped early. */
+function countCopiedPerFolder(results, ops) {
+  const counts = new Map();
+  for (const op of ops) {
+    const folder = path.basename(path.dirname(op.destPath));
+    counts.set(folder, (counts.get(folder) || 0) + 1);
+  }
+  return results.filter(r => counts.has(r.folder)).map(r => ({ folder: r.folder, fileCount: counts.get(r.folder) }));
+}
+
+/** After a stopped run is undone, forget its resume record so the next start does not redo it. */
+async function clearResumeRecordFor(progressId) {
+  if (!progressId) return;
+  const progress = await progressManager.loadProgress();
+  if (progress && progress.operationId === progressId) await progressManager.clearProgress();
+}
+
 // Last folder each dialog returned, in memory only. Electron 43+ opens a dialog with no
 // defaultPath in Downloads instead of the folder Windows remembered.
 let lastSourceFolder;
@@ -554,6 +571,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Reset cancellation flag at start of new operation
       appState.resetBatchCancellation();
+      rollbackManager.clearRollbackManifest();
       
       // Re-scan to get clean state
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
@@ -666,7 +684,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Start progress tracking for crash recovery
       const allFileNames = operations.map(op => op.fileName);
-      await progressManager.startProgress({
+      const progressId = await progressManager.startProgress({
         folderPath,
         outputDir: baseOutputDir,
         mode,
@@ -680,6 +698,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Delegate file processing to the shared batch executor
       const totalBatchCount = batches.length + (blurryFolderName ? 1 : 0);
+      const doneNames = new Set();
       const { processedFiles: finalProcessed, errors } = await executeFileOperations(
         operations, mode, {
           totalFiles,
@@ -687,7 +706,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           initialProcessed: 0,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
-          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onProcessedFiles: (fileNames) => { progressManager.addProcessedFiles(fileNames); for (const n of fileNames) doneNames.add(n); },
           onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
       );
@@ -746,20 +765,23 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         completedAt: new Date().toISOString(),
       };
       
-      // Save rollback manifest before the renderer refreshes History on completion.
-      if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
+      // Undo record. Move: only a finished run (unchanged). Copy: also a stopped run,
+      // listing only the files it really copied.
+      const undoOps = mode === 'copy' ? operations.filter(op => doneNames.has(op.fileName)) : operations;
+      const saveUndo = mode === 'copy' ? undoOps.length > 0 : (!wasCancelled && mode === 'move');
+      if (config.features.ROLLBACK_ENABLED && saveUndo) {
         await rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
-          operations,
+          operations: undoOps,
           batchFolders: result.results.map(r => r.folder),
-          totalFiles: processedFiles,
+          totalFiles: mode === 'copy' ? undoOps.length : processedFiles,
           outputPrefix: safePrefix,
-          // Extended metadata for history detail display
           maxFilesPerBatch: safeMaxFiles,
           sortBy: safeSortBy,
-          batchResults: result.results, // [{ folder, fileCount }, ...]
+          batchResults: mode === 'copy' ? countCopiedPerFolder(result.results, undoOps) : result.results,
+          progressId,
         }).catch(err => logger.error('💾 [ROLLBACK] Background manifest save failed:', err.message));
       }
       
@@ -1389,6 +1411,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       if (result.success && result.sourceFolder) {
         registerAllowedPath(result.sourceFolder);
       }
+      if (result.success) await clearResumeRecordFor(result.progressId);
 
       logger.timeEnd('RESUME_ROLLBACK_EXECUTION');
       return result;
@@ -1464,6 +1487,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           batchesCreated: batchInfo?.length || 0,
           filesProcessed: alreadyProcessed,
           totalFiles,
+          mode,
           results: batchInfo || [],
           outputDir: outputDir || folderPath,
           message: 'Operation was already complete'
@@ -1485,6 +1509,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       
       // Delegate file processing to the shared batch executor
       const resumeBatchCount = batchInfo?.length || 1;
+      const doneNames = new Set();
       const { processedFiles: finalProcessed, errors } = await executeFileOperations(
         remainingOperations, mode, {
           totalFiles,
@@ -1492,7 +1517,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           initialProcessed: alreadyProcessed,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
-          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onProcessedFiles: (fileNames) => { progressManager.addProcessedFiles(fileNames); for (const n of fileNames) doneNames.add(n); },
           onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
       );
@@ -1504,13 +1529,43 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       if (!wasCancelled) {
         await progressManager.clearProgress();
       }
-      
+
+      // One undo record for the whole job: what was done before the stop plus what this resume did.
+      const remainingSet = new Set(remainingOperations);
+      const undoOps = storedOperations.filter(op => !remainingSet.has(op) || doneNames.has(op.fileName));
+      const saveUndo = undoOps.length > 0 && (mode === 'copy' || (mode === 'move' && !wasCancelled));
+      if (config.features.ROLLBACK_ENABLED && saveUndo) {
+        const saved = await rollbackManager.saveRollbackManifest({
+          sourceFolder: folderPath,
+          outputFolder: outputDir || folderPath,
+          mode,
+          operations: undoOps,
+          batchFolders: (batchInfo || []).map(b => b.folder),
+          totalFiles: undoOps.length,
+          outputPrefix: progress.outputPrefix,
+          maxFilesPerBatch: progress.maxFilesPerBatch,
+          batchResults: countCopiedPerFolder(batchInfo || [], undoOps),
+          progressId: progress.operationId,
+          resumed: true,
+        }).catch(err => { logger.error('💾 [ROLLBACK] Manifest save after resume failed:', err.message); return false; });
+        if (saved) {
+          // The stopped run's own entry is now covered by this one.
+          const newId = rollbackManager.getRollbackManifest()?.operationId;
+          const history = rollbackManager.getOperationHistory();
+          if (history.some(e => e.operationId === newId)) {
+            const older = history.filter(e => e.progressId === progress.operationId && e.operationId !== newId);
+            for (const entry of older) await rollbackManager.removeHistoryEntry(entry.operationId);
+          }
+        }
+      }
+
       return {
         success: !wasCancelled,
         cancelled: wasCancelled,
         batchesCreated: batchInfo?.length || 0,
         filesProcessed: finalProcessed,
         totalFiles,
+        mode,
         results: batchInfo || [],
         outputDir: outputDir || folderPath,
         hasErrors: errors.length > 0,
@@ -1557,7 +1612,8 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         // Send progress updates to renderer
         event.sender.send('rollback-progress', progress);
       });
-      
+      if (result.success) await clearResumeRecordFor(result.progressId);
+
       logger.timeEnd('ROLLBACK_EXECUTION');
       return result;
       
@@ -1799,6 +1855,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       if (result.success && result.sourceFolder) {
         registerAllowedPath(result.sourceFolder);
       }
+      if (result.success) await clearResumeRecordFor(result.progressId);
 
       logger.timeEnd('HISTORY_ROLLBACK_EXECUTION');
       return result;

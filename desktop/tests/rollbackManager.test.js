@@ -15,7 +15,7 @@ import crypto from 'crypto';
 let rollbackManifest = null;
 
 function saveRollbackManifest({ sourceFolder, outputFolder, mode, operations, batchFolders, totalFiles, outputPrefix, maxFilesPerBatch, sortBy, batchResults }) {
-  if (mode !== 'move') return false;
+  if (mode !== 'move' && mode !== 'copy') return false;
   rollbackManifest = {
     operationId: 'test-id',
     createdAt: new Date().toISOString(),
@@ -68,7 +68,7 @@ describe('saveRollbackManifest', () => {
     expect(result).toBe(true);
   });
 
-  it('does NOT save manifest for copy mode', () => {
+  it('saves manifest for copy mode', () => {
     clearRollbackManifest();
     const result = saveRollbackManifest({
       sourceFolder: '/photos',
@@ -80,7 +80,7 @@ describe('saveRollbackManifest', () => {
       batchFolders: ['Batch_001'],
       totalFiles: 1,
     });
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 
   it('maps operations correctly (sourcePath -> originalPath, destPath -> currentPath)', () => {

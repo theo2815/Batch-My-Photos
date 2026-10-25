@@ -23,21 +23,28 @@ import './StatusCards.css';
  */
 function UndoCompleteCard({ undoResult, onOpenFolder, onReset }) {
   const folderName = undoResult?.sourceFolder?.split(/[/\\]/).pop() || 'folder';
+  const isCopy = undoResult?.mode === 'copy';
 
   return (
     <div className="status-card complete">
       <div className="success-icon">
         <Undo2 size={64} color="var(--success)" />
       </div>
-      <h2>{STRINGS.UNDO_COMPLETE_TITLE}</h2>
+      <h2>{isCopy ? STRINGS.COPY_UNDO_COMPLETE_TITLE : STRINGS.UNDO_COMPLETE_TITLE}</h2>
       <p>
-        {STRINGS.UNDO_COMPLETE_DESC}
+        {isCopy ? STRINGS.COPY_UNDO_COMPLETE_DESC : STRINGS.UNDO_COMPLETE_DESC}
       </p>
       <div className="results-summary">
         <div className="result-row">
-          <span className="confirmation-label">{STRINGS.UNDO_COMPLETE_FILES}</span>
+          <span className="confirmation-label">{isCopy ? STRINGS.COPY_UNDO_COMPLETE_TITLE : STRINGS.UNDO_COMPLETE_FILES}</span>
           <span className="confirmation-value">{undoResult?.restoredFiles?.toLocaleString()}</span>
         </div>
+        {isCopy && undoResult?.keptFiles > 0 && (
+          <div className="result-row">
+            <span className="confirmation-label">{STRINGS.COPY_UNDO_COMPLETE_KEPT}</span>
+            <span className="confirmation-value">{undoResult.keptFiles.toLocaleString()}</span>
+          </div>
+        )}
         {undoResult?.deletedFolders > 0 && (
           <div className="result-row">
             <span className="confirmation-label">{STRINGS.UNDO_COMPLETE_FOLDERS_REMOVED}</span>
@@ -45,10 +52,11 @@ function UndoCompleteCard({ undoResult, onOpenFolder, onReset }) {
           </div>
         )}
         <div className="result-row">
-          <span className="confirmation-label">{STRINGS.UNDO_COMPLETE_LOCATION}</span>
+          <span className="confirmation-label">{isCopy ? STRINGS.COPY_UNDO_COMPLETE_LOCATION : STRINGS.UNDO_COMPLETE_LOCATION}</span>
           <span className="folder-name">{folderName}</span>
         </div>
       </div>
+      {isCopy && undoResult?.keptFiles > 0 && <p className="cancel-note">{STRINGS.COPY_UNDO_COMPLETE_KEPT_NOTE}</p>}
       <div className="action-buttons">
         <button className="btn secondary" onClick={onOpenFolder}>
           <FolderOpen size={16} /> {STRINGS.UNDO_COMPLETE_OPEN}

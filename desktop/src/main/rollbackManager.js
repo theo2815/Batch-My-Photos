@@ -9,7 +9,7 @@
  * Key features:
  * - Stores original and current file paths for reverse operations
  * - Persistent history: manifests survive app restarts (configurable)
- * - Only supports "move" mode operations (copy mode doesn't need rollback)
+ * - Supports move mode (put files back) and copy mode (delete the copies)
  * - Validates file locations before rollback (detects stale manifests)
  * - Caps history to MAX_HISTORY_ENTRIES to bound disk usage
  * - SECURITY: Manifests are encrypted at rest using AES-256-GCM
@@ -298,7 +298,7 @@ async function deleteManifestFromDisk(operationId) {
  * @param {Object} params - Operation parameters
  * @param {string} params.sourceFolder - Original source folder path
  * @param {string} params.outputFolder - Output folder where batches were created
- * @param {string} params.mode - 'move' or 'copy' (only 'move' is saved)
+ * @param {string} params.mode - 'move' or 'copy'
  * @param {Array<Object>} params.operations - Array of { fileName, sourcePath, destPath }
  * @param {Array<string>} params.batchFolders - Names of created batch folders
  * @param {number} params.totalFiles - Total files processed
@@ -306,12 +306,13 @@ async function deleteManifestFromDisk(operationId) {
  * @param {number} [params.maxFilesPerBatch] - Max files per batch setting used
  * @param {string} [params.sortBy] - Sort order used (e.g. 'name-asc')
  * @param {Array<Object>} [params.batchResults] - Per-batch results [{ folder, fileCount }]
+ * @param {string|null} [params.progressId] - Id of the run's resume record (kept so Undo can drop it)
+ * @param {boolean} [params.resumed] - True when the record covers a job that was stopped and resumed
  * @returns {Promise<boolean>} True if manifest was saved
  */
-async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operations, batchFolders, totalFiles, outputPrefix, maxFilesPerBatch, sortBy, batchResults }) {
-  // Only save manifest for 'move' mode - copy mode doesn't need rollback
-  if (mode !== 'move') {
-    logger.log('🔄 [ROLLBACK] Skipping manifest save - only supported for move mode');
+async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operations, batchFolders, totalFiles, outputPrefix, maxFilesPerBatch, sortBy, batchResults, progressId = null, resumed = false }) {
+  if (mode !== 'move' && mode !== 'copy') {
+    logger.log('🔄 [ROLLBACK] Skipping manifest save - only move and copy modes are supported');
     return false;
   }
 
@@ -335,6 +336,8 @@ async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operatio
     maxFilesPerBatch: maxFilesPerBatch || null,
     sortBy: sortBy || 'name-asc',
     batchResults: batchResults || [],
+    progressId,
+    resumed,
     operations: mappedOperations
   };
 
@@ -364,6 +367,8 @@ async function saveRollbackManifest({ sourceFolder, outputFolder, mode, operatio
         maxFilesPerBatch: maxFilesPerBatch || null,
         sortBy: sortBy || 'name-asc',
         batchResults: batchResults || [],
+        progressId,
+        resumed,
       };
 
       history.unshift(summary); // Newest first
@@ -404,6 +409,7 @@ function checkRollbackAvailable() {
     operationId: rollbackManifest.operationId,
     createdAt: rollbackManifest.createdAt,
     sourceFolder: rollbackManifest.sourceFolder,
+    mode: rollbackManifest.mode || 'move',
     totalFiles: rollbackManifest.totalFiles,
     batchFolderCount: rollbackManifest.batchFolders?.length || 0
   };
@@ -514,7 +520,11 @@ async function executeHistoryRollback(operationId, appState, progressCallback) {
     operations: manifest.operations,
     batchFolders: summary.batchFolders || [],
     outputFolder: summary.outputFolder,
-    sourceFolder: summary.sourceFolder
+    sourceFolder: summary.sourceFolder,
+    mode: summary.mode || 'move',
+    createdAt: summary.createdAt,
+    progressId: summary.progressId || null,
+    resumed: summary.resumed || false
   };
 
   // Execute rollback using the shared logic
@@ -701,6 +711,7 @@ async function checkInterruptedRollback() {
     restoredFiles: state.restoredFiles || 0,
     totalFiles: state.totalFiles || 0,
     sourceFolder: state.sourceFolder,
+    mode: state.mode || 'move',
   };
 }
 
@@ -729,6 +740,7 @@ async function resumeInterruptedRollback(appState, progressCallback) {
   // Find the history summary for batch folder info
   const history = loadHistoryIndex();
   const summary = history.find(e => e.operationId === state.operationId);
+  const mode = state.mode || summary?.mode || 'move';
 
   // Derive which operations are already restored.
   // New checkpoints store only a count (not restoredFileNames) for performance.
@@ -736,7 +748,20 @@ async function resumeInterruptedRollback(appState, progressCallback) {
   // otherwise determine remaining work by checking filesystem state.
   let remainingOps;
   let alreadyRestored;
-  if (state.restoredFileNames && state.restoredFileNames.length > 0) {
+  if (mode === 'copy') {
+    // Copy undo: a copy is done once it is gone from its batch folder
+    try {
+      await fsPromises.stat(summary?.outputFolder || state.outputFolder);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      return { success: false, mode, error: 'Cannot find the output folder. Connect the drive and try again.' };
+    }
+    const stillThere = await Promise.all(
+      manifest.operations.map(op => fsPromises.access(op.currentPath).then(() => true, err => err.code !== 'ENOENT'))
+    );
+    remainingOps = manifest.operations.filter((_, i) => stillThere[i]);
+    alreadyRestored = manifest.operations.length - remainingOps.length;
+  } else if (state.restoredFileNames && state.restoredFileNames.length > 0) {
     // Legacy path: use the persisted filename list
     const restoredSet = new Set(state.restoredFileNames);
     remainingOps = manifest.operations.filter(op => !restoredSet.has(op.fileName));
@@ -771,6 +796,9 @@ async function resumeInterruptedRollback(appState, progressCallback) {
       totalFiles: state.totalFiles,
       sourceFolder: state.sourceFolder,
       deletedFolders: 0,
+      mode,
+      keptFiles: 0,
+      progressId: summary?.progressId || null,
       resumed: true
     };
   }
@@ -781,7 +809,11 @@ async function resumeInterruptedRollback(appState, progressCallback) {
     operations: remainingOps,
     batchFolders: summary?.batchFolders || state.batchFolders || [],
     outputFolder: summary?.outputFolder || state.outputFolder,
-    sourceFolder: state.sourceFolder
+    sourceFolder: state.sourceFolder,
+    mode,
+    createdAt: summary?.createdAt || state.createdAt,
+    progressId: summary?.progressId || null,
+    resumed: summary?.resumed || state.resumed || false
   };
 
   const result = await executeRollbackInternal(partialManifest, appState, progressCallback, {
@@ -798,6 +830,39 @@ async function resumeInterruptedRollback(appState, progressCallback) {
   return result;
 }
 
+// Copy-mode undo deletes files, so it deletes a copy only when it is provably a spare.
+const TIME_SLACK_MS = 2000; // FAT/exFAT keep modified times in coarse steps
+
+function normPath(p) {
+  const resolved = path.resolve(p);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+/** Returns 'delete', 'gone' or 'kept'. Throws on unexpected file-system errors. */
+async function judgeCopy(op, runEndMs) {
+  if (normPath(op.currentPath) === normPath(op.originalPath)) return 'kept';
+  let copy;
+  try {
+    copy = await fsPromises.lstat(op.currentPath);
+  } catch (err) {
+    if (err.code === 'ENOENT') return 'gone';
+    throw err;
+  }
+  let orig;
+  try {
+    orig = await fsPromises.lstat(op.originalPath);
+  } catch (err) {
+    if (err.code === 'ENOENT') return 'kept'; // the copy may be the only one left
+    throw err;
+  }
+  if (!copy.isFile() || !orig.isFile() || copy.size !== orig.size) return 'kept';
+  // Windows copies keep the original's modified time; other systems stamp the copy time.
+  // Either way, editing either file after the run fails both tests.
+  const sameTime = Math.abs(copy.mtimeMs - orig.mtimeMs) <= TIME_SLACK_MS;
+  const bothBeforeRunEnd = Math.max(copy.mtimeMs, orig.mtimeMs) <= runEndMs + TIME_SLACK_MS;
+  return sameTime || bothBeforeRunEnd ? 'delete' : 'kept';
+}
+
 /**
  * Internal rollback executor - shared between session and history rollback.
  * 
@@ -808,7 +873,7 @@ async function resumeInterruptedRollback(appState, progressCallback) {
  * @returns {Promise<Object>} Result object with success status
  */
 async function executeRollbackInternal(manifest, appState, progressCallback, resumeState = null) {
-  const { operations, batchFolders, outputFolder, sourceFolder } = manifest;
+  const { operations, batchFolders, outputFolder, sourceFolder, mode = 'move', createdAt, progressId = null, resumed = false } = manifest;
 
   logger.log('🔄 [ROLLBACK] Starting rollback operation');
   logger.log('   - Files to restore:', operations.length);
@@ -819,13 +884,30 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
     return { success: false, error: 'Rollback manifest references a protected system location' };
   }
 
+  if (mode === 'copy') {
+    const batchDirs = new Set(outputFolder ? (batchFolders || []).map(f => normPath(path.join(outputFolder, f))) : []);
+    if ((batchFolders || []).some(f => !f || f === '.' || f === '..' || path.basename(f) !== f) || operations.some(op => !batchDirs.has(normPath(path.dirname(op.currentPath))))) {
+      logger.warn('🔒 [SECURITY] Copy undo record points outside its batch folders — refusing');
+      return { success: false, mode, error: 'This undo record does not match its batch folders, so nothing was deleted.' };
+    }
+    if (outputFolder) {
+      try {
+        await fsPromises.stat(outputFolder);
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+        return { success: false, mode, error: 'Cannot find the output folder. Connect the drive and try again.' };
+      }
+    }
+  }
+
   let restoredFiles = resumeState?.initialRestored || 0;
+  let keptFiles = 0;
   const restoredFileNames = resumeState?.existingRestoredNames ? [...resumeState.existingRestoredNames] : [];
   const errors = [];
 
   // Detect cross-drive rollback once upfront to choose the right strategy
   let crossDrive = false;
-  if (operations.length > 0) {
+  if (mode !== 'copy' && operations.length > 0) {
     crossDrive = !(await isSameDrive(operations[0].currentPath, operations[0].originalPath));
     if (crossDrive) {
       logger.log('📀 [ROLLBACK] Cross-drive detected — using copy+delete strategy');
@@ -852,6 +934,9 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
         operationId: manifest.operationId,
         totalFiles: totalToRestore,
         restoredFiles,
+        mode,
+        createdAt,
+        resumed,
         sourceFolder,
         outputFolder,
         batchFolders: batchFolders || [],
@@ -868,20 +953,82 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
   await saveRollbackState();
 
   // Pre-create all unique parent directories ONCE (instead of per-file)
-  const uniqueDirs = new Set();
-  for (const op of operations) {
-    uniqueDirs.add(path.dirname(op.originalPath));
-  }
-  for (const dir of uniqueDirs) {
-    try {
-      await fsPromises.mkdir(dir, { recursive: true });
-    } catch (err) {
-      // If we can't create a directory, individual file moves will fail and be caught below
-      logger.warn('⚠️ [ROLLBACK] Could not pre-create directory:', dir, err.message);
+  if (mode !== 'copy') {
+    const uniqueDirs = new Set();
+    for (const op of operations) {
+      uniqueDirs.add(path.dirname(op.originalPath));
+    }
+    for (const dir of uniqueDirs) {
+      try {
+        await fsPromises.mkdir(dir, { recursive: true });
+      } catch (err) {
+        // If we can't create a directory, individual file moves will fail and be caught below
+        logger.warn('⚠️ [ROLLBACK] Could not pre-create directory:', dir, err.message);
+      }
     }
   }
 
-  if (crossDrive) {
+  if (mode === 'copy') {
+    // ================================================================
+    // COPY: delete each copy only when judgeCopy proves it is a spare
+    // ================================================================
+    logger.log('🗑️ [ROLLBACK] Copy undo with', MAX_FILE_CONCURRENCY, 'concurrent workers');
+    // A resumed job spans the stop, so only the same-time test is safe.
+    const runEndMs = resumed ? NaN : Date.parse(createdAt);
+
+    const cursor = { index: 0 };
+    const getNextIndex = () => cursor.index++;
+
+    const worker = async () => {
+      while (!appState?.batchCancelled) {
+        const opIndex = getNextIndex();
+        if (opIndex >= operations.length) break;
+
+        const op = operations[opIndex];
+        try {
+          const verdict = await judgeCopy(op, runEndMs);
+          if (verdict === 'delete') {
+            try {
+              await fsPromises.unlink(op.currentPath);
+            } catch (err) {
+              if (err.code !== 'ENOENT') throw err;
+            }
+          }
+          if (verdict === 'kept') keptFiles++;
+          else restoredFiles++;
+          rollbackProgressDirty = true;
+        } catch (err) {
+          errors.push({ file: op.fileName, error: err.message });
+        }
+      }
+    };
+
+    const workers = [];
+    const threadCount = Math.min(MAX_FILE_CONCURRENCY, operations.length);
+    for (let i = 0; i < threadCount; i++) {
+      workers.push(worker());
+    }
+
+    let progressActive = true;
+    const progressLoop = async () => {
+      while (progressActive) {
+        await new Promise(r => setTimeout(r, 500));
+        if (progressCallback && progressActive) {
+          const done = restoredFiles + keptFiles + errors.length;
+          progressCallback({ current: done, total: totalToRestore, restoredFiles: done });
+        }
+        if (rollbackProgressDirty && (Date.now() - lastRollbackSave) >= ROLLBACK_SAVE_INTERVAL) {
+          await saveRollbackState();
+        }
+      }
+    };
+    const progressPromise = progressLoop();
+
+    await Promise.all(workers);
+    progressActive = false;
+    await progressPromise;
+
+  } else if (crossDrive) {
     // ================================================================
     // CROSS-DRIVE: concurrent worker pool (matches batch executor)
     // ================================================================
@@ -1061,8 +1208,11 @@ async function executeRollbackInternal(manifest, appState, progressCallback, res
     success: !wasCancelled && errors.length === 0,
     cancelled: wasCancelled,
     restoredFiles,
+    keptFiles,
     totalFiles: totalToRestore,
     deletedFolders,
+    mode,
+    progressId,
     sourceFolder,
     hasErrors: errors.length > 0,
     errorCount: errors.length,
