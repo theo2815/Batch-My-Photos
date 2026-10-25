@@ -327,6 +327,7 @@ describe('upload engine', () => {
     expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: [] }, () => {})).toEqual({ success: false, error: 'Nothing to upload.' });
     expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: ['Race'] }, () => {})).toEqual({ success: false, error: 'Nothing to upload.' });
     expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: ['../x'] }, () => {})).toEqual({ success: false, error: 'Invalid upload request.' });
+    expect(await service.startUpload({ rootPath: root, eventId: 'e', folders: ['Race\\..\\..\\x'] }, () => {})).toEqual({ success: false, error: 'Invalid upload request.' });
     const other = tempRoot('qp-unregistered-upload-'); write(other, 'a.jpg');
     expect(await service.startUpload({ rootPath: other, eventId: 'e', folders: [''] }, () => {})).toEqual({ success: false, error: 'Access denied: folder not selected through dialog' });
   });
@@ -480,6 +481,18 @@ describe('upload engine', () => {
     expect(last.phase).toBe('cancelled');
     expect(last.counts.uploaded).toBeGreaterThanOrEqual(1);
     expect(last.counts.uploaded + last.counts.failed).toBeLessThan(8);
+  });
+
+  it('cancel while the folders are listed stops the upload', async () => {
+    const root = tempRoot('qp-listcancel-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    routes(directTable()); fakeHttps();
+    const real = fs.promises.readdir;
+    const readdir = vi.spyOn(fs.promises, 'readdir').mockImplementationOnce((...args) => { service.cancelUpload(); return real(...args); });
+    const { finished } = await run(root, ['']);
+    readdir.mockRestore();
+    expect((await finished()).phase).toBe('cancelled');
+    expect(calls('begin')).toHaveLength(0);
+    expect(uploadRecord.load()).toBeNull();
   });
 
   it('falls back to multipart when begin says so', async () => {
@@ -813,6 +826,37 @@ describe('resume', () => {
     expect(calls('begin').every(([p]) => p.includes('/events/event-1/'))).toBe(true);
     expect(await service.scanFolder(elsewhere)).toEqual({ success: false, error: 'Access denied: folder not selected through dialog' });
     expect(uploadRecord.load()).toBeNull();
+  });
+
+  it('the resume scan holds the upload slot', async () => {
+    earlierRun('qp-resume-slot-');
+    routes(directTable()); fakeHttps();
+    const real = fs.promises.readdir;
+    let open; const gate = new Promise(resolve => { open = resolve; });
+    const readdir = vi.spyOn(fs.promises, 'readdir').mockImplementation(async (...args) => { await gate; return real(...args); });
+    const events = [];
+    const first = service.startUpload({ resume: true }, (payload) => events.push(payload));
+    try {
+      await vi.waitFor(() => expect(readdir).toHaveBeenCalled());
+      expect(service.isUploading()).toBe(true);
+      service.discardPending();
+      expect(uploadRecord.load()).not.toBeNull();
+      expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'An upload is already running.' });
+    } finally { open(); readdir.mockRestore(); }
+    expect(await first).toMatchObject({ success: true, total: 2 });
+    expect((await untilSettled(events)).phase).toBe('done');
+  });
+
+  it('a missing subfolder is reported and the rest resumes', async () => { // D1 (a)
+    const root = earlierRun('qp-gone-');
+    fs.rmSync(path.join(root, 'B'), { recursive: true });
+    routes(directTable()); fakeHttps();
+    const events = [];
+    expect(await service.startUpload({ resume: true }, (payload) => events.push(payload))).toMatchObject({ success: true, total: 1 });
+    const last = await untilSettled(events);
+    expect(last.phase).toBe('done');
+    expect(last.failures[0].code).toBe('FOLDER_MISSING');
+    expect(calls('begin')).toHaveLength(1);
   });
 
   it("has nothing to resume without a record or for another account's", async () => { // R5

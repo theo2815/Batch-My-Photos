@@ -81,4 +81,4 @@ function markFinished(relPath) {
   else write({ ...record, finished, updatedAt: new Date().toISOString() });
 }
 
-module.exports = { load, save, markFinished, clear };
+module.exports = { load, save, markFinished, clear, isRelPath };
