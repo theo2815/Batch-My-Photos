@@ -935,9 +935,12 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       };
     } catch (error) {
       // ai-api refused the saved beta key (revoked or wrong): forget it so Settings asks again.
-      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 40[13]\b/.test(error.message || '')) {
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 401\b/.test(error.message || '')) {
         require('./blurBetaKeyStore').clear();
         return { success: false, error: 'Your blur beta key was not accepted. Enter it again in Settings.', aiUnavailable: false };
+      }
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 403\b/.test(error.message || '')) {
+        return { success: false, error: 'The blur service refused this request. Check your beta key in Settings, or try again later.', aiUnavailable: false };
       }
       // Check if this is an AI service unavailability error
       const isAiError = error.message?.includes('AI service');
