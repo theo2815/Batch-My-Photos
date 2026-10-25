@@ -236,7 +236,7 @@ export default function DeviceManagerModal({ isOpen, onClose }) {
             display: 'flex', alignItems: 'center', gap: '4px',
           }}>
             <Trash2 size={12} />
-            {removalsUsed} / {removalsLimit} removals used this month
+            {removalsUsed} / {removalsLimit} removals used in 30 days
           </span>
           {hasCooldown && (
             <span style={{
@@ -280,7 +280,7 @@ export default function DeviceManagerModal({ isOpen, onClose }) {
               lineHeight: '1.4',
             }}>
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span>You&apos;ve used all {removalsLimit} device removals for this billing period. Removals will reset next month.</span>
+              <span>You&apos;ve used all {removalsLimit} device removals allowed in 30 days. You can remove a device again later.</span>
             </div>
           )}
 
@@ -329,7 +329,7 @@ export default function DeviceManagerModal({ isOpen, onClose }) {
                   <strong>Remove &ldquo;{confirmDevice.label}&rdquo;?</strong>
                   <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: '12px' }}>
                     <li>A <strong>24-hour cooldown</strong> will start — no new devices can be added during this time.</li>
-                    <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left this month.</li>
+                    <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left in 30 days.</li>
                     <li>Re-adding the same device later will bypass the cooldown.</li>
                   </ul>
                 </div>
@@ -478,7 +478,7 @@ export default function DeviceManagerModal({ isOpen, onClose }) {
                       transition: 'all 0.15s ease',
                       flexShrink: 0,
                     }}
-                    title={atRemovalLimit ? 'Monthly removal limit reached' : isRemoving ? 'Removing...' : 'Remove this device'}
+                    title={atRemovalLimit ? '30-day removal limit reached' : isRemoving ? 'Removing...' : 'Remove this device'}
                   >
                     {isRemoving ? <Loader size={14} className="spin" /> : <Trash2 size={14} />}
                     Remove

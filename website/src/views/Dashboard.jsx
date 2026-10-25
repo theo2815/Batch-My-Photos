@@ -399,7 +399,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-4 text-[11px] text-text-muted">
                 <span className={`flex items-center gap-1 ${atRemovalLimit ? 'text-red-700' : ''}`}>
                   <Trash2 className="w-3 h-3" />
-                  <span className="font-mono">{removalsUsed} / {removalsLimit}</span> removals used this month
+                  <span className="font-mono">{removalsUsed} / {removalsLimit}</span> removals used in 30 days
                 </span>
                 {hasCooldown && (
                   <span className="flex items-center gap-1 text-amber-700">
@@ -421,7 +421,7 @@ export default function Dashboard() {
               {atRemovalLimit && (
                 <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs leading-relaxed bg-red-500/10 border border-red-500/20 text-red-700">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>You&apos;ve used all {removalsLimit} device removals for this billing period. Removals will reset next month.</span>
+                  <span>You&apos;ve used all {removalsLimit} device removals allowed in 30 days. You can remove a device again later.</span>
                 </div>
               )}
 
@@ -441,7 +441,7 @@ export default function Dashboard() {
                       <p className="font-semibold mb-1">Remove &ldquo;{confirmRemoveDevice.label}&rdquo;?</p>
                       <ul className="list-disc pl-4 space-y-0.5 text-text-muted">
                         <li>A <strong>24-hour cooldown</strong> will start &mdash; no new devices can be added.</li>
-                        <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left this month.</li>
+                        <li>You have <strong>{removalsLimit - removalsUsed}</strong> removal{removalsLimit - removalsUsed !== 1 ? 's' : ''} left in 30 days.</li>
                         <li>Re-adding the same device later will bypass the cooldown.</li>
                       </ul>
                     </div>
@@ -507,7 +507,7 @@ export default function Dashboard() {
                             onClick={() => promptRemoveDevice(device.id, device.device_label)}
                             disabled={!canRemove}
                             className="p-2 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                            title={atRemovalLimit ? 'Monthly removal limit reached' : removingDeviceId === device.id ? 'Removing…' : 'Remove device'}
+                            title={atRemovalLimit ? '30-day removal limit reached' : removingDeviceId === device.id ? 'Removing…' : 'Remove device'}
                           >
                             {removingDeviceId === device.id ? (
                               <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
@@ -525,7 +525,7 @@ export default function Dashboard() {
               {/* Footer note */}
               <div className="mt-4 pt-4 border-t border-border-subtle">
                 <p className="text-[11px] text-text-muted leading-relaxed">
-                  Your account allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per billing month.
+                  Your account allows up to {deviceLimit} device{deviceLimit !== 1 ? 's' : ''}. Removing a device starts a 24-hour cooldown before new devices can be added. You get {removalsLimit} removals per 30 days.
                 </p>
               </div>
             </div>
