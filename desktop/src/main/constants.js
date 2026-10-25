@@ -102,6 +102,9 @@ const PREVIEW_JPEG_QUALITY = 85;
  */
 const PREVIEW_CACHE_SIZE = 10;
 
+/** Largest original (bytes) the photo info panel reads into memory; bigger files show the size only. */
+const PHOTO_METADATA_MAX_BYTES = 64 * 1024 * 1024;
+
 /**
  * Largest image (width × height) sharp may decode for thumbnails, preview and blur scoring.
  * Covers every common camera up to 102 MP (Fujifilm GFX100: 11648 × 8736 ≈ 101.8 M); a larger
@@ -356,6 +359,7 @@ module.exports = {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  PHOTO_METADATA_MAX_BYTES,
   SHARP_MAX_INPUT_PIXELS,
   EXIF_CONCURRENCY,
   BLUR_CONCURRENCY,

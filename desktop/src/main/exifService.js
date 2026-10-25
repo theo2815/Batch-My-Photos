@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const exifr = require('exifr');
 const sharp = require('sharp');
-const { EXIF_CONCURRENCY, SHARP_MAX_INPUT_PIXELS } = require('./constants');
+const { EXIF_CONCURRENCY, SHARP_MAX_INPUT_PIXELS, PHOTO_METADATA_MAX_BYTES } = require('./constants');
 const logger = require('../utils/logger');
 
 /**
@@ -414,6 +414,7 @@ async function readPhotoMetadata(filePath) {
   const withSize = (result) => ({ ...result, fileSizeBytes });
   try {
     if (!METADATA_EXTENSIONS.includes(path.extname(filePath).toLowerCase())) return withSize({ status: 'unavailable' });
+    if (fileSizeBytes > PHOTO_METADATA_MAX_BYTES) return withSize({ status: 'unavailable' });
     if (await startsWithZeroZero(filePath)) return withSize({ status: 'unavailable' });
     // exifr reads a cut-short block past its buffer's end, so it gets the bytes in memory of their own: past the
     // end is then an error, not other data. Node pools files under 4 KB into a shared slab; those are copied.
