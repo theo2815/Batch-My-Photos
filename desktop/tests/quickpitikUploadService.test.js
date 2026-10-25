@@ -564,6 +564,30 @@ describe('upload engine', () => {
     expect(beforeEnd.at(-1).phase).toBe('uploading');
   });
 
+  it('a run of failed files stops the whole upload and keeps the record', async () => {
+    const root = tempRoot('qp-unreachable-'); for (let i = 0; i < 20; i++) write(root, `IMG_${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    routes({ ...directTable(), begin: async () => { throw netError('ENOTFOUND'); } });
+    service._internals.sleep = () => new Promise(r => setTimeout(r, 1));
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('error');
+    expect(last.error.code).toBe('UNREACHABLE');
+    expect(calls('begin').length).toBeLessThan(80);
+    expect(uploadRecord.load()).not.toBeNull();
+  });
+
+  it('a slow network with some successes does not stop', async () => {
+    const root = tempRoot('qp-flaky-'); for (let i = 0; i < 20; i++) write(root, `IMG_${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    const table = directTable();
+    routes({ ...table, begin: async (body) => {
+      if (Number(/\d+/.exec(body.originalFilename)[0]) % 5 !== 4) throw netError('ENOTFOUND');
+      return table.begin(body);
+    } });
+    fakeHttps();
+    service._internals.sleep = () => new Promise(r => setTimeout(r, 1));
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('done');
+  });
+
   it('refuses to start while another upload is running', async () => {
     const root = tempRoot('qp-twice-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
     let release;

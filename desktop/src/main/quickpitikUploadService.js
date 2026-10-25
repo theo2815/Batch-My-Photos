@@ -22,7 +22,7 @@ const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const {
   STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH, QP_UPLOAD_CONCURRENCY, QP_HASH_CONCURRENCY,
   QP_EXISTS_CHUNK, QP_COMMIT_TIMEOUT_MS, QP_PUT_STALL_MS, QP_PUT_DEADLINE_MS, QP_COMMIT_BUSY_WINDOW_MS,
-  QP_MAX_RETRIES_PER_PHASE, QP_PROGRESS_INTERVAL_MS,
+  QP_MAX_RETRIES_PER_PHASE, QP_PROGRESS_INTERVAL_MS, QP_MAX_CONSECUTIVE_FAILURES,
 } = require('./constants');
 const config = require('./config');
 const qpAuth = require('./quickpitikAuthService');
@@ -562,12 +562,17 @@ async function runUpload(ctx) {
           const outcome = await uploadOne(ctx, file);
           ctx.counts[outcome] += 1;
           if (outcome !== 'uploaded') ctx.addBytes(file.sizeBytes);
+          if (outcome === 'uploaded' || outcome === 'alreadyThere') ctx.failStreak = 0;
         } catch (error) {
           if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError || TERMINAL_PER_UPLOAD.has(codeOf(error))) {
             ctx.stop(error); // the other workers finish the file they are on, then stop
             return;
           }
           recordFailure(ctx, folder, file, netCode(error) || 'UPLOAD_FAILED', error.message, isRetryable(error));
+          if (isRetryable(error)) {
+            ctx.failStreak = (ctx.failStreak || 0) + 1;
+            if (ctx.failStreak >= QP_MAX_CONSECUTIVE_FAILURES) ctx.stop(Object.assign(new Error('QuickPitik cannot be reached. Check your connection, then resume.'), { code: 'UNREACHABLE' }));
+          }
         }
         ctx.emit({ phase: 'uploading' });
       });
