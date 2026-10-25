@@ -102,7 +102,7 @@ function createWindow() {
     // - Prod: Strict policy, only allow self
     const cspPolicy = shouldUseDistBuild && isPackaged
       ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.batchmyphotos.com; base-uri 'none'; form-action 'none';"
-      :"default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
+      : "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
     
     callback({
       responseHeaders: {
@@ -148,7 +148,7 @@ function createWindow() {
       message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
     }).then(({ response }) => {
       if (response === 1) { confirmed = true; mainWindow.close(); }
-    }).finally(() => { confirming = false; });
+    }).catch(() => {}).finally(() => { confirming = false; });
   });
 
   mainWindow.on('closed', () => {
