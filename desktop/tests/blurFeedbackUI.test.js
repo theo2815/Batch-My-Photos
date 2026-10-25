@@ -843,7 +843,12 @@ describe('done screen names the _Blurry folder', () => {
   it('shows no _Blurry line after a cancelled run', () => {
     expect(card({ ...finished, cancelled: true, filesProcessed: 10, totalFiles: 36 })).not.toContain('flagged as blurry');
   });
-  it('keeps the count and shows no line without a _Blurry folder, as after a resumed run', () => {
+  it('names the _Blurry folder after a resumed run that has the field', () => {
+    const t = card({ ...finished, filesProcessed: 36, totalFiles: 36 });
+    expect(t).toContain('Successfully created 6 batch folders.');
+    expect(t).toContain('6 files flagged as blurry went to Run_Blurry. Check them before you upload.');
+  });
+  it('keeps the count and shows no line without a _Blurry folder', () => {
     const t = card({ mode: 'move', batchesCreated: 3, results: batches(3) });
     expect(t).toContain('Successfully created 3 batch folders.');
     expect(t).not.toContain('flagged as blurry');
