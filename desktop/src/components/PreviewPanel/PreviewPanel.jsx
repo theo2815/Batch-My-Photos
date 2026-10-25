@@ -9,6 +9,7 @@ import { FolderOpen, TriangleAlert, Zap, Copy, RotateCcw, CheckCircle, Loader2 }
 import StatsGrid from './StatsGrid';
 import SettingsPanel from './SettingsPanel';
 import BatchPreview from './BatchPreview';
+import batchNaming from '../../utils/batchNaming';
 import './PreviewPanel.css';
 
 /**
@@ -124,15 +125,15 @@ function PreviewPanel({
       {/* Confirmation Box */}
       <div className="confirmation-box">
         {blurDetection?.isAnalyzing ? (
-          <p className="note">Blur analysis is still running. No photos will go to {outputPrefix}_Blurry.</p>
+          <p className="note">Blur analysis is still running. No photos will go to {batchNaming.generateBlurryFolderName(outputPrefix)}.</p>
         ) : blurDetection?.blurryCount > 0 && (
           <p className="note">
-            {blurDetection.blurryCount} flagged group{blurDetection.blurryCount > 1 ? 's' : ''} will go to <strong>{outputPrefix}_Blurry</strong>. Review that folder after the batch.
+            {blurDetection.blurryCount} flagged group{blurDetection.blurryCount > 1 ? 's' : ''} will go to <strong>{batchNaming.generateBlurryFolderName(outputPrefix)}</strong>. Review that folder after the batch.
           </p>
         )}
         {!previewResults?.batchCount && blurDetection?.blurryCount > 0 ? (
           <p>
-            Every photo is flagged as blurry, so no numbered folders will be created. All photos will go to <strong>{outputPrefix}_Blurry</strong>.
+            Every photo is flagged as blurry, so no numbered folders will be created. All photos will go to <strong>{batchNaming.generateBlurryFolderName(outputPrefix)}</strong>.
           </p>
         ) : (
           <p>

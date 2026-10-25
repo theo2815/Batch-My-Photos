@@ -755,6 +755,26 @@ describe('explicit beta feedback consent', () => {
     again.props.onClick({ detail: 1 });
     expect(d.toggleBlurFlag).toHaveBeenCalledWith('A');
   });
+  it('says all restored in the header when every flagged group is restored', () => {
+    expect(text(list(flagged(['A', 'B'])))).toContain('Blur suggestions (all restored)');
+  });
+  it('names the real expanded _Blurry folder on screen for a {date} prefix', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2024-06-15T10:30:00Z'));
+      const d = flagged(['B']);
+      const batch = { batchDetails: [{ batchNumber: 1, fileCount: 1, allFiles: ['A.jpg'] }], outputPrefix: 'Ev_{date}', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection: d };
+      const section = nodes(render(BatchPreview, batch)).find(n => n.type?.name === 'BlurryPhotosSection');
+      hooks.values = [true]; hooks.deps = []; hooks.cleanups = []; hooks.effects = [];
+      const tree = render(section.type, section.props);
+      expect(text(tree)).toContain('Will be placed in Ev_2024-06-15_Blurry');
+      expect(button(tree, 'Flag again').props.title).toBe('Send back to Ev_2024-06-15_Blurry');
+      const settings = { outputPrefix: 'Ev_{date}', batchMode: 'copy' };
+      expect(text(render(PreviewPanel, { settings, blurDetection: { isAnalyzing: true, blurryCount: 2 } }))).toContain('No photos will go to Ev_2024-06-15_Blurry.');
+      expect(text(render(PreviewPanel, { settings, blurDetection: { blurryCount: 2 } }))).toContain('2 flagged groups will go to Ev_2024-06-15_Blurry.');
+      expect(text(render(PreviewPanel, { settings, previewResults: { batchCount: 0, batchDetails: [] }, blurDetection: { blurryCount: 1 } }))).toContain('All photos will go to Ev_2024-06-15_Blurry.');
+    } finally { vi.useRealTimers(); }
+  });
   it('counts a double-click on Restore or Flag again as one click', () => {
     const d = flagged(['A']);
     const [rowA, rowB] = rows(list(d));
@@ -785,7 +805,7 @@ describe('explicit beta feedback consent', () => {
   });
   it('keeps the list when every flagged group is restored', () => {
     const tree = list(flagged(['A', 'B']));
-    expect(text(tree)).toContain('Blur suggestions (0 groups)');
+    expect(text(tree)).toContain('Blur suggestions (all restored)');
     expect(text(tree)).toContain('2 groups restored to normal batches');
     expect(text(tree)).not.toContain('Will be placed in');
     expect(text(tree)).not.toContain('No blur suggestions for this analysis.');

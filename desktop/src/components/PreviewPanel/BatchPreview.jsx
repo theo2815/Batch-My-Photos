@@ -345,10 +345,10 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
       >
         <ScanEye size={18} className="icon-inline" />
         <span className="blurry-title">
-          {analyzedCount === 0 ? 'No blur results available' : flaggedGroups.length > 0 ? `Blur suggestions (${blurryCount} group${blurryCount === 1 ? '' : 's'})` : 'No blur suggestions'}
+          {analyzedCount === 0 ? 'No blur results available' : flaggedGroups.length > 0 ? (blurryCount === 0 ? 'Blur suggestions (all restored)' : `Blur suggestions (${blurryCount} group${blurryCount === 1 ? '' : 's'})`) : 'No blur suggestions'}
         </span>
         {analyzedCount > 0 && unanalyzedCount === 0 && flaggedGroups.length === 0 && <CheckCircle size={16} className="blurry-check" />}
-        {blurryCount > 0 && <span className="blurry-folder-hint">Will be placed in {outputPrefix}_Blurry</span>}
+        {blurryCount > 0 && <span className="blurry-folder-hint">Will be placed in {batchNaming.generateBlurryFolderName(outputPrefix)}</span>}
         <span className="expand-icon">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
@@ -426,7 +426,7 @@ function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnai
                 <button
                   className="unflag-btn"
                   onClick={(event) => { if (event.detail > 1) return; toggleBlurFlag(baseName); }}
-                  title={restored ? `Send back to ${outputPrefix}_Blurry` : 'Restore to normal batches'}
+                  title={restored ? `Send back to ${batchNaming.generateBlurryFolderName(outputPrefix)}` : 'Restore to normal batches'}
                   aria-label={restored ? `Flag ${baseName} as blurry again` : `Restore ${baseName} to normal batches`}
                 >
                   {restored ? <Flag size={14} /> : <Undo2 size={14} />}
