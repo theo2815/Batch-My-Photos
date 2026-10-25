@@ -15,7 +15,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 let unheardAuthCallback = null;
 let authCallbackListeners = 0;
 ipcRenderer.on('auth-callback', (_event, data) => {
-  if (authCallbackListeners === 0) unheardAuthCallback = data;
+  if (authCallbackListeners === 0) unheardAuthCallback = { data, at: Date.now() };
 });
 
 // Expose protected methods to the renderer process
@@ -161,11 +161,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('auth-callback', listener);
     authCallbackListeners++;
-    if (unheardAuthCallback) {
-      const data = unheardAuthCallback;
-      unheardAuthCallback = null;
-      callback(data);
-    }
+    const unheard = unheardAuthCallback;
+    unheardAuthCallback = null;
+    if (unheard && Date.now() - unheard.at < 30000) callback(unheard.data);
     return () => {
       authCallbackListeners--;
       ipcRenderer.removeListener('auth-callback', listener);
