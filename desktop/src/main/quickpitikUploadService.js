@@ -599,26 +599,28 @@ let current = null; // one upload per process
  */
 async function startUpload(request, send) {
   if (current) return { success: false, error: 'An upload is already running.' };
-  if (request?.resume === true) return resumeUpload(send); // the saved record decides; the screen's paths are not used
-  const slot = current = { stop() {} }; // holds the place while the folders are listed
+  const slot = current = { stopped: false, stop() { slot.stopped = true; } }; // holds the place while the folders are listed
   try {
-    return await beginUpload(request, send);
+    // A resume: the saved record decides; the screen's paths are not used
+    return request?.resume === true ? await resumeUpload(send, slot) : await beginUpload(request, send, slot);
   } finally {
     if (current === slot) current = null;
   }
 }
 
-async function beginUpload(request, send) {
+async function beginUpload(request, send, slot) {
   const { rootPath, eventId, eventName, folders } = request || {};
   if (typeof rootPath !== 'string' || typeof eventId !== 'string' || !Array.isArray(folders)
-      || folders.some(rel => typeof rel !== 'string' || rel.split('/').includes('..') || path.isAbsolute(rel))) {
+      || folders.some(rel => !uploadRecord.isRelPath(rel))) {
     return { success: false, error: 'Invalid upload request.' };
   }
   if (!(await isPathAllowedAsync(rootPath))) return { success: false, error: ACCESS_DENIED };
   const root = path.resolve(rootPath);
   const plan = [];
+  const missing = [];
   for (const relPath of folders) {
     const dir = relPath === '' ? root : path.join(root, ...relPath.split('/'));
+    if (!(await isFolder(dir))) { missing.push(relPath); continue; }
     if (!(await isPathAllowedAsync(dir))) return { success: false, error: ACCESS_DENIED };
     const { files } = await listFolder(dir);
     if (files.length > 0) plan.push({ relPath, dir, files });
@@ -631,6 +633,8 @@ async function beginUpload(request, send) {
     account: qpAuth.getAccountId(), eventId, eventName: typeof eventName === 'string' && eventName ? eventName.slice(0, 200) : eventId,
     root, selected: folders,
   });
+  for (const relPath of missing) recordFailure(current, { relPath }, { name: '' }, 'FOLDER_MISSING', 'This subfolder is no longer there.', false);
+  if (slot.stopped) current.stop(new CancelledError());
   runUpload(current).finally(() => { current = null; });
   return { success: true, total };
 }
@@ -659,7 +663,7 @@ async function getPending() {
 }
 
 /** Re-allow the saved folder (this one only, only now), scan it, then upload the subfolders that did not finish. */
-async function resumeUpload(send) {
+async function resumeUpload(send, slot) {
   const record = ownRecord();
   if (!record) return { success: false, error: 'There is no upload to resume.' };
   if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
@@ -667,7 +671,7 @@ async function resumeUpload(send) {
   const scan = await scanFolder(record.root);
   if (!scan.success) return scan;
   const folders = record.selected.filter(rel => !record.finished.includes(rel));
-  const started = await startUpload({ rootPath: record.root, eventId: record.eventId, eventName: record.eventName, folders }, send);
+  const started = await beginUpload({ rootPath: record.root, eventId: record.eventId, eventName: record.eventName, folders }, send, slot);
   return started.success ? { ...started, eventId: record.eventId, folders, scan } : started;
 }
 
