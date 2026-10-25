@@ -720,7 +720,9 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalFiles,
         allFileNames,
         operations,
-        batchInfo
+        batchInfo,
+        blurryFolderName,
+        blurryFileCount: blurryFiles.length
       });
       
       // Delegate file processing to the shared batch executor
@@ -1470,7 +1472,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       }
       
       const { folderPath, outputDir, mode, processedFileNames, processedFiles: checkpointCount,
-              totalFiles, operations: storedOperations, batchInfo } = progress;
+              totalFiles, operations: storedOperations, batchInfo, blurryFolderName, blurryFileCount } = progress;
 
       // Register the folder path as allowed for this session
       registerAllowedPath(folderPath);
@@ -1516,6 +1518,8 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           totalFiles,
           mode,
           results: batchInfo || [],
+          blurryFolderName,
+          blurryFileCount,
           outputDir: outputDir || folderPath,
           message: 'Operation was already complete'
         };
@@ -1594,6 +1598,8 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
         totalFiles,
         mode,
         results: batchInfo || [],
+        blurryFolderName,
+        blurryFileCount,
         outputDir: outputDir || folderPath,
         hasErrors: errors.length > 0,
         errorCount: errors.length,

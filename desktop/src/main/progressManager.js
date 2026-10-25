@@ -277,6 +277,8 @@ async function startProgress(params) {
     allFileNames: params.allFileNames,
     operations: params.operations, // Full operations with dest paths
     batchInfo: params.batchInfo,   // Batch info for display
+    blurryFolderName: params.blurryFolderName,
+    blurryFileCount: params.blurryFileCount,
     lastUpdated: new Date().toISOString()
   };
   
