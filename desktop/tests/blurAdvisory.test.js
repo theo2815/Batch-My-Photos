@@ -174,6 +174,46 @@ describe('beta batch safety', () => {
     }
   });
 
+  it('refuses a run when only the _Blurry folder already has a same-name file', async () => {
+    const source = path.join(fixtureRoot, 'clash-blurry-only');
+    fs.mkdirSync(path.join(source, 'Mv_Blurry'), { recursive: true });
+    fs.writeFileSync(path.join(source, 'A.jpg'), 'photo');
+    fs.writeFileSync(path.join(source, 'B.jpg'), 'photo');
+    fs.writeFileSync(path.join(source, 'Mv_Blurry', 'B.jpg'), 'old-b');
+    registerAllowedPath(source);
+    let saved = false;
+    let cleared = false;
+    stubs['./rollbackManager'].saveRollbackManifest = async () => { saved = true; };
+    stubs['./rollbackManager'].clearRollbackManifest = () => { cleared = true; };
+
+    try {
+      const handlers = new Map();
+      registerIpcHandlers({ handle: (name, fn) => handlers.set(name, fn) }, {}, () => ({}), {
+        batchCancelled: false,
+        resetBatchCancellation: noop,
+      });
+      const result = await handlers.get('execute-batch')({ sender: { send: noop } }, {
+        folderPath: source,
+        maxFilesPerBatch: 10,
+        outputPrefix: 'Mv',
+        mode: 'move',
+        blurryGroups: ['B'],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Mv_Blurry already has 1 file with the same name (for example B.jpg). Choose another folder name.');
+      expect(fs.readFileSync(path.join(source, 'Mv_Blurry', 'B.jpg'), 'utf8')).toBe('old-b');
+      expect(fs.existsSync(path.join(source, 'A.jpg'))).toBe(true);
+      expect(fs.existsSync(path.join(source, 'B.jpg'))).toBe(true);
+      expect(fs.existsSync(path.join(source, 'Mv_001'))).toBe(false);
+      expect(saved).toBe(false);
+      expect(cleared).toBe(false);
+    } finally {
+      delete stubs['./rollbackManager'].saveRollbackManifest;
+      stubs['./rollbackManager'].clearRollbackManifest = noop;
+    }
+  });
+
   it('does not refuse a run when the existing batch folder is empty', async () => {
     const source = path.join(fixtureRoot, 'empty-existing');
     fs.mkdirSync(path.join(source, 'Mv_001'), { recursive: true });
