@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(8);
+SELECT plan(9);
 
 -- Switch email on for this transaction only, then read what was queued for send-email.
 SELECT vault.create_secret('http://email.test/send-email', 'email_fn_url');
@@ -44,6 +44,13 @@ SELECT is((SELECT count(*) FROM sent WHERE m->>'kind' = 'new_device' AND m->>'to
 SELECT _send_email('beta_key', '00000000-0000-0000-0000-000000000401', '{}') FROM generate_series(1, 7);
 SELECT is((SELECT count(*) FROM sent WHERE m->>'kind' = 'beta_key' AND m->>'to' = 'busy@example.test'), 7::bigint,
   'beta_key emails are not limited');
+
+-- ── Admin beta alerts share the cap ─────────────────────────────────────────
+INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password)
+VALUES ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin@example.test', 'test');
+SELECT _send_email('beta_request_admin', '00000000-0000-0000-0000-000000000405', '{}') FROM generate_series(1, 7);
+SELECT is((SELECT count(*) FROM sent WHERE m->>'kind' = 'beta_request_admin' AND m->>'to' = 'admin@example.test'), 5::bigint,
+  'admin alerts are capped at 5 per hour');
 
 -- ── The log is private ──────────────────────────────────────────────────────
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE relname = 'email_send_log' AND relnamespace = 'public'::regnamespace),
