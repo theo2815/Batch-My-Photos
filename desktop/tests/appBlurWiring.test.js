@@ -47,7 +47,8 @@ vi.mock('../src/hooks/useTheme', () => ({ useTheme: () => m.theme }));
 vi.mock('../src/hooks/useUpdateCheck', () => ({ useUpdateCheck: () => m.update }));
 
 import App from '../src/App.jsx';
-import { ConfirmationModal } from '../src/components/Modals';
+import { ConfirmationModal, BlurSensitivityModal } from '../src/components/Modals';
+import { PreviewPanel } from '../src/components/PreviewPanel';
 
 let tree;
 async function settle() {
@@ -124,5 +125,22 @@ describe('App blur wiring', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await settle();
     expect(globalThis.window.electronAPI.previewBatches.mock.lastCall.at(-1)).toBeNull();
+  });
+
+  it('keeps blur on when Cancel is pressed on Change Sensitivity', async () => {
+    m.settings.handleSettingsChange = vi.fn();
+    const tree = await ready();
+    nodes(tree).find((n) => n.type === PreviewPanel).props.onOpenBlurModal();
+    nodes(await settle()).find((n) => n.type === BlurSensitivityModal).props.onCancel();
+    expect(m.settings.handleSettingsChange).not.toHaveBeenCalledWith('blurDetectionEnabled', false);
+  });
+
+  it('turns blur off when Cancel is pressed on the first prompt', async () => {
+    m.settings.handleSettingsChange = vi.fn();
+    m.settings.blurDetectionEnabled = false;
+    await ready();
+    m.settings.blurDetectionEnabled = true;
+    nodes(await settle()).find((n) => n.type === BlurSensitivityModal).props.onCancel();
+    expect(m.settings.handleSettingsChange).toHaveBeenCalledWith('blurDetectionEnabled', false);
   });
 });
