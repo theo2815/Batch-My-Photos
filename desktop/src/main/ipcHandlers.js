@@ -30,7 +30,7 @@ const blurDetectionService = require('./blurDetectionService');
 const { executeFileOperations } = require('./batchExecutor');
 const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
 const { collectFileStats, isSameDrive, getDiskSpace, testWritePermission, formatBytes, calculateTotalSize, SPACE_BUFFER_MULTIPLIER } = require('./fileUtils');
-const { generateBatchFolderName } = require('../utils/batchNaming');
+const { generateBatchFolderName, generateBlurryFolderName } = require('../utils/batchNaming');
 const sharp = require('sharp');
 const { rateLimitedHandle: handle } = require('./ipcRateLimiter');
 const {
@@ -571,8 +571,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Reset cancellation flag at start of new operation
       appState.resetBatchCancellation();
-      rollbackManager.clearRollbackManifest();
-      
+
       // Re-scan to get clean state
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
@@ -606,29 +605,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       const batches = await calculateBatches(fileGroups, safeMaxFiles, safeSortBy, fileStats);
 
       const baseOutputDir = (mode === 'copy' && outputDir) ? outputDir : folderPath;
-      
-      // Create all batch folders first (Parallel Optimized)
-      // Process in chunks to prevent file handle exhaustion
-      logger.time('FOLDER_CREATION');
-      for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
-        const chunkPromises = [];
-        for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
-          const batchIndex = i + j;
-          const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
-          const batchFolderPath = path.join(baseOutputDir, batchFolderName);
-          chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
-        }
-        await Promise.all(chunkPromises);
-      }
-      
-      // Create the blurry folder if there are blurry files
-      const blurryFolderName = blurryFiles.length > 0 ? `${safePrefix}_Blurry` : null;
-      if (blurryFolderName) {
-        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
-        await fsPromises.mkdir(blurryFolderPath, { recursive: true });
-        logger.log(`🔍 [BLUR] Created blurry folder: ${blurryFolderName}`);
-      }
-      logger.timeEnd('FOLDER_CREATION');
+      const blurryFolderName = blurryFiles.length > 0 ? generateBlurryFolderName(safePrefix) : null;
 
       let processedFiles = 0;
 
@@ -665,6 +642,56 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           });
         }
       }
+
+      // Refuse before touching anything if a destination folder already holds files with these names
+      const namesByFolder = new Map();
+      for (const op of operations) {
+        const dir = path.dirname(op.destPath);
+        if (!namesByFolder.has(dir)) namesByFolder.set(dir, []);
+        namesByFolder.get(dir).push(op.fileName);
+      }
+      for (const [dir, names] of namesByFolder) {
+        let existing;
+        try {
+          existing = await fsPromises.readdir(dir);
+        } catch (err) {
+          if (err.code === 'ENOENT') continue;
+          throw err;
+        }
+        const fold = n => (process.platform === 'win32' ? n.toLowerCase() : n);
+        const existingSet = new Set(existing.map(fold));
+        const clashes = names.filter(n => existingSet.has(fold(n)));
+        if (clashes.length > 0) {
+          return {
+            success: false,
+            error: `${path.basename(dir)} already has ${clashes.length} ${clashes.length === 1 ? 'file with the same name' : 'files with the same names'} (for example ${clashes[0]}). Choose another folder name.`
+          };
+        }
+      }
+
+      rollbackManager.clearRollbackManifest();
+
+      // Create all batch folders first (Parallel Optimized)
+      // Process in chunks to prevent file handle exhaustion
+      logger.time('FOLDER_CREATION');
+      for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
+        const chunkPromises = [];
+        for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
+          const batchIndex = i + j;
+          const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
+          const batchFolderPath = path.join(baseOutputDir, batchFolderName);
+          chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
+        }
+        await Promise.all(chunkPromises);
+      }
+
+      // Create the blurry folder if there are blurry files
+      if (blurryFolderName) {
+        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
+        await fsPromises.mkdir(blurryFolderPath, { recursive: true });
+        logger.log(`🔍 [BLUR] Created blurry folder: ${blurryFolderName}`);
+      }
+      logger.timeEnd('FOLDER_CREATION');
 
       // Use the actual filtered count (operations built from grouped media files + blurry files)
       // instead of raw files.length which includes system/non-media files skipped by groupFilesByBaseName
