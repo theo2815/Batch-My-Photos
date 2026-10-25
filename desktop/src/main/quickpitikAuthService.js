@@ -308,12 +308,14 @@ async function authorizedFetch(path, init = {}) {
  * Sign out of QuickPitik: forget the session locally at once, and tell the
  * server in the background (best effort, so a dead network cannot hold the
  * Disconnect button for the length of the timeout).
+ * keepUploadRecord: a new BatchMyPhotos sign-in or an expired session keeps the
+ * unfinished-upload record; Resume still offers it only to the same QuickPitik account.
  */
-async function disconnect() {
+async function disconnect({ keepUploadRecord = false } = {}) {
   const refreshToken = store.get('refresh_token', null)
   const accessToken = store.get('access_token', null)
   clearSession()
-  uploadRecord.clear() // an unfinished upload does not outlive the account on this PC
+  if (!keepUploadRecord) uploadRecord.clear() // an explicit sign-out: an unfinished upload does not outlive the account on this PC
   if (refreshToken) {
     request(`${API_URL}/auth/logout`, {
       method: 'POST',

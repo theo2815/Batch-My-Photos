@@ -92,8 +92,10 @@ function getStoredRefreshToken() {
 
 /**
  * Clear session (logout)
+ * @param {{keepUploadRecord?: boolean}} [options] keepUploadRecord: a new sign-in or an
+ *   expired session keeps the unfinished-upload Resume record; only a real logout clears it.
  */
-function clearSession() {
+function clearSession({ keepUploadRecord = false } = {}) {
   store.clear()
   _sessionGen++
   _refreshPromise = null
@@ -103,7 +105,7 @@ function clearSession() {
     try {
       // Stop a running upload too, but only if it is already loaded: a logout must not load or write anything new
       require.cache[require.resolve('./quickpitikUploadService')]?.exports.cancelUpload()
-      require('./quickpitikAuthService').disconnect()
+      require('./quickpitikAuthService').disconnect({ keepUploadRecord })
     } catch (err) {
       logger.warn('⚠️ [AUTH] Could not disconnect QuickPitik:', err.message)
     }
@@ -350,7 +352,7 @@ async function checkAuthStatus() {
     // The renderer shows the login screen with a "session expired" notice; the
     // user opens the browser themselves (no unsolicited browser launch).
     logger.warn('⚠️ [AUTH] Stored session is invalid, clearing')
-    clearSession()
+    clearSession({ keepUploadRecord: true })
     return { isAuthenticated: false, user: null, subscription: null, sessionExpired: true }
   }
 

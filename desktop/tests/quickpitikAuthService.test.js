@@ -429,4 +429,13 @@ describe('disconnect and the resume record', () => {
     await qp.disconnect();
     expect(recordStub.clear).toHaveBeenCalledTimes(1);
   });
+
+  it('disconnect for a new sign-in or expired session keeps the unfinished upload', async () => {
+    memory.set('refresh_token', 'r1');
+    fetchMock.mockResolvedValue(json(200, { success: true, data: null }));
+    recordStub.clear.mockClear();
+    await qp.disconnect({ keepUploadRecord: true });
+    expect(recordStub.clear).not.toHaveBeenCalled();
+    expect(memory.has('refresh_token')).toBe(false);
+  });
 });
