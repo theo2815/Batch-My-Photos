@@ -309,6 +309,7 @@ function App() {
 
   // Track when blur toggle just turned on (to show modal instead of auto-analyzing)
   const prevBlurEnabledRef = useRef(blurDetectionEnabled);
+  const blurModalFromToggleRef = useRef(false);
 
   // Only Start Analysis may trigger inference; folder and sensitivity changes do not.
   useEffect(() => {
@@ -324,6 +325,7 @@ function App() {
 
     // Show the sensitivity modal when toggle just turned on (manual or via preset)
     if (justEnabled) {
+      blurModalFromToggleRef.current = true;
       setShowBlurSensitivityModal(true);
       return;
     }
@@ -345,11 +347,12 @@ function App() {
   // Called when user dismisses the sensitivity modal without starting
   const handleDismissBlurModal = useCallback(() => {
     setShowBlurSensitivityModal(false);
-    handleSettingsChange('blurDetectionEnabled', false);
+    if (blurModalFromToggleRef.current) handleSettingsChange('blurDetectionEnabled', false);
   }, [handleSettingsChange]);
 
   // Called from SettingsPanel "Change Sensitivity" button
   const handleOpenBlurModal = useCallback(() => {
+    blurModalFromToggleRef.current = false;
     setShowBlurSensitivityModal(true);
   }, []);
 
