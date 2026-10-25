@@ -568,6 +568,7 @@ async function runUpload(ctx) {
             ctx.stop(error); // the other workers finish the file they are on, then stop
             return;
           }
+          if (ctx.cancelled) return; // cut short by the stop, not a failed photo
           recordFailure(ctx, folder, file, netCode(error) || 'UPLOAD_FAILED', error.message, isRetryable(error));
           if (isRetryable(error)) {
             ctx.failStreak = (ctx.failStreak || 0) + 1;
@@ -674,7 +675,7 @@ async function resumeUpload(send, slot) {
   if (!record) return { success: false, error: 'There is no upload to resume.' };
   if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
   if (typeof record.rootBirth === 'number' && record.rootBirth !== (await fsPromises.stat(record.root)).birthtimeMs) {
-    return { success: false, error: 'This folder is not the one the upload started from. Choose it again or Discard.' };
+    return { success: false, error: 'This folder is not the one the upload started from. Discard it and choose the folder again.' };
   }
   registerAllowedPath(record.root);
   const scan = await scanFolder(record.root);
