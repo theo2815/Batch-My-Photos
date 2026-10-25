@@ -672,6 +672,20 @@ describe('explicit beta feedback consent', () => {
     expect(none).not.toContain('_Blurry');
     expect(none).not.toContain('Blur analysis is still running');
   });
+  it('keeps the blur list and a clear confirm line when every group is flagged (zero batches)', () => {
+    const toggleBlurFlag = vi.fn();
+    const blurDetection = { blurResults: { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' } }, blurryGroups: ['A'], blurryCount: 1,
+      analyzedCount: 1, unanalyzedCount: 0, isAnalyzing: false, unflaggedGroups: new Set(), toggleBlurFlag };
+    const tree = render(BatchPreview, { batchDetails: [], outputPrefix: 'Beta', expandedBatch: null, onToggleBatch: vi.fn(), folderPath: 'C:/fixture', blurDetectionEnabled: true, blurDetection });
+    expect(nodes(tree).find(n => n.type?.name === 'BlurryPhotosSection')).toBeDefined();
+    expect(text(tree)).not.toContain('Batch Preview');
+    expect(render(BatchPreview, { batchDetails: [], blurDetectionEnabled: true, blurDetection: { ...blurDetection, blurryCount: 0 } })).toBeNull();
+    // No preview yet while analysis runs: must render the blur section, not crash on missing batchDetails
+    expect(() => render(BatchPreview, { batchDetails: undefined, outputPrefix: 'Beta', blurDetectionEnabled: true, blurDetection: { ...blurDetection, isAnalyzing: true } })).not.toThrow();
+    const confirm = text(render(PreviewPanel, { settings: { outputPrefix: 'Beta', batchMode: 'copy' }, previewResults: { batchCount: 0, batchDetails: [] }, blurDetection }));
+    expect(confirm).toContain('All photos will go to Beta_Blurry');
+    expect(confirm).not.toContain('Beta_000');
+  });
   it('shows where a flagged group will go and lets the user restore it', () => {
     const toggleBlurFlag = vi.fn();
     const blurDetection = { blurResults: { A: { score: 0.8, isBlurry: true, analyzedFile: 'A.jpg' } }, blurryGroups: ['A'], blurryCount: 1,

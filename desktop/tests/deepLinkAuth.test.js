@@ -123,7 +123,7 @@ describe('auth callback deep link', () => {
 
     await openLink('batchmyphotos://auth/callback?token=jwt1&state=s');
 
-    expect(auth.clearSession).toHaveBeenCalledTimes(1);
+    expect(auth.clearSession).toHaveBeenCalledWith({ keepUploadRecord: true });
     expect(auth.clearSession.mock.invocationCallOrder[0]).toBeLessThan(auth.saveSession.mock.invocationCallOrder[0]);
   });
 

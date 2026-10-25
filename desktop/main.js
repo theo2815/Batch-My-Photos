@@ -189,7 +189,7 @@ async function handleDeepLink(url) {
     }
 
     // A new sign-in ends whatever session is still stored (and its QuickPitik connection)
-    authService.clearSession();
+    authService.clearSession({ keepUploadRecord: true });
     authService.saveSession(token, { email: profile.email, name: profile.name });
 
     // Store refresh token for persistent sessions (silent re-auth on JWT expiry)
