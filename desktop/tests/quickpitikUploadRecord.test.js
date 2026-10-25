@@ -29,7 +29,7 @@ describe('upload resume record', () => {
     expect(record.load()).toEqual({ ...saved(), startedAt: expect.any(String), updatedAt: expect.any(String) });
     expect([...memory.keys()]).toEqual(['record']);
     expect(Object.keys(memory.get('record')).sort())
-      .toEqual(['account', 'eventId', 'eventName', 'finished', 'root', 'selected', 'startedAt', 'updatedAt', 'version']);
+      .toEqual(['account', 'eventId', 'eventName', 'finished', 'root', 'rootBirth', 'selected', 'startedAt', 'updatedAt', 'version']);
   });
 
   it('adds each finished subfolder, and forgets the run once none is left', () => {

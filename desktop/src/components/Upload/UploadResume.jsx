@@ -55,6 +55,7 @@ function UploadResumeModal({ onResume, onRunning }) {
       <div className="modal-content confirmation-modal confirm-dialog" role="dialog" aria-modal="true"
         aria-labelledby="qp-resume-title" aria-describedby="qp-resume-body">
         <h3 id="qp-resume-title">{formatString(STRINGS.QP_RESUME_TITLE, { event: pending.eventName })}</h3>
+        <span className="upload-kicker upload-path" title={pending.folder}>{pending.folder}</span>
         <p id="qp-resume-body">{STRINGS.QP_RESUME_BODY}</p>
         <div className="modal-buttons">
           <button type="button" className="btn secondary" onClick={discard}>{STRINGS.QP_BTN_DISCARD}</button>

@@ -168,6 +168,7 @@ export function useQuickPitikUpload({ onBusyChange, resumeOnOpen = false } = {})
       : pending.folderMissing ? 'missing' : 'resume';
 
   useEffect(() => {
+    if (resumeState && resumeState !== 'resume') autoResumed.current = true;
     if (!resumeOnOpen || resumeState !== 'resume' || autoResumed.current) return;
     autoResumed.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- once per view: the launch pop-up's Resume, when the offer is ready
