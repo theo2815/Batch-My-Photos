@@ -568,6 +568,7 @@ async function runUpload(ctx) {
             ctx.stop(error); // the other workers finish the file they are on, then stop
             return;
           }
+          if (ctx.cancelled) return; // cut short by the stop, not a failed photo
           recordFailure(ctx, folder, file, netCode(error) || 'UPLOAD_FAILED', error.message, isRetryable(error));
           if (isRetryable(error)) {
             ctx.failStreak = (ctx.failStreak || 0) + 1;

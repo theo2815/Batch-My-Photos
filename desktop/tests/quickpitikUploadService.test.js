@@ -571,6 +571,8 @@ describe('upload engine', () => {
     const last = await (await run(root, [''])).finished();
     expect(last.phase).toBe('error');
     expect(last.error.code).toBe('UNREACHABLE');
+    expect(last.counts.failed).toBe(8);
+    expect(last.failures).toHaveLength(8);
     expect(calls('begin').length).toBeLessThan(80);
     expect(uploadRecord.load()).not.toBeNull();
   });
