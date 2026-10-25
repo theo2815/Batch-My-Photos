@@ -886,7 +886,7 @@ describe('resume', () => {
   it('refuses a folder made at another time (another card on the same drive letter) and keeps the record', async () => { // M3, D2
     earlierRun('qp-other-card-', ['A'], 1);
     routes(directTable()); fakeHttps();
-    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'This folder is not the one the upload started from. Choose it again or Discard.' });
+    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'This folder is not the one the upload started from. Discard it and choose the folder again.' });
     expect(calls('begin')).toHaveLength(0);
     expect(uploadRecord.load()).not.toBeNull();
   });
