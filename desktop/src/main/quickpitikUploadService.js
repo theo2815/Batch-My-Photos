@@ -632,11 +632,12 @@ async function beginUpload(request, send, slot) {
   }
   const total = plan.reduce((sum, folder) => sum + folder.files.length, 0);
   if (total === 0) return { success: false, error: 'Nothing to upload.' };
+  const { birthtimeMs: rootBirth } = await fsPromises.stat(root);
   current = makeContext({ eventId, plan, total, send });
   // Errors, a crash or a quit keep this record; done, Cancel, Discard and Disconnect clear it.
   uploadRecord.save({
     account: qpAuth.getAccountId(), eventId, eventName: typeof eventName === 'string' && eventName ? eventName.slice(0, 200) : eventId,
-    root, selected: folders,
+    root, rootBirth, selected: folders,
   });
   for (const relPath of missing) recordFailure(current, { relPath }, { name: '' }, 'FOLDER_MISSING', 'This subfolder is no longer there.', false);
   if (slot.stopped) current.stop(new CancelledError());
@@ -672,6 +673,9 @@ async function resumeUpload(send, slot) {
   const record = ownRecord();
   if (!record) return { success: false, error: 'There is no upload to resume.' };
   if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
+  if (typeof record.rootBirth === 'number' && record.rootBirth !== (await fsPromises.stat(record.root)).birthtimeMs) {
+    return { success: false, error: 'This folder is not the one the upload started from. Choose it again or Discard.' };
+  }
   registerAllowedPath(record.root);
   const scan = await scanFolder(record.root);
   if (!scan.success) return scan;

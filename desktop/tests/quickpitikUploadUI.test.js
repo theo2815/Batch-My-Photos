@@ -897,6 +897,17 @@ describe('resume an unfinished upload', () => {
     expect(api.qpUploadStart).not.toHaveBeenCalled();
   });
 
+  it("the launch pop-up's Resume pressed while the card was out does not start later on its own", async () => { // L6d
+    const api = resumeApi({ qpUploadPending: vi.fn().mockResolvedValue({ running: false, pending: { ...pending, folderMissing: true } }) });
+    const qp = await mountedHook({ resumeOnOpen: true });
+    expect(qp.resumeState).toBe('missing');
+    api.qpUploadPending.mockResolvedValue({ running: false, pending }); // the card is back: Refresh
+    await qp.loadEvents();
+    for (let i = 0; i < 2; i++) { render(useQuickPitikUpload, { resumeOnOpen: true }); await effects(); }
+    expect(api.qpUploadStart).not.toHaveBeenCalled();
+    expect(render(useQuickPitikUpload, { resumeOnOpen: true }).resumeState).toBe('resume');
+  });
+
   describe('ResumeCard', () => {
     const card = (props) => render(ResumeCard, { pending, event, onResume: noop, onDiscard: noop, onChooseAgain: noop, ...props });
 
@@ -952,6 +963,11 @@ describe('resume an unfinished upload', () => {
       button(tree, 'Resume').props.onClick();
       expect(props.onResume).toHaveBeenCalledTimes(1);
       expect(render(UploadResumeModal, props)).toBeNull();
+    });
+
+    it('names the folder under the event', async () => { // M3, D2
+      resumeApi();
+      expect(text(await modal({ onResume: vi.fn(), onRunning: vi.fn() }))).toContain('D:/Shoots/Theo dipolog');
     });
 
     it('Discard forgets the upload and closes', async () => { // R3

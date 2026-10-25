@@ -67,9 +67,9 @@ function load() {
 }
 
 /** A new upload replaces the record. */
-function save({ account, eventId, eventName, root, selected }) {
+function save({ account, eventId, eventName, root, rootBirth, selected }) {
   const now = new Date().toISOString();
-  write({ version: VERSION, account, eventId, eventName, root, selected, finished: [], startedAt: now, updatedAt: now });
+  write({ version: VERSION, account, eventId, eventName, root, rootBirth, selected, finished: [], startedAt: now, updatedAt: now });
 }
 
 /** A subfolder with no failed photo is done: a resume does not read it again. */

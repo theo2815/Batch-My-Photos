@@ -733,7 +733,7 @@ describe('resume record', () => {
       if (payload.phase === 'folder-done') atFolderDone.push(uploadRecord.load().finished);
     })).toEqual({ success: true, total: 4 });
     expect(uploadRecord.load()).toEqual({ version: 1, account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root,
-      selected: ['A', 'B', 'C'], finished: [], startedAt: expect.any(String), updatedAt: expect.any(String) });
+      rootBirth: fs.statSync(root).birthtimeMs, selected: ['A', 'B', 'C'], finished: [], startedAt: expect.any(String), updatedAt: expect.any(String) });
     expect((await untilSettled(events)).phase).toBe('done');
     expect(atFolderDone).toEqual([['A'], ['A'], ['A', 'C']]); // B had a failed photo: a resume reads it again
   });
@@ -790,10 +790,10 @@ describe('resume', () => {
   beforeEach(() => { service._internals.sleep = async () => {}; service._internals.now = () => Date.now(); });
 
   // A shoot folder that was dropped in an earlier session: on disk, but not allowed in this one.
-  function earlierRun(prefix, finished = ['A']) {
+  function earlierRun(prefix, finished = ['A'], rootBirth) {
     const root = tempRoot(prefix);
     write(root, 'A/a.jpg', 'a'); write(root, 'B/b.jpg', 'b'); write(root, 'C/c.jpg', 'c');
-    uploadRecord.save({ account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root, selected: ['A', 'B', 'C'] });
+    uploadRecord.save({ account: 'u1', eventId: 'event-1', eventName: 'Cebu Marathon 2026', root, rootBirth: rootBirth ?? fs.statSync(root).birthtimeMs, selected: ['A', 'B', 'C'] });
     for (const rel of finished) uploadRecord.markFinished(rel);
     return root;
   }
@@ -881,6 +881,41 @@ describe('resume', () => {
     expect(last.phase).toBe('done');
     expect(last.failures[0].code).toBe('FOLDER_MISSING');
     expect(calls('begin')).toHaveLength(1);
+  });
+
+  it('refuses a folder made at another time (another card on the same drive letter) and keeps the record', async () => { // M3, D2
+    earlierRun('qp-other-card-', ['A'], 1);
+    routes(directTable()); fakeHttps();
+    expect(await service.startUpload({ resume: true }, () => {})).toEqual({ success: false, error: 'This folder is not the one the upload started from. Choose it again or Discard.' });
+    expect(calls('begin')).toHaveLength(0);
+    expect(uploadRecord.load()).not.toBeNull();
+  });
+
+  it('resumes the folder it started from', async () => { // M3
+    earlierRun('qp-same-card-');
+    routes(directTable()); fakeHttps();
+    const events = [];
+    expect(await service.startUpload({ resume: true }, (payload) => events.push(payload))).toMatchObject({ success: true, total: 2 });
+    expect((await untilSettled(events)).phase).toBe('done');
+  });
+
+  it('an old record without the folder time still resumes', async () => { // Review Focus 5
+    earlierRun('qp-old-record-');
+    const { rootBirth, ...old } = memory.get('record');
+    memory.set('record', old);
+    routes(directTable()); fakeHttps();
+    const events = [];
+    expect(await service.startUpload({ resume: true }, (payload) => events.push(payload))).toMatchObject({ success: true, total: 2 });
+    expect((await untilSettled(events)).phase).toBe('done');
+  });
+
+  it('a photo culled from an unfinished subfolder does not block the resume', async () => { // Review Focus 2
+    const root = earlierRun('qp-culled-');
+    fs.rmSync(path.join(root, 'B', 'b.jpg'));
+    routes(directTable()); fakeHttps();
+    const events = [];
+    expect(await service.startUpload({ resume: true }, (payload) => events.push(payload))).toMatchObject({ success: true, total: 1 });
+    expect((await untilSettled(events)).phase).toBe('done');
   });
 
   it("has nothing to resume without a record or for another account's", async () => { // R5
