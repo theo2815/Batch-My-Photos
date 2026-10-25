@@ -115,16 +115,19 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
     setVisibleBatchesCount(prev => Math.min(prev + BATCHES_PER_LOAD, batchDetails.length));
   };
 
-  if (!batchDetails || batchDetails.length === 0) return null;
+  // Every group can be flagged blurry, leaving zero batches: keep the blur list so the user can Restore.
+  const hasBatches = !!batchDetails && batchDetails.length > 0;
+  const showBlurSection = !!blurDetectionEnabled && !!blurDetection && (blurDetection.isAnalyzing || blurDetection.blurryCount > 0);
+  if (!hasBatches && !showBlurSection) return null;
 
-  const batchesToShow = batchDetails.slice(0, visibleBatchesCount);
-  const remainingBatches = batchDetails.length - visibleBatchesCount;
+  const batchesToShow = hasBatches ? batchDetails.slice(0, visibleBatchesCount) : [];
+  const remainingBatches = hasBatches ? batchDetails.length - visibleBatchesCount : 0;
   const canLoadMoreBatches = remainingBatches > 0;
 
   return (
     <div className="batch-preview">
-      <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>
-      <div className="batch-list">
+      {hasBatches && <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>}
+      {hasBatches && <div className="batch-list">
         {batchesToShow.map((batch) => {
           const visibleCount = visibleFilesCount[batch.batchNumber] || 5;
           const allFiles = batch.allFiles || batch.sampleFiles || [];
@@ -202,7 +205,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
             Show Less (back to 10)
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Blurry Photos Section */}
       {blurDetectionEnabled && blurDetection && (

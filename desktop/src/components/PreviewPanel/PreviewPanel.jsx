@@ -130,10 +130,16 @@ function PreviewPanel({
             {blurDetection.blurryCount} flagged group{blurDetection.blurryCount > 1 ? 's' : ''} will go to <strong>{outputPrefix}_Blurry</strong>. Review that folder after the batch.
           </p>
         )}
-        <p>
-          This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
-          named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
-        </p>
+        {!previewResults?.batchCount && blurDetection?.blurryCount > 0 ? (
+          <p>
+            Every photo is flagged as blurry, so no numbered folders will be created. All photos will go to <strong>{outputPrefix}_Blurry</strong>.
+          </p>
+        ) : (
+          <p>
+            This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
+            named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
+          </p>
+        )}
         {batchMode === 'move' ? (
           <p className="note">
             <Zap size={14} className="icon-inline" /> 
