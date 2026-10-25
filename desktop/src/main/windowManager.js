@@ -101,8 +101,8 @@ function createWindow() {
     // - Dev: Allow localhost and unsafe-eval for Vite HMR
     // - Prod: Strict policy, only allow self
     const cspPolicy = shouldUseDistBuild && isPackaged
-      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.batchmyphotos.com;"
-      : "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
+      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.batchmyphotos.com; base-uri 'none'; form-action 'none';"
+      :"default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: file: http://localhost:*; font-src 'self' data: http://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* https://*.supabase.co wss://*.supabase.co;";
     
     callback({
       responseHeaders: {
@@ -119,7 +119,8 @@ function createWindow() {
 
   // SECURITY: no popups, and never leave the bundle (dev server in dev)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  mainWindow.webContents.on('will-navigate', (event) => {
+    const url = event.url;
     const allowed = shouldUseDistBuild ? isAppUrl(url) : url.startsWith('http://localhost:');
     if (!allowed) {
       event.preventDefault();
@@ -133,14 +134,21 @@ function createWindow() {
 
   // Closing during a QuickPitik upload asks first. Quitting does not cancel the
   // upload (a cancel would clear its resume record), so the next launch offers Resume.
+  let confirming = false;
+  let confirmed = false;
   mainWindow.on('close', (event) => {
+    if (confirmed) return;
     const upload = require.cache[require.resolve('./quickpitikUploadService')]?.exports; // not loaded = Upload view never used
     if (!upload?.isUploading()) return;
-    const choice = dialog.showMessageBoxSync(mainWindow, {
+    event.preventDefault();
+    if (confirming) return;
+    confirming = true;
+    dialog.showMessageBox(mainWindow, {
       type: 'question', buttons: ['Keep uploading', 'Stop and quit'], defaultId: 0, cancelId: 0,
       message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
-    });
-    if (choice === 0) event.preventDefault();
+    }).then(({ response }) => {
+      if (response === 1) { confirmed = true; mainWindow.close(); }
+    }).finally(() => { confirming = false; });
   });
 
   mainWindow.on('closed', () => {

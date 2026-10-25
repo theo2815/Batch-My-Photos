@@ -11,6 +11,7 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
   const loads = [];
   const handlers = {};
   const windowHandlers = {};
+  const closes = [];
   class BrowserWindow {
     constructor() {
       this.webContents = {
@@ -24,6 +25,7 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
     loadURL(url) { loads.push(['url', url]); }
     once() {}
     on(name, fn) { windowHandlers[name] = fn; }
+    close() { closes.push(1); }
   }
   const module = { exports: {} };
   function requireStub(name) {
@@ -46,7 +48,7 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
     require: requireStub,
   }, { filename });
   module.exports.createWindow();
-  return { loads, handlers, windowHandlers, api: module.exports };
+  return { loads, handlers, windowHandlers, closes, api: module.exports };
 }
 
 function loadedPage(options) {
@@ -54,8 +56,8 @@ function loadedPage(options) {
 }
 
 function navigationBlocked(handlers, target) {
-  const event = { preventDefault: vi.fn() };
-  handlers['will-navigate'](event, target);
+  const event = { preventDefault: vi.fn(), url: target };
+  handlers['will-navigate'](event);
   return event.preventDefault.mock.calls.length > 0;
 }
 
@@ -139,31 +141,54 @@ describe('closing the window during a QuickPitik upload', () => { // R12
   const uploading = () => ({ isUploading: () => true, cancelUpload: vi.fn() });
   const close = (windowHandlers) => { const event = { preventDefault: vi.fn() }; windowHandlers.close(event); return event; };
 
-  it('asks first, with Keep uploading as the safe answer; Keep uploading keeps the window open', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve));
+
+  it('asks first, with Keep uploading as the safe answer; Keep uploading keeps the window open', async () => {
     const upload = uploading();
-    const dialog = { showMessageBoxSync: vi.fn(() => 0) };
-    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 0 })) };
+    const { windowHandlers, closes } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
     expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
-    expect(dialog.showMessageBoxSync.mock.calls[0][1]).toMatchObject({
+    await settle();
+    expect(dialog.showMessageBox.mock.calls[0][1]).toMatchObject({
       message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
       buttons: ['Keep uploading', 'Stop and quit'], defaultId: 0, cancelId: 0,
     });
+    expect(closes).toHaveLength(0);
     expect(upload.cancelUpload).not.toHaveBeenCalled();
   });
 
-  it('Stop and quit lets the window close without cancelling, so the resume record stays', () => { // R4
+  it('Stop and quit closes the window without cancelling, so the resume record stays', async () => { // R4
     const upload = uploading();
-    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog: { showMessageBoxSync: () => 1 } });
-    expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) };
+    const { windowHandlers, closes } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(closes).toHaveLength(1);
     expect(upload.cancelUpload).not.toHaveBeenCalled();
+  });
+
+  it('the close after Stop and quit is let through, not prevented again', async () => {
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) };
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload: uploading(), dialog });
+    close(windowHandlers);
+    await settle();
+    expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('a second close while the question is open opens no second question', async () => {
+    const dialog = { showMessageBox: vi.fn(() => new Promise(() => {})) };
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload: uploading(), dialog });
+    close(windowHandlers);
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    expect(dialog.showMessageBox).toHaveBeenCalledTimes(1);
   });
 
   it('asks nothing when no upload runs, or when the Upload view was never used', () => { // R12, R13
-    const dialog = { showMessageBoxSync: vi.fn() };
+    const dialog = { showMessageBox: vi.fn() };
     for (const upload of [{ isUploading: () => false }, undefined]) {
       const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
       expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
     }
-    expect(dialog.showMessageBoxSync).not.toHaveBeenCalled();
+    expect(dialog.showMessageBox).not.toHaveBeenCalled();
   });
 });
