@@ -2237,7 +2237,22 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   /** Starts the background upload; results arrive as qp-upload-progress events. */
   handle(ipcMain, 'qp-upload-start', async (_event, request) => {
     try {
-      return await qpUpload().startUpload(request, (payload) => send('qp-upload-progress', payload));
+      let originalTitle;
+      return await qpUpload().startUpload(request, (payload) => {
+        send('qp-upload-progress', payload);
+        const win = getMainWindow();
+        if (!win || win.isDestroyed()) return;
+        originalTitle ??= win.getTitle();
+        if (['done', 'cancelled', 'error'].includes(payload.phase)) {
+          win.setProgressBar(-1);
+          win.setTitle(originalTitle);
+        } else {
+          const fraction = payload.bytes?.total > 0
+            ? Math.min(1, Math.max(0, payload.bytes.sent / payload.bytes.total)) : 0;
+          win.setProgressBar(fraction);
+          win.setTitle(`Uploading ${Math.round(fraction * 100)}% · ${payload.counts.uploaded} of ${payload.counts.total}`);
+        }
+      });
     } catch (error) {
       logger.error('❌ [IPC] qp-upload-start failed:', error);
       return { success: false, error: sanitizeError(error, 'qp-upload-start') };
