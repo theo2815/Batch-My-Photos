@@ -13,7 +13,8 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
   const windowHandlers = {};
   const closes = [];
   class BrowserWindow {
-    constructor() {
+    constructor(options) {
+      this.options = options;
       this.webContents = {
         openDevTools() {},
         session: { webRequest: { onHeadersReceived() {} } },
@@ -62,6 +63,11 @@ function navigationBlocked(handlers, target) {
 }
 
 describe('desktop window source selection when dist exists', () => {
+  it('keeps renderer progress active while the window is covered', () => {
+    const { api } = loadWindow({ packaged: true });
+    expect(api.getMainWindow().options.webPreferences.backgroundThrottling).toBe(false);
+  });
+
   it('uses Vite for npm start', () => {
     expect(loadedPage({ packaged: false, npmScript: 'start' })).toEqual(['url', 'http://localhost:5173']);
   });

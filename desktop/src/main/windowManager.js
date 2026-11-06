@@ -56,6 +56,7 @@ function createWindow() {
       preload: path.join(PROJECT_ROOT, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
       sandbox: true, // SECURITY: Sandboxes the renderer — safe because preload only uses contextBridge
     },
     // ponytail: light --bg-primary; dark-theme users get a bone pre-paint frame — read the stored theme here if it's ever noticed

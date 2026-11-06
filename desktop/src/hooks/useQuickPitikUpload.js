@@ -74,6 +74,9 @@ export function useQuickPitikUpload({ onBusyChange, resumeOnOpen = false } = {})
 
   useEffect(() => {
     const stop = window.electronAPI.onQpUploadProgress((event) => {
+      const percent = event.bytes?.total > 0
+        ? Math.round(Math.min(1, Math.max(0, event.bytes.sent / event.bytes.total)) * 100) : 0;
+      console.log(new Date().toISOString(), 'qp-upload-progress', percent, event.counts?.uploaded ?? 0);
       setProgress(event);
       if (event.phase === 'done' || event.phase === 'cancelled') setStatus('done');
       else if (event.phase === 'error') {
