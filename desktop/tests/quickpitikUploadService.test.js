@@ -417,6 +417,48 @@ describe('upload engine', () => {
     expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
   });
 
+  it('treats a 503 with Retry-After on commit as a wait, not a failure', async () => {
+    const root = tempRoot('qp-commit-503-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    const waits = []; service._internals.sleep = async (ms) => { waits.push(ms); };
+    let commits = 0;
+    routes(directTable({ commit: async (body) => {
+      if (++commits <= 5) throw new QpApiError({ status: 503, code: 'UPLOAD_STORAGE_UNAVAILABLE', message: 'down', retryAfterSeconds: 5 });
+      return { id: body.photoId };
+    } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(commits).toBe(6);
+    expect(last.counts).toMatchObject({ uploaded: 1, failed: 0 });
+    expect(waits).toHaveLength(5);
+    expect(waits.every(ms => ms >= 5000 && ms <= 15000)).toBe(true);
+  });
+
+  it('still fails a commit 503 without Retry-After after three retries', async () => {
+    const root = tempRoot('qp-commit-503-no-header-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let now = Date.now(); service._internals.now = () => now;
+    const waits = []; service._internals.sleep = async (ms) => { waits.push(ms); now += ms; };
+    routes(directTable({ commit: async () => { throw new QpApiError({ status: 503, code: 'UPLOAD_STORAGE_UNAVAILABLE', message: 'down' }); } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(calls('commit')).toHaveLength(4);
+    expect(waits).toHaveLength(3);
+    expect(last.counts).toMatchObject({ uploaded: 0, failed: 1 });
+    expect(last.failures).toEqual([expect.objectContaining({ code: 'UPLOAD_STORAGE_UNAVAILABLE', retryable: true })]);
+  });
+
+  it('gives up a commit 503 once the ten-minute window has passed', async () => {
+    const root = tempRoot('qp-commit-503-expired-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
+    let now = Date.now(); service._internals.now = () => now;
+    const waits = []; service._internals.sleep = async (ms) => { waits.push(ms); now += 600001; };
+    routes(directTable({ commit: async () => { throw new QpApiError({ status: 503, code: 'UPLOAD_STORAGE_UNAVAILABLE', message: 'down', retryAfterSeconds: 5 }); } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(calls('commit')).toHaveLength(5); // One busy wait, then the existing three ordinary retries.
+    expect(waits).toHaveLength(4);
+    expect(last.counts).toMatchObject({ uploaded: 0, failed: 1 });
+    expect(last.failures).toEqual([expect.objectContaining({ code: 'UPLOAD_STORAGE_UNAVAILABLE', retryable: true })]);
+  });
+
   it('retries a server error with backoff and gives up after three retries per phase', async () => {
     const root = tempRoot('qp-5xx-'); write(root, 'a.jpg', 'a'); registerAllowedPath(root);
     const waits = []; service._internals.sleep = async (ms) => { waits.push(ms); };
