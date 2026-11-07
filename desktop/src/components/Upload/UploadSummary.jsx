@@ -5,6 +5,7 @@ import { STRINGS, formatString } from '../../constants/strings';
 // A help link for server-side blocks (closed event, unverified account). The
 // production site is right for every real user; dev runs land there too.
 const QP_SITE_URL = 'https://quickpitik.com/dashboard';
+const QP_SELLER_DETAILS_URL = 'https://quickpitik.com/dashboard/settings#seller-details';
 
 function skippedInSelection(scan, selected) {
   return (scan?.folders || [])
@@ -49,7 +50,7 @@ function UploadSummary({ status, progress, scan, selected, error, onRetryFailed,
       <div className="upload-actions">
         {sessionExpired && <button type="button" className="btn primary" onClick={onReconnect}>{STRINGS.QP_BTN_RECONNECT}</button>}
         {status === 'error' && !sessionExpired && error?.code !== 'UPLOAD_LINK_REJECTED' && (
-          <button type="button" className="btn primary" onClick={() => window.electronAPI.openExternalUrl(QP_SITE_URL)}>{STRINGS.QP_FIX_ON_SITE}</button>
+          <button type="button" className="btn primary" onClick={() => window.electronAPI.openExternalUrl(error?.code === 'SELLER_DETAILS_REQUIRED' ? QP_SELLER_DETAILS_URL : QP_SITE_URL)}>{STRINGS.QP_FIX_ON_SITE}</button>
         )}
         {failures.length > 0 && !sessionExpired && error?.code !== 'UPLOAD_LINK_REJECTED' && <button type="button" className="btn secondary" onClick={onRetryFailed}>{STRINGS.QP_BTN_RETRY_FAILED}</button>}
         <button type="button" className="btn secondary" onClick={onReset}>{STRINGS.QP_BTN_ANOTHER_FOLDER}</button>

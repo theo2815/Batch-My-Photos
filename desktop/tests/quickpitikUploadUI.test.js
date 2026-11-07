@@ -321,6 +321,15 @@ describe('UploadSummary', () => {
     expect(button(tree, 'Fix this on quickpitik.com')).toBeDefined();
   });
 
+  it('Fix on site opens the seller-details settings for this code and the dashboard for others', () => {
+    const openExternalUrl = vi.fn(); vi.stubGlobal('window', { electronAPI: { openExternalUrl } });
+    const fixFor = (code) => button(render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 0, alreadyThere: 0, failed: 0, total: 1 }, bytes: { sent: 0, total: 1 }, failures: [] },
+      scan, selected: [''], error: { code, message: 'x' }, onRetryFailed: noop, onReset: noop, onReconnect: noop }), 'Fix this on quickpitik.com');
+    fixFor('SELLER_DETAILS_REQUIRED').props.onClick();
+    fixFor('EVENT_NOT_UPLOADABLE').props.onClick();
+    expect(openExternalUrl.mock.calls).toEqual([['https://quickpitik.com/dashboard/settings#seller-details'], ['https://quickpitik.com/dashboard']]);
+  });
+
   it('a rejected upload link blames this app, not the website', () => {
     const tree = render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 0, alreadyThere: 0, failed: 0, total: 6 }, bytes: { sent: 0, total: 6 }, failures: [] },
       scan, selected: [''], error: { code: 'UPLOAD_LINK_REJECTED', message: 'This version of BatchMyPhotos is not set up for uploads to QuickPitik. Update the app and try again.' }, onRetryFailed: noop, onReset: noop, onReconnect: noop });
