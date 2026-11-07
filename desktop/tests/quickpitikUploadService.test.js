@@ -503,6 +503,20 @@ describe('upload engine', () => {
     expect(calls('commit')).toHaveLength(0);
   });
 
+  it('a SELLER_DETAILS_REQUIRED refusal stops the run at the first photo, keeps the resume record, and keeps the server message and code', async () => {
+    const message = 'Before you can upload, add your ID, address and phone number in your photographer settings on quickpitik.com.';
+    const root = tempRoot('qp-seller-'); for (let i = 0; i < 6; i++) write(root, `p${i}.jpg`, `p${i}`); registerAllowedPath(root);
+    routes(directTable({ begin: async () => { throw new QpApiError({ status: 403, code: 'SELLER_DETAILS_REQUIRED', message }); } }));
+    fakeHttps();
+    const last = await (await run(root, [''])).finished();
+    expect(last.phase).toBe('error');
+    expect(last.error).toEqual({ code: 'SELLER_DETAILS_REQUIRED', message });
+    expect(last.counts.failed).toBe(0);
+    expect(calls('begin').length).toBeLessThanOrEqual(4); // the four in flight; a fifth file never started
+    expect(calls('commit')).toHaveLength(0);
+    expect(uploadRecord.load()).toMatchObject({ eventId: 'event-1', finished: [] });
+  });
+
   it('a per-file terminal error records the failure and continues', async () => {
     const root = tempRoot('qp-perfile-'); write(root, 'bad.jpg', 'bad'); write(root, 'good.jpg', 'good'); registerAllowedPath(root);
     const table = directTable(); const begin = table.begin;
