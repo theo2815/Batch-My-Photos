@@ -256,6 +256,16 @@ describe('clearSession', () => {
     expect(quickpitik.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('a logout disconnects QuickPitik and clears the unfinished-upload record', () => {
+    authService.clearSession();
+    expect(quickpitik.disconnect).toHaveBeenCalledWith({ keepUploadRecord: false });
+  });
+
+  it('a new sign-in or expired session keeps the unfinished-upload record', () => {
+    authService.clearSession({ keepUploadRecord: true });
+    expect(quickpitik.disconnect).toHaveBeenCalledWith({ keepUploadRecord: true });
+  });
+
   it('leaves QuickPitik alone (and writes no file for it) while the Upload view is off', () => {
     authConfig.features.QUICKPITIK_UPLOAD_ENABLED = false;
     authService.clearSession();

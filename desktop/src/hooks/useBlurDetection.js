@@ -198,7 +198,7 @@ export function useBlurDetection({ folderPath, blurDetectionEnabled, blurSensiti
   }, [folderPath, blurDetectionEnabled, blurSensitivity, blurCategories, analysisKey]);
 
   /**
-   * Dismiss or restore a blur suggestion without changing batch routing.
+   * Restore a flagged group to the normal batches, or flag it again (a toggle). Flagged groups go to the _Blurry folder when the batch runs.
    */
   const toggleBlurFlag = useCallback((baseName) => {
     setUnflaggedGroups(prev => {

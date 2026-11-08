@@ -9,6 +9,7 @@ import { FolderOpen, TriangleAlert, Zap, Copy, RotateCcw, CheckCircle, Loader2 }
 import StatsGrid from './StatsGrid';
 import SettingsPanel from './SettingsPanel';
 import BatchPreview from './BatchPreview';
+import batchNaming from '../../utils/batchNaming';
 import './PreviewPanel.css';
 
 /**
@@ -123,11 +124,23 @@ function PreviewPanel({
       
       {/* Confirmation Box */}
       <div className="confirmation-box">
-        {blurDetection?.isBeta && <p className="note">Blur suggestions are advisory. Every photo stays in the ordinary batches.</p>}
-        <p>
-          This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
-          named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
-        </p>
+        {blurDetection?.isAnalyzing ? (
+          <p className="note">Blur analysis is still running. No photos will go to {batchNaming.generateBlurryFolderName(outputPrefix)}.</p>
+        ) : blurDetection?.blurryCount > 0 && (
+          <p className="note">
+            {blurDetection.blurryCount} flagged group{blurDetection.blurryCount > 1 ? 's' : ''} will go to <strong>{batchNaming.generateBlurryFolderName(outputPrefix)}</strong>. Review that folder after the batch.
+          </p>
+        )}
+        {!previewResults?.batchCount && blurDetection?.blurryCount > 0 ? (
+          <p>
+            Every photo is flagged as blurry, so no numbered folders will be created. All photos will go to <strong>{batchNaming.generateBlurryFolderName(outputPrefix)}</strong>.
+          </p>
+        ) : (
+          <p>
+            This will create <strong>{previewResults?.batchCount || 0}</strong> folders 
+            named <strong>{outputPrefix}_001</strong> through <strong>{outputPrefix}_{String(previewResults?.batchCount || 0).padStart(3, '0')}</strong>.
+          </p>
+        )}
         {batchMode === 'move' ? (
           <p className="note">
             <Zap size={14} className="icon-inline" /> 

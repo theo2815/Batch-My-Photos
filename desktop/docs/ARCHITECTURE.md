@@ -52,7 +52,7 @@ BatchMyPhotos/
 ├── main.js                  # Electron entry point — app lifecycle, protocol, store
 ├── preload.js               # Context bridge (electronAPI whitelist)
 ├── progressManager.js       # Crash recovery — encrypted progress persistence
-├── rollbackManager.js       # Session-based undo for move operations
+├── rollbackManager.js       # Session-based undo for Move and Copy runs
 ├── package.json
 ├── vite.config.js           # Vite config for React frontend
 │
@@ -68,6 +68,7 @@ BatchMyPhotos/
 │   │   ├── securityManager.js # Path validation, input sanitization, symlink protection
 │   │   ├── windowManager.js # BrowserWindow creation, CSP headers
 │   │   ├── quickpitikAuthService.js   # QuickPitik sign-in for the Upload view (one-time code hand-off; own encrypted store)
+│   │   ├── quickpitikUploadRecord.js  # The unfinished upload's record, for Resume after a crash or quit (own encrypted store)
 │   │   └── quickpitikUploadService.js # Read-only folder scan + upload engine (begin → PUT → commit)
 │   │
 │   ├── utils/               # ── Shared utilities (main + renderer) ──
@@ -134,7 +135,7 @@ User selects folder ──► IDLE
    Result displayed  ◄─────────────────── COMPLETE
          │
          │  (optional) User clicks Undo
-         │  rollbackBatch() → moves files back
+         │  rollbackBatch() → puts files back (Move) or deletes copies (Copy)
          │
          ▼
        IDLE
@@ -150,7 +151,7 @@ Defined in `src/constants/appStates.js`:
 | `SCANNING`  | Reading folder contents, building file groups      |
 | `READY`     | Preview displayed, settings adjustable             |
 | `EXECUTING` | Files being moved/copied with progress bar         |
-| `COMPLETE`  | Results shown, undo available (if move mode)       |
+| `COMPLETE`  | Results shown, undo available (Move or Copy)       |
 | `ERROR`     | Error occurred, user can retry                     |
 
 ---
@@ -210,7 +211,7 @@ All IPC communication flows through `preload.js` → `ipcHandlers.js`. The handl
 | Channel                    | Direction            | Purpose                               |
 | -------------------------- | -------------------- | ------------------------------------- |
 | `check-rollback-available` | invoke               | Check if undo is possible             |
-| `rollback-batch`           | invoke               | Move files back to original locations |
+| `rollback-batch`           | invoke               | Undo: put files back / delete copies  |
 | `clear-rollback-manifest`  | invoke               | Dismiss undo option                   |
 | `rollback-progress`        | send (main→renderer) | Progress during rollback              |
 | `get-thumbnails`           | invoke               | Generate preview thumbnails (Sharp)   |
@@ -227,8 +228,10 @@ Contract: monorepo `docs/desktop-upload-integration-guide.md`. Tokens stay in th
 | `qp-disconnect`                 | invoke               | Best-effort logout, clear the `quickpitik-session` store  |
 | `qp-list-events`                | invoke               | Events open for upload (public window + own events)       |
 | `qp-scan-folder`                | invoke               | Read-only walk of a registered folder → per-subfolder sums |
-| `qp-upload-start`               | invoke               | Start the background upload (one subfolder at a time)     |
+| `qp-upload-start`               | invoke               | Start the background upload (one subfolder at a time); `{ resume: true }` resumes the saved one |
 | `qp-upload-cancel`              | invoke               | Stop now: no new file starts, files in flight are aborted |
+| `qp-upload-pending`             | invoke               | `{ running, pending }`: an upload still running, or this account's unfinished one |
+| `qp-upload-discard`             | invoke               | Forget the unfinished upload (not while one runs)         |
 | `qp-connect-result`             | send (main→renderer) | Result of the `batchmyphotos://quickpitik/callback` link  |
 | `qp-upload-progress`            | send (main→renderer) | `{ phase, folder, file?, counts, bytes, failures?, error? }` |
 
@@ -362,9 +365,9 @@ userData/
 ### Rollback (`rollbackManager.js`)
 
 - **Session-based only** — manifest is in-memory, lost on app restart (by design)
-- **Move mode only** — copy mode doesn't need undo (originals are preserved)
+- **Move and Copy runs** — Move puts files back; Copy deletes the copies it can prove are spare (original still in place, same size, neither file changed after the run) and keeps any other copy
 - Stores the full operation list with original source/dest paths
-- Rollback reverses each operation: move files from batch folders → original location → delete empty batch folders
+- Move rollback: move files from batch folders → original location → delete empty batch folders. Copy rollback: delete the provable copies → delete empty batch folders
 
 ---
 

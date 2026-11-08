@@ -5,14 +5,15 @@ import ConfirmDialog from '../Modals/ConfirmDialog';
 import ConnectCard from './ConnectCard';
 import EventPicker, { ChosenEvent } from './EventPicker';
 import FolderDrop from './FolderDrop';
+import { ResumeCard } from './UploadResume';
 import ReviewTable from './ReviewTable';
 import UploadProgress from './UploadProgress';
 import UploadSummary from './UploadSummary';
 import './Upload.css';
 
 /** The Upload view: one card per state, driven by useQuickPitikUpload. Never changes files on disk. */
-function UploadView({ onBusyChange }) {
-  const qp = useQuickPitikUpload({ onBusyChange });
+function UploadView({ onBusyChange, resumeOnOpen }) {
+  const qp = useQuickPitikUpload({ onBusyChange, resumeOnOpen });
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   if (qp.status === 'disconnected' || qp.status === 'connecting') {
@@ -38,6 +39,12 @@ function UploadView({ onBusyChange }) {
         <span className="upload-kicker">{formatString(STRINGS.QP_CONNECTED_AS, { email: qp.session?.email ?? '' })}</span>
         <button type="button" className="upload-link upload-link-quiet" onClick={() => setConfirmingDisconnect(true)} disabled={scanning}>{STRINGS.QP_BTN_DISCONNECT}</button>
       </div>
+      {qp.resumeState && (
+        <ResumeCard
+          state={qp.resumeState} pending={qp.pending} event={qp.pendingEvent}
+          onResume={qp.resume} onDiscard={qp.discardPending} onChooseAgain={qp.chooseFolderAgain}
+        />
+      )}
       {/* The folder comes after the event: until one is chosen there is no drop zone. A scan already made is kept. */}
       {event ? (
         <ChosenEvent event={event} onChange={() => qp.setEventId('')} disabled={scanning} />

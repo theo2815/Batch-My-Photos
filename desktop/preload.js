@@ -15,7 +15,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 let unheardAuthCallback = null;
 let authCallbackListeners = 0;
 ipcRenderer.on('auth-callback', (_event, data) => {
-  if (authCallbackListeners === 0) unheardAuthCallback = data;
+  if (authCallbackListeners === 0) unheardAuthCallback = { data, at: Date.now() };
 });
 
 // Expose protected methods to the renderer process
@@ -161,11 +161,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('auth-callback', listener);
     authCallbackListeners++;
-    if (unheardAuthCallback) {
-      const data = unheardAuthCallback;
-      unheardAuthCallback = null;
-      callback(data);
-    }
+    const unheard = unheardAuthCallback;
+    unheardAuthCallback = null;
+    if (unheard && Date.now() - unheard.at < 30000) callback(unheard.data);
     return () => {
       authCallbackListeners--;
       ipcRenderer.removeListener('auth-callback', listener);
@@ -342,9 +340,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Start uploading the ticked subfolders (relPaths from qpScanFolder) to one event.
    * Resolves at once with { success, total } or { success: false, error }; progress
-   * arrives through onQpUploadProgress.
+   * arrives through onQpUploadProgress. { resume: true } resumes the saved upload
+   * instead (the main process ignores every other field) and also answers
+   * { eventId, folders, scan }.
    */
-  qpUploadStart: ({ rootPath, eventId, folders }) => ipcRenderer.invoke('qp-upload-start', { rootPath, eventId, folders }),
+  qpUploadStart: ({ rootPath, eventId, eventName, folders, resume }) => ipcRenderer.invoke('qp-upload-start', { rootPath, eventId, eventName, folders, resume }),
+
+  /** An upload still running, or this account's unfinished one. @returns {Promise<{ running: boolean, pending: { eventId: string, eventName: string, folder: string, folderMissing: boolean } | null }>} */
+  qpUploadPending: () => ipcRenderer.invoke('qp-upload-pending'),
+
+  /** Forget the unfinished upload. @returns {Promise<{ success: boolean }>} */
+  qpUploadDiscard: () => ipcRenderer.invoke('qp-upload-discard'),
 
   /** Stop after the files in flight. @returns {Promise<{ success: boolean }>} */
   qpUploadCancel: () => ipcRenderer.invoke('qp-upload-cancel'),

@@ -208,7 +208,7 @@ Vault: an ADR in `_project/decisions.md` for the boundary change and the hand-of
 
 ## Follow-ups, not in version one
 
-Google sign-in inside the app; a type-the-code fallback on the connect page using the same endpoints; saving upload state across restarts; an "Upload the folder I just sorted" shortcut on Sort's Done card; a `desktop` client value for upload metrics; HEIC conversion through `sharp`; a purge job for `desktop_auth_codes`.
+Google sign-in inside the app; a type-the-code fallback on the connect page using the same endpoints; saving upload state across restarts (built 2026-10-24 as upload resume, see `docs/ARCHITECTURE.md` § 4 Group 7); an "Upload the folder I just sorted" shortcut on Sort's Done card; a `desktop` client value for upload metrics; HEIC conversion through `sharp`; a purge job for `desktop_auth_codes`.
 
 ## Decisions log from the brainstorm on 2026-10-10
 

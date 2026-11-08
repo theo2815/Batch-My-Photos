@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { RotateCcw, Trash2, FolderOpen, AlertTriangle } from 'lucide-react';
+import { STRINGS } from '../../constants/strings';
 import './Modals.css';
 
 /**
@@ -27,6 +28,7 @@ function ResumeRollbackModal({ isOpen, info, onResume, onDiscard }) {
     ? Math.round((info.restoredFiles / info.totalFiles) * 100)
     : 0;
   const remainingFiles = info.totalFiles - info.restoredFiles;
+  const isCopy = info.mode === 'copy';
 
   return (
     <div className="modal-overlay">
@@ -36,21 +38,21 @@ function ResumeRollbackModal({ isOpen, info, onResume, onDiscard }) {
         </div>
         <h3>Resume Interrupted Undo?</h3>
         <p className="resume-description">
-          A previous undo (rollback) operation was interrupted. Some files may be in an 
-          inconsistent state. It is recommended to resume to complete the restoration.
+          {isCopy ? STRINGS.COPY_UNDO_RESUME_DESC : `A previous undo (rollback) operation was interrupted. Some files may be in an
+          inconsistent state. It is recommended to resume to complete the restoration.`}
         </p>
         
         <div className="resume-details">
           <div className="resume-row">
             <FolderOpen size={16} />
-            <span className="resume-label">Restoring to:</span>
+            <span className="resume-label">{isCopy ? STRINGS.COPY_UNDO_RESUME_LABEL : 'Restoring to:'}</span>
             <span className="resume-value" title={info.sourceFolder}>{folderName}</span>
           </div>
           <div className="resume-progress-bar">
             <div className="resume-progress-fill" style={{ width: `${percentComplete}%` }} />
           </div>
           <div className="resume-stats">
-            <span>{info.restoredFiles.toLocaleString()} of {info.totalFiles.toLocaleString()} files restored ({percentComplete}%)</span>
+            <span>{info.restoredFiles.toLocaleString()} of {info.totalFiles.toLocaleString()} {isCopy ? 'copies removed' : 'files restored'} ({percentComplete}%)</span>
             <span className="remaining">{remainingFiles.toLocaleString()} remaining</span>
           </div>
         </div>

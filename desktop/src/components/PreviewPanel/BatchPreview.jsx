@@ -6,8 +6,8 @@
  * Optionally shows a "Blurry Photos" section when blur detection is enabled
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle, ScanEye, X, CheckCircle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Package, ChevronRight, ChevronDown, Image, ChevronDownCircle, ScanEye, X, Undo2, Flag, CheckCircle, Loader2 } from 'lucide-react';
 import ImagePreviewModal from '../Modals/ImagePreviewModal';
 import './PreviewPanel.css';
 // Default import: the shared CJS module exposes its exports as the default
@@ -35,7 +35,7 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
   const [visibleBatchesCount, setVisibleBatchesCount] = useState(10); // Number of batches to show
 
   // Image preview modal state
-  const [previewImage, setPreviewImage] = useState(null); // { fileName, fileList, imageInfo, blurInfoMap, onRestore }
+  const [previewImage, setPreviewImage] = useState(null); // { fileName, fileList, onRestore }
 
   const blurInfoMap = {};
   for (const [baseName, result] of Object.entries(blurDetection?.blurResults || {})) {
@@ -115,16 +115,19 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
     setVisibleBatchesCount(prev => Math.min(prev + BATCHES_PER_LOAD, batchDetails.length));
   };
 
-  if (!batchDetails || batchDetails.length === 0) return null;
+  // Every group can be flagged blurry, leaving zero batches: keep the blur list so the user can Restore.
+  const hasBatches = !!batchDetails && batchDetails.length > 0;
+  const showBlurSection = !!blurDetectionEnabled && !!blurDetection && (blurDetection.isAnalyzing || blurDetection.blurryCount > 0);
+  if (!hasBatches && !showBlurSection) return null;
 
-  const batchesToShow = batchDetails.slice(0, visibleBatchesCount);
-  const remainingBatches = batchDetails.length - visibleBatchesCount;
+  const batchesToShow = hasBatches ? batchDetails.slice(0, visibleBatchesCount) : [];
+  const remainingBatches = hasBatches ? batchDetails.length - visibleBatchesCount : 0;
   const canLoadMoreBatches = remainingBatches > 0;
 
   return (
     <div className="batch-preview">
-      <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>
-      <div className="batch-list">
+      {hasBatches && <h3><Package className="icon-inline" size={18} /> Batch Preview</h3>}
+      {hasBatches && <div className="batch-list">
         {batchesToShow.map((batch) => {
           const visibleCount = visibleFilesCount[batch.batchNumber] || 5;
           const allFiles = batch.allFiles || batch.sampleFiles || [];
@@ -202,16 +205,17 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
             Show Less (back to 10)
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Blurry Photos Section */}
       {blurDetectionEnabled && blurDetection && (
         <BlurryPhotosSection
           blurDetection={blurDetection}
+          outputPrefix={outputPrefix}
           folderPath={folderPath}
           thumbnails={thumbnails}
-          onImageClick={(fileName, fileList, imageInfo, blurInfoMap) =>
-            setPreviewImage({ fileName, fileList, imageInfo, blurInfoMap })
+          onImageClick={(fileName, fileList, onRestore) =>
+            setPreviewImage({ fileName, fileList, onRestore })
           }
         />
       )}
@@ -230,7 +234,10 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
         onLabel={blurDetection?.setLabel}
         getSubmission={blurDetection?.getSubmission}
         onSubmit={blurDetection?.submitExample}
-        onRestore={previewImage?.onRestore}
+        onRestore={previewImage?.onRestore && (baseName => {
+          previewImage.onRestore(baseName);
+          setPreviewImage(null);
+        })}
         onClose={() => setPreviewImage(null)}
       />}
     </div>
@@ -238,15 +245,16 @@ function BatchPreview({ batchDetails, outputPrefix, expandedBatch, onToggleBatch
 }
 
 /**
- * Blur suggestions section - shows flagged groups for optional review
+ * Blur suggestions section - lists flagged groups; restored ones stay, dimmed, with Flag again
  */
-function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThumbnails, onImageClick }) {
+function BlurryPhotosSection({ blurDetection, outputPrefix, folderPath, thumbnails: parentThumbnails, onImageClick }) {
   const { blurResults, blurProgress, blurEta, blurryGroups, blurryCount, analyzedCount, unanalyzedCount, isAnalyzing, unflaggedGroups, toggleBlurFlag, cancelAnalysis } = blurDetection;
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [blurThumbnails, setBlurThumbnails] = useState({});
   const requestedRef = useRef(new Set());
   const lastResultsRef = useRef(blurResults);
+  const flaggedGroups = useMemo(() => Object.keys(blurResults || {}).filter((name) => blurResults[name].isBlurry), [blurResults]);
 
   // Fetch thumbnails for currently VISIBLE blurry files only.
   // Tied to visibleCount so each "Load More" triggers a new batch fetch.
@@ -256,10 +264,10 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       lastResultsRef.current = blurResults;
       requestedRef.current = new Set();
     }
-    if (!expanded || !folderPath || !blurResults || blurryGroups.length === 0) return;
+    if (!expanded || !folderPath || !blurResults || flaggedGroups.length === 0) return;
 
     // Only look at files the user can currently see
-    const visibleGroups = blurryGroups.slice(0, visibleCount);
+    const visibleGroups = flaggedGroups.slice(0, visibleCount);
     const filesToFetch = visibleGroups
       .map(baseName => blurResults[baseName]?.analyzedFile)
       .filter(f => f && !requestedRef.current.has(f) && !parentThumbnails[f] && !blurThumbnails[f]);
@@ -287,7 +295,7 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       }
     };
     fetchThumbs();
-  }, [expanded, visibleCount, folderPath, blurResults, blurryGroups, parentThumbnails, blurThumbnails]);
+  }, [expanded, visibleCount, folderPath, blurResults, flaggedGroups, parentThumbnails, blurThumbnails]);
 
   // Reset thumbnails and pagination when blur results change (adjust-state-during-render pattern)
   const [prevBlurResults, setPrevBlurResults] = useState(blurResults);
@@ -337,10 +345,10 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
       >
         <ScanEye size={18} className="icon-inline" />
         <span className="blurry-title">
-          {analyzedCount === 0 ? 'No blur results available' : blurryCount > 0 ? `Blur suggestions (${blurryCount} groups)` : 'No blur suggestions'}
+          {analyzedCount === 0 ? 'No blur results available' : flaggedGroups.length > 0 ? (blurryCount === 0 ? 'Blur suggestions (all restored)' : `Blur suggestions (${blurryCount} group${blurryCount === 1 ? '' : 's'})`) : 'No blur suggestions'}
         </span>
-        {analyzedCount > 0 && unanalyzedCount === 0 && blurryCount === 0 && <CheckCircle size={16} className="blurry-check" />}
-        <span className="blurry-folder-hint">Analysis does not move or exclude photos</span>
+        {analyzedCount > 0 && unanalyzedCount === 0 && flaggedGroups.length === 0 && <CheckCircle size={16} className="blurry-check" />}
+        {blurryCount > 0 && <span className="blurry-folder-hint">Will be placed in {batchNaming.generateBlurryFolderName(outputPrefix)}</span>}
         <span className="expand-icon">
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
@@ -349,15 +357,15 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
         {analyzedCount} group{analyzedCount === 1 ? '' : 's'} analyzed · {unanalyzedCount} could not be analyzed.
       </p>
 
-      {expanded && blurryCount > 0 && (() => {
+      {expanded && flaggedGroups.length > 0 && (() => {
         // Build navigable file list once, outside the per-item loop
         const blurryFileList = blurryGroups
           .map(bn => blurResults[bn]?.analyzedFile)
           .filter(Boolean);
 
-        const visibleGroups = blurryGroups.slice(0, visibleCount);
-        const hasMore = blurryGroups.length > visibleCount;
-        const remainingCount = blurryGroups.length - visibleCount;
+        const visibleGroups = flaggedGroups.slice(0, visibleCount);
+        const hasMore = flaggedGroups.length > visibleCount;
+        const remainingCount = flaggedGroups.length - visibleCount;
 
         return (
         <div className="blurry-list">
@@ -365,12 +373,13 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
             const result = blurResults[baseName];
             const thumbFile = result?.analyzedFile;
             const thumbSrc = thumbFile ? allThumbs[thumbFile] : null;
+            const restored = unflaggedGroups.has(baseName);
 
             return (
-              <div key={baseName} className="blurry-item">
+              <div key={baseName} className={restored ? 'blurry-item blurry-item-restored' : 'blurry-item'}>
                 <button type="button" className="thumbnail-button" aria-label={`Preview ${thumbFile || baseName}`}
                   disabled={!thumbFile}
-                  onClick={() => onImageClick?.(thumbFile, blurryFileList)}>
+                  onClick={() => restored ? onImageClick?.(thumbFile, [thumbFile]) : onImageClick?.(thumbFile, blurryFileList, toggleBlurFlag)}>
                 {thumbSrc ? (
                   <img
                     src={thumbSrc}
@@ -416,12 +425,12 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
                 <span className="blurry-score">Score: {result?.score >= 0 ? result.score.toFixed(1) : 'N/A'}</span>
                 <button
                   className="unflag-btn"
-                  onClick={() => toggleBlurFlag(baseName)}
-                  title="Dismiss blur suggestion"
-                  aria-label={`Dismiss blur suggestion for ${baseName}`}
+                  onClick={(event) => { if (event.detail > 1) return; toggleBlurFlag(baseName); }}
+                  title={restored ? `Send back to ${batchNaming.generateBlurryFolderName(outputPrefix)}` : 'Restore to normal batches'}
+                  aria-label={restored ? `Flag ${baseName} as blurry again` : `Restore ${baseName} to normal batches`}
                 >
-                  <X size={14} />
-                  <span>Dismiss</span>
+                  {restored ? <Flag size={14} /> : <Undo2 size={14} />}
+                  <span>{restored ? 'Flag again' : 'Restore'}</span>
                 </button>
               </div>
             );
@@ -439,17 +448,17 @@ function BlurryPhotosSection({ blurDetection, folderPath, thumbnails: parentThum
         );
       })()}
 
-      {expanded && blurryCount === 0 && (
+      {expanded && flaggedGroups.length === 0 && (
         <div className={unanalyzedCount > 0 ? 'blurry-empty blurry-empty-unknown' : 'blurry-empty'}>
           {analyzedCount > 0 && unanalyzedCount === 0 && <CheckCircle size={20} />}
           <p>{analyzedCount > 0 ? 'No blur suggestions for this analysis.' : 'No blur results available for this analysis.'}</p>
         </div>
       )}
 
-      {/* Show dismissed suggestions count */}
+      {/* Count of restored groups (they go to the normal batches) */}
       {unflaggedGroups.size > 0 && (
         <div className="blurry-restored-note">
-          {unflaggedGroups.size} suggestion{unflaggedGroups.size > 1 ? 's' : ''} dismissed; photos remain in normal batches
+          {unflaggedGroups.size} group{unflaggedGroups.size > 1 ? 's' : ''} restored to normal batches
         </div>
       )}
     </div>

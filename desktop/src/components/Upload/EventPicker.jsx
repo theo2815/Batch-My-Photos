@@ -30,13 +30,13 @@ function emptyCard({ Icon, title, help, action }) {
 }
 
 /** "10 Oct 2026" from a YYYY-MM-DD date. */
-function raceDate(dateIso) {
+export function raceDate(dateIso) {
   const part = Object.fromEntries(RACE_DATE.formatToParts(new Date(dateIso)).map(p => [p.type, p.value]));
   return `${part.day} ${part.month} ${part.year}`;
 }
 
 /** Whole days from Manila-today to a YYYY-MM-DD date, counted the same way the main process does. */
-function daysFromToday(dateIso) {
+export function daysFromToday(dateIso) {
   return Math.round((Date.parse(dateIso) - Date.parse(MANILA_DATE.format(new Date()))) / 86400000);
 }
 

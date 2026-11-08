@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateBatchFolderName } from '../src/utils/batchNaming.js';
+import { generateBatchFolderName, generateBlurryFolderName } from '../src/utils/batchNaming.js';
 
 describe('generateBatchFolderName', () => {
   // Mock Date for deterministic tests
@@ -82,6 +82,11 @@ describe('generateBatchFolderName', () => {
 
   it('preserves literal text in pattern', () => {
     expect(generateBatchFolderName('Wedding-Photos-{count}', 0, 3)).toBe('Wedding-Photos-001');
+  });
+
+  it('names the blurry folder with date tokens expanded and {count} removed', () => {
+    expect(generateBlurryFolderName('Ev_{date}')).toBe('Ev_2024-06-15_Blurry');
+    expect(generateBlurryFolderName('Run{count}')).toBe('Run_Blurry');
   });
 
   it('handles zero-indexed batch correctly (1-based output)', () => {

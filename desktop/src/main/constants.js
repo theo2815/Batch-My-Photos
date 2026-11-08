@@ -102,6 +102,9 @@ const PREVIEW_JPEG_QUALITY = 85;
  */
 const PREVIEW_CACHE_SIZE = 10;
 
+/** Largest original (bytes) the photo info panel reads into memory; bigger files show the size only. */
+const PHOTO_METADATA_MAX_BYTES = 64 * 1024 * 1024;
+
 /**
  * Largest image (width × height) sharp may decode for thumbnails, preview and blur scoring.
  * Covers every common camera up to 102 MP (Fujifilm GFX100: 11648 × 8736 ≈ 101.8 M); a larger
@@ -333,6 +336,9 @@ const QP_COMMIT_BUSY_WINDOW_MS = 600000;
 /** Retries per phase (begin, transfer, commit, pre-flight) for retryable errors. */
 const QP_MAX_RETRIES_PER_PHASE = 3;
 
+/** Retryable failed photos in a row that stop the whole upload (the resume record is kept). */
+const QP_MAX_CONSECUTIVE_FAILURES = 8;
+
 /** A Connect the browser has not answered within this time is forgotten. */
 const QP_CONNECT_PENDING_TTL_MS = 600000;
 
@@ -356,6 +362,7 @@ module.exports = {
   PREVIEW_MAX_DIMENSION,
   PREVIEW_JPEG_QUALITY,
   PREVIEW_CACHE_SIZE,
+  PHOTO_METADATA_MAX_BYTES,
   SHARP_MAX_INPUT_PIXELS,
   EXIF_CONCURRENCY,
   BLUR_CONCURRENCY,
@@ -388,6 +395,7 @@ module.exports = {
   QP_PUT_DEADLINE_MS,
   QP_COMMIT_BUSY_WINDOW_MS,
   QP_MAX_RETRIES_PER_PHASE,
+  QP_MAX_CONSECUTIVE_FAILURES,
   QP_CONNECT_PENDING_TTL_MS,
   LOGIN_PENDING_TTL_MS,
   QP_PROGRESS_INTERVAL_MS,

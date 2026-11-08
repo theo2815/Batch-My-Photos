@@ -305,7 +305,7 @@ function ImagePreviewModal({ isOpen, folderPath, fileName, fileList, imageInfo, 
       {analyzedImage && (
         <section className="blur-feedback" onClick={e => e.stopPropagation()} aria-label="Review blur suggestion" aria-busy={submitting}>
           <p className="blur-feedback-file">{currentFile}</p>
-          <p>Model suggestion: {analyzedImage.isBlurry ? 'possible blur' : 'no blur flagged'}. Your judgment comes first; photos stay in normal batches.</p>
+          <p>Model suggestion: {analyzedImage.isBlurry ? 'possible blur' : 'no blur flagged'}. Flagged photos go to the _Blurry folder unless you restore them.</p>
           <div className="blur-feedback-actions" role="group" aria-label="Your label">
             {['sharp', 'blurry'].map(value => (
               <button key={value} type="button" className="btn-small" aria-pressed={label === value}

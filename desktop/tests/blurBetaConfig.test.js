@@ -315,7 +315,7 @@ describe('analysis needs a beta key', () => {
     await handlers.get('analyze-blur')({ sender: { send() {} } }, { folderPath: temporaryFolder() });
     expect(analyzeBlur.mock.calls[0].at(-1)).toBe(0);
   });
-  it.each([[401, true], [403, true], [503, false]])('an analysis answered %i forgets the stored key: %s', async (status, forgotten) => {
+  it.each([[401, true], [403, false], [503, false]])('an analysis answered %i forgets the stored key: %s', async (status, forgotten) => {
     const keyStore = { get: () => 'stored-key', clear: vi.fn() };
     const analyzeBlur = vi.fn(async () => { throw new Error(`AI service returned ${status}: nope`); });
     const { handlers } = ipcFor(configFor(storeManifest), keyStore, {
@@ -328,7 +328,19 @@ describe('analysis needs a beta key', () => {
     expect(keyStore.clear).toHaveBeenCalledTimes(forgotten ? 1 : 0);
     expect(result).toMatchObject(forgotten
       ? { success: false, aiUnavailable: false, error: expect.stringMatching(/not accepted/) }
-      : { success: false, aiUnavailable: true });
+      : { success: false, aiUnavailable: status !== 403 });
+  });
+  it('a 403 from a proxy keeps the key and says the service refused the request', async () => {
+    const keyStore = { get: () => 'stored-key', clear: vi.fn() };
+    const analyzeBlur = vi.fn(async () => { throw new Error('AI service returned 403: error code: 1010'); });
+    const { handlers } = ipcFor(configFor(storeManifest), keyStore, {
+      './blurDetectionService': { analyzeBlur, cancelCount: () => 0 },
+      './securityManager': { isPathAllowedAsync: async () => true },
+      './batchEngine': { groupFilesByBaseName: async () => ({}) },
+    });
+    const result = await handlers.get('analyze-blur')({ sender: { send() {} } }, { folderPath: temporaryFolder() });
+    expect(keyStore.clear).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, aiUnavailable: false, error: expect.stringMatching(/refused/) });
   });
 });
 

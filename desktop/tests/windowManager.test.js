@@ -6,11 +6,15 @@ import vm from 'node:vm';
 
 const filename = path.resolve(import.meta.dirname, '../src/main/windowManager.js');
 
-function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), urlModule = url }) {
+// upload: the upload service as require.cache holds it once the Upload view was used (absent = never loaded).
+function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), urlModule = url, upload, dialog = {} }) {
   const loads = [];
   const handlers = {};
+  const windowHandlers = {};
+  const closes = [];
   class BrowserWindow {
-    constructor() {
+    constructor(options) {
+      this.options = options;
       this.webContents = {
         openDevTools() {},
         session: { webRequest: { onHeadersReceived() {} } },
@@ -21,27 +25,31 @@ function loadWindow({ packaged, npmScript, dirname = path.dirname(filename), url
     loadFile(file) { loads.push(['file', file]); }
     loadURL(url) { loads.push(['url', url]); }
     once() {}
-    on() {}
+    on(name, fn) { windowHandlers[name] = fn; }
+    close() { closes.push(1); }
   }
   const module = { exports: {} };
+  function requireStub(name) {
+    if (name === 'electron') return { BrowserWindow, Menu: { setApplicationMenu() {} }, dialog };
+    if (name === 'path') return path;
+    if (name === 'url') return urlModule;
+    if (name === 'fs') return { existsSync: () => true };
+    if (name === '../utils/logger') return { log() {}, warn() {} };
+    if (name === './config') return { isProduction: packaged };
+    throw new Error(`Unexpected import: ${name}`);
+  }
+  requireStub.resolve = (name) => name;
+  requireStub.cache = upload ? { './quickpitikUploadService': { exports: upload } } : {};
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module,
     exports: module.exports,
     __dirname: dirname,
     URL,
     process: { env: { npm_lifecycle_event: npmScript } },
-    require(name) {
-      if (name === 'electron') return { BrowserWindow, Menu: { setApplicationMenu() {} } };
-      if (name === 'path') return path;
-      if (name === 'url') return urlModule;
-      if (name === 'fs') return { existsSync: () => true };
-      if (name === '../utils/logger') return { log() {}, warn() {} };
-      if (name === './config') return { isProduction: packaged };
-      throw new Error(`Unexpected import: ${name}`);
-    },
+    require: requireStub,
   }, { filename });
   module.exports.createWindow();
-  return { loads, handlers, api: module.exports };
+  return { loads, handlers, windowHandlers, closes, api: module.exports };
 }
 
 function loadedPage(options) {
@@ -49,12 +57,17 @@ function loadedPage(options) {
 }
 
 function navigationBlocked(handlers, target) {
-  const event = { preventDefault: vi.fn() };
-  handlers['will-navigate'](event, target);
+  const event = { preventDefault: vi.fn(), url: target };
+  handlers['will-navigate'](event);
   return event.preventDefault.mock.calls.length > 0;
 }
 
 describe('desktop window source selection when dist exists', () => {
+  it('keeps renderer progress active while the window is covered', () => {
+    const { api } = loadWindow({ packaged: true });
+    expect(api.getMainWindow().options.webPreferences.backgroundThrottling).toBe(false);
+  });
+
   it('uses Vite for npm start', () => {
     expect(loadedPage({ packaged: false, npmScript: 'start' })).toEqual(['url', 'http://localhost:5173']);
   });
@@ -127,5 +140,61 @@ describe('window navigation guard', () => {
     expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html#/x')).toBe(true);
     expect(api.isAppUrl('file:///C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/evil.html')).toBe(false);
     expect(api.isAppUrl('http://localhost:5173/C:/Users/THEOCE~1/[work]/Batch%20My%20Photos/dist/index.html')).toBe(false);
+  });
+});
+
+describe('closing the window during a QuickPitik upload', () => { // R12
+  const uploading = () => ({ isUploading: () => true, cancelUpload: vi.fn() });
+  const close = (windowHandlers) => { const event = { preventDefault: vi.fn() }; windowHandlers.close(event); return event; };
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve));
+
+  it('asks first, with Keep uploading as the safe answer; Keep uploading keeps the window open', async () => {
+    const upload = uploading();
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 0 })) };
+    const { windowHandlers, closes } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(dialog.showMessageBox.mock.calls[0][1]).toMatchObject({
+      message: 'Stop the upload and quit?', detail: 'You can resume it next time you open the app.',
+      buttons: ['Keep uploading', 'Stop and quit'], defaultId: 0, cancelId: 0,
+    });
+    expect(closes).toHaveLength(0);
+    expect(upload.cancelUpload).not.toHaveBeenCalled();
+  });
+
+  it('Stop and quit closes the window without cancelling, so the resume record stays', async () => { // R4
+    const upload = uploading();
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) };
+    const { windowHandlers, closes } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(closes).toHaveLength(1);
+    expect(upload.cancelUpload).not.toHaveBeenCalled();
+  });
+
+  it('the close after Stop and quit is let through, not prevented again', async () => {
+    const dialog = { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) };
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload: uploading(), dialog });
+    close(windowHandlers);
+    await settle();
+    expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('a second close while the question is open opens no second question', async () => {
+    const dialog = { showMessageBox: vi.fn(() => new Promise(() => {})) };
+    const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload: uploading(), dialog });
+    close(windowHandlers);
+    expect(close(windowHandlers).preventDefault).toHaveBeenCalledTimes(1);
+    expect(dialog.showMessageBox).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing when no upload runs, or when the Upload view was never used', () => { // R12, R13
+    const dialog = { showMessageBox: vi.fn() };
+    for (const upload of [{ isUploading: () => false }, undefined]) {
+      const { windowHandlers } = loadWindow({ packaged: true, npmScript: 'start', upload, dialog });
+      expect(close(windowHandlers).preventDefault).not.toHaveBeenCalled();
+    }
+    expect(dialog.showMessageBox).not.toHaveBeenCalled();
   });
 });

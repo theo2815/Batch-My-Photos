@@ -665,6 +665,12 @@
   border: 1px solid rgba(27, 122, 70, 0.15);
 }
 
+.history-mode-badge.copy {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+}
+
 .history-entry-stats {
   display: flex;
   align-items: center;

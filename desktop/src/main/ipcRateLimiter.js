@@ -75,6 +75,8 @@ const CHANNEL_TIERS = {
   'get-quickpitik-upload-enabled': 'RELAXED',
   'qp-session-status':      'RELAXED',
   'qp-upload-cancel':       'RELAXED',
+  'qp-upload-pending':      'RELAXED',
+  'qp-upload-discard':      'RELAXED',
 };
 
 // ============================================================================

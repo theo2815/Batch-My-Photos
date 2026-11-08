@@ -17,15 +17,16 @@ const https = require('https');
 const { net } = require('electron');
 const path = require('path');
 const logger = require('../utils/logger');
-const { isPathAllowedAsync } = require('./securityManager');
+const { isPathAllowedAsync, registerAllowedPath } = require('./securityManager');
 const { IGNORED_FILES, yieldToMain } = require('./batchEngine');
 const {
   STAT_CONCURRENCY, QP_MAX_FILE_BYTES, QP_WALK_MAX_DEPTH, QP_UPLOAD_CONCURRENCY, QP_HASH_CONCURRENCY,
   QP_EXISTS_CHUNK, QP_COMMIT_TIMEOUT_MS, QP_PUT_STALL_MS, QP_PUT_DEADLINE_MS, QP_COMMIT_BUSY_WINDOW_MS,
-  QP_MAX_RETRIES_PER_PHASE, QP_PROGRESS_INTERVAL_MS,
+  QP_MAX_RETRIES_PER_PHASE, QP_PROGRESS_INTERVAL_MS, QP_MAX_CONSECUTIVE_FAILURES,
 } = require('./constants');
 const config = require('./config');
 const qpAuth = require('./quickpitikAuthService');
+const uploadRecord = require('./quickpitikUploadRecord');
 
 const ACCESS_DENIED = 'Access denied: folder not selected through dialog';
 const UNREADABLE = 'Could not read this folder.';
@@ -254,7 +255,7 @@ const TERMINAL_PER_FILE = new Set(['UNSUPPORTED_MEDIA_TYPE', 'PAYLOAD_TOO_LARGE'
  * fail the same way, and each begin leaves a pending slot on the server.
  */
 const TERMINAL_PER_UPLOAD = new Set(['EVENT_NOT_UPLOADABLE', 'EVENT_NOT_FOUND', 'PHOTOGRAPHER_NOT_VERIFIED', 'ACCOUNT_SUSPENDED', 'WATERMARK_MISSING',
-  'UPLOAD_LINK_REJECTED']);
+  'UPLOAD_LINK_REJECTED', 'SELLER_DETAILS_REQUIRED']);
 const OFFLINE_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED',
   'ERR_NAME_NOT_RESOLVED', 'ERR_CONNECTION_REFUSED', 'ERR_ADDRESS_UNREACHABLE']);
 
@@ -296,7 +297,7 @@ function retryDelay(error, attempt) {
 
 /**
  * Run one phase with the retry rules: really offline → wait, retry, do not count;
- * commit busy (UPLOAD_IN_PROGRESS / 429) → capped waits inside
+ * commit busy (UPLOAD_IN_PROGRESS / 429 / 503 with Retry-After) → capped waits inside
  * QP_COMMIT_BUSY_WINDOW_MS; retryable → backoff, at most
  * QP_MAX_RETRIES_PER_PHASE per phase; anything else is thrown to the caller.
  */
@@ -309,7 +310,8 @@ async function withRetries(run, phase, state, ctx, canRetry = isRetryable) {
       ctx.assertActive();
       if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError) throw error;
       if (isOffline(error) && !net.isOnline()) { await ctx.waitForConnection(); continue; }
-      if (phase === 'commit' && (codeOf(error) === 'UPLOAD_IN_PROGRESS' || (error instanceof qpAuth.QpApiError && error.status === 429))) {
+      if (phase === 'commit' && (codeOf(error) === 'UPLOAD_IN_PROGRESS' || (error instanceof qpAuth.QpApiError
+          && (error.status === 429 || (error.status === 503 && error.retryAfterSeconds !== undefined))))) {
         state.busyUntil = state.busyUntil || internals.now() + QP_COMMIT_BUSY_WINDOW_MS;
         if (internals.now() < state.busyUntil) {
           state.busyWaits = (state.busyWaits || 0) + 1;
@@ -532,6 +534,7 @@ async function runUpload(ctx) {
     for (let index = 0; index < ctx.plan.length; index++) {
       const folder = ctx.plan[index];
       ctx.folder = { relPath: folder.relPath, index, count: ctx.plan.length };
+      const failedBefore = ctx.failures.length;
       ctx.emit({ phase: 'hashing' }, true);
       // A worker never throws: the pool then ends only when every file in
       // flight has finished, so nothing is reported after the last event.
@@ -560,22 +563,31 @@ async function runUpload(ctx) {
           const outcome = await uploadOne(ctx, file);
           ctx.counts[outcome] += 1;
           if (outcome !== 'uploaded') ctx.addBytes(file.sizeBytes);
+          if (outcome === 'uploaded' || outcome === 'alreadyThere') ctx.failStreak = 0;
         } catch (error) {
           if (error instanceof CancelledError || error instanceof qpAuth.QpAuthError || TERMINAL_PER_UPLOAD.has(codeOf(error))) {
             ctx.stop(error); // the other workers finish the file they are on, then stop
             return;
           }
+          if (ctx.cancelled) return; // cut short by the stop, not a failed photo
           recordFailure(ctx, folder, file, netCode(error) || 'UPLOAD_FAILED', error.message, isRetryable(error));
+          if (isRetryable(error)) {
+            ctx.failStreak = (ctx.failStreak || 0) + 1;
+            if (ctx.failStreak >= QP_MAX_CONSECUTIVE_FAILURES) ctx.stop(Object.assign(new Error('QuickPitik cannot be reached. Check your connection, then resume.'), { code: 'UNREACHABLE' }));
+          }
         }
         ctx.emit({ phase: 'uploading' });
       });
       ctx.assertActive();
+      if (ctx.failures.length === failedBefore) uploadRecord.markFinished(folder.relPath); // a folder with a failure is read again on resume
       ctx.emit({ phase: 'folder-done' }, true);
     }
+    uploadRecord.clear(); // even with failed photos: Retry failed covers them in this session
     ctx.emit({ phase: 'done', failures: ctx.failures }, true);
   } catch (caught) {
     const error = ctx.stopError || caught;
     if (error instanceof CancelledError) {
+      uploadRecord.clear();
       ctx.emit({ phase: 'cancelled', failures: ctx.failures }, true);
     } else if (error instanceof qpAuth.QpAuthError) {
       ctx.emit({ phase: 'error', error: { code: 'SESSION_EXPIRED', message: 'Your QuickPitik sign-in expired.' }, failures: ctx.failures }, true);
@@ -594,35 +606,94 @@ let current = null; // one upload per process
  */
 async function startUpload(request, send) {
   if (current) return { success: false, error: 'An upload is already running.' };
-  const slot = current = { stop() {} }; // holds the place while the folders are listed
+  const slot = current = { stopped: false, stop() { slot.stopped = true; } }; // holds the place while the folders are listed
   try {
-    return await beginUpload(request, send);
+    // A resume: the saved record decides; the screen's paths are not used
+    return request?.resume === true ? await resumeUpload(send, slot) : await beginUpload(request, send, slot);
   } finally {
     if (current === slot) current = null;
   }
 }
 
-async function beginUpload(request, send) {
-  const { rootPath, eventId, folders } = request || {};
+async function beginUpload(request, send, slot) {
+  const { rootPath, eventId, eventName, folders } = request || {};
   if (typeof rootPath !== 'string' || typeof eventId !== 'string' || !Array.isArray(folders)
-      || folders.some(rel => typeof rel !== 'string' || rel.split('/').includes('..') || path.isAbsolute(rel))) {
+      || folders.some(rel => !uploadRecord.isRelPath(rel))) {
     return { success: false, error: 'Invalid upload request.' };
   }
   if (!(await isPathAllowedAsync(rootPath))) return { success: false, error: ACCESS_DENIED };
   const root = path.resolve(rootPath);
   const plan = [];
+  const missing = [];
   for (const relPath of folders) {
     const dir = relPath === '' ? root : path.join(root, ...relPath.split('/'));
+    if (!(await isFolder(dir))) { missing.push(relPath); continue; }
     if (!(await isPathAllowedAsync(dir))) return { success: false, error: ACCESS_DENIED };
     const { files } = await listFolder(dir);
     if (files.length > 0) plan.push({ relPath, dir, files });
   }
   const total = plan.reduce((sum, folder) => sum + folder.files.length, 0);
   if (total === 0) return { success: false, error: 'Nothing to upload.' };
+  const { birthtimeMs: rootBirth } = await fsPromises.stat(root);
   current = makeContext({ eventId, plan, total, send });
+  // Errors, a crash or a quit keep this record; done, Cancel, Discard and Disconnect clear it.
+  uploadRecord.save({
+    account: qpAuth.getAccountId(), eventId, eventName: typeof eventName === 'string' && eventName ? eventName.slice(0, 200) : eventId,
+    root, rootBirth, selected: folders,
+  });
+  for (const relPath of missing) recordFailure(current, { relPath }, { name: '' }, 'FOLDER_MISSING', 'This subfolder is no longer there.', false);
+  if (slot.stopped) current.stop(new CancelledError());
   runUpload(current).finally(() => { current = null; });
   return { success: true, total };
 }
+
+// ── Resume after a crash or a quit ────────────────────────────────────────────
+
+const isFolder = (dir) => fsPromises.stat(dir).then(stat => stat.isDirectory(), () => false);
+
+/** The saved record if it belongs to the connected account (another account's stays hidden, not deleted). */
+function ownRecord() {
+  const record = uploadRecord.load();
+  return record && record.account === qpAuth.getAccountId() ? record : null;
+}
+
+/**
+ * For the screen: an upload still running (the screen may have reloaded), or
+ * this account's unfinished one. No token, no file list.
+ */
+async function getPending() {
+  if (current) return { running: true, pending: null };
+  const record = ownRecord();
+  if (!record) return { running: false, pending: null };
+  return { running: false, pending: {
+    eventId: record.eventId, eventName: record.eventName, folder: record.root, folderMissing: !(await isFolder(record.root)),
+  } };
+}
+
+/** Re-allow the saved folder (this one only, only now), scan it, then upload the subfolders that did not finish. */
+async function resumeUpload(send, slot) {
+  const record = ownRecord();
+  if (!record) return { success: false, error: 'There is no upload to resume.' };
+  if (!(await isFolder(record.root))) return { success: false, error: 'The folder is not there. Plug in the card or choose the folder again.' };
+  if (typeof record.rootBirth === 'number' && record.rootBirth !== (await fsPromises.stat(record.root)).birthtimeMs) {
+    return { success: false, error: 'This folder is not the one the upload started from. Discard it and choose the folder again.' };
+  }
+  registerAllowedPath(record.root);
+  const scan = await scanFolder(record.root);
+  if (!scan.success) return scan;
+  const folders = record.selected.filter(rel => !record.finished.includes(rel));
+  const started = await beginUpload({ rootPath: record.root, eventId: record.eventId, eventName: record.eventName, folders }, send, slot);
+  return started.success ? { ...started, eventId: record.eventId, folders, scan } : started;
+}
+
+/** Discard: forget the unfinished upload. A running upload keeps its record. */
+function discardPending() {
+  if (!current) uploadRecord.clear();
+  return { success: true };
+}
+
+/** For the quit question. */
+const isUploading = () => current !== null;
 
 /** Cooperative cancel: no new file starts, in-flight PUTs are destroyed, the summary reports what finished. */
 function cancelUpload() {
@@ -636,5 +707,6 @@ module.exports = {
   scanFolder,
   listEvents,
   sha256File, startUpload, cancelUpload,
+  getPending, discardPending, isUploading,
   _internals: { listFolder, runPool, ACCESS_DENIED, RAW_EXTENSIONS, VIDEO_EXTENSIONS, HEIC_EXTENSIONS, canUploadPublic, canUploadOwned, ownerCloseDate, get sleep() { return internals.sleep; }, set sleep(fn) { internals.sleep = fn; }, get now() { return internals.now; }, set now(fn) { internals.now = fn; } },
 };

@@ -9,7 +9,7 @@ export default defineConfig({
       apply: "serve",
       transform(code, id) {
         if (id.endsWith("/src/utils/batchNaming.js")) {
-          return code.replace("module.exports = { generateBatchFolderName };", "export default { generateBatchFolderName };");
+          return code.replace("module.exports = { generateBatchFolderName, generateBlurryFolderName, expandDateTokens };", "export default { generateBatchFolderName, generateBlurryFolderName, expandDateTokens };");
         }
       },
     },

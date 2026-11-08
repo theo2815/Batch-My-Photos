@@ -4,6 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { useQuickPitikUpload } from '../src/hooks/useQuickPitikUpload.js';
+
+const progressEffects = vi.hoisted(() => []);
+vi.mock('react', () => ({
+  useState: value => [value, () => {}],
+  useRef: value => ({ current: value }),
+  useEffect: effect => progressEffects.push(effect),
+  useCallback: callback => callback,
+}));
 
 const root = path.resolve(import.meta.dirname, '..');
 const logger = { log() {}, warn() {}, error() {}, info() {}, debug() {}, time() {}, timeEnd() {} };
@@ -22,7 +31,8 @@ function load(file, mocks = {}, overrides = {}) {
 const baseConfig = { isDevelopment: true, isProduction: false, features: { QUICKPITIK_UPLOAD_ENABLED: true }, urls: {}, limits: {} };
 function ipcFor(services = {}, config = { ...baseConfig }) {
   const handlers = new Map();
-  const win = { isDestroyed: () => false, webContents: { send: vi.fn() } };
+  const win = { isDestroyed: () => false, webContents: { send: vi.fn() },
+    getTitle: () => 'Batch My Photos', setTitle: vi.fn(), setProgressBar: vi.fn() };
   const electron = { app: { getVersion: () => '1.0.6' }, net: { fetch: async () => ({ ok: false }) }, dialog: {}, shell: {} };
   const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
   const mocks = {
@@ -131,6 +141,56 @@ describe('QuickPitik connect channels', () => {
 });
 
 describe('QuickPitik upload channels', () => {
+  it('shows byte progress and committed photo counts on the taskbar and title', async () => {
+    const upload = uploadMock();
+    const { handlers, win } = ipcFor({ './quickpitikUploadService': upload });
+    await handlers.get('qp-upload-start')({}, {});
+    const progress = upload.startUpload.mock.calls[0][1];
+    const payload = { phase: 'uploading', bytes: { sent: 250, total: 1000 },
+      counts: { uploaded: 1, alreadyThere: 0, inTrash: 0, failed: 0, total: 4 } };
+    progress(payload);
+    expect(win.setProgressBar).toHaveBeenLastCalledWith(0.25);
+    expect(win.setTitle).toHaveBeenLastCalledWith('Uploading 25% · 1 of 4');
+    expect(win.webContents.send).toHaveBeenLastCalledWith('qp-upload-progress', payload);
+  });
+
+  it.each(['done', 'cancelled', 'error'])('clears taskbar progress and restores the title on %s', async phase => {
+    const upload = uploadMock();
+    const { handlers, win } = ipcFor({ './quickpitikUploadService': upload });
+    win.getTitle = () => 'My existing title';
+    await handlers.get('qp-upload-start')({}, {});
+    const progress = upload.startUpload.mock.calls[0][1];
+    progress({ phase: 'uploading', bytes: { sent: 250, total: 1000 }, counts: { uploaded: 1, total: 4 } });
+    win.getTitle = () => 'Uploading 25% · 1 of 4';
+    progress({ phase, bytes: { sent: 250, total: 1000 }, counts: { uploaded: 1, total: 4 } });
+    expect(win.setProgressBar).toHaveBeenLastCalledWith(-1);
+    expect(win.setTitle).toHaveBeenLastCalledWith('My existing title');
+  });
+
+  it.each([
+    [{ sent: 0, total: 0 }, 0],
+    [{ sent: -10, total: 100 }, 0],
+    [{ sent: 120, total: 100 }, 1],
+  ])('keeps taskbar progress valid for byte counts %j', async (bytes, fraction) => {
+    const upload = uploadMock();
+    const { handlers, win } = ipcFor({ './quickpitikUploadService': upload });
+    await handlers.get('qp-upload-start')({}, {});
+    upload.startUpload.mock.calls[0][1]({ phase: 'uploading', bytes, counts: { uploaded: 0, total: 4 } });
+    expect(win.setProgressBar).toHaveBeenLastCalledWith(fraction);
+  });
+
+  it('leaves a destroyed window alone while the background upload finishes', async () => {
+    const upload = uploadMock();
+    const { handlers, win } = ipcFor({ './quickpitikUploadService': upload });
+    await handlers.get('qp-upload-start')({}, {});
+    win.isDestroyed = () => true;
+    win.setProgressBar.mockClear(); win.setTitle.mockClear(); win.webContents.send.mockClear();
+    upload.startUpload.mock.calls[0][1]({ phase: 'done', counts: { uploaded: 1, total: 4 } });
+    expect(win.setProgressBar).not.toHaveBeenCalled();
+    expect(win.setTitle).not.toHaveBeenCalled();
+    expect(win.webContents.send).not.toHaveBeenCalled();
+  });
+
   it('qp-scan-folder passes the path to the upload service', async () => {
     const upload = uploadMock();
     const { api } = preloadFor(ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload }).handlers);
@@ -190,6 +250,29 @@ describe('QuickPitik upload channels', () => {
     expect(openExternal).toHaveBeenCalledWith('https://quickpitik.com/dashboard');
     expect((await api.openExternalUrl('https://quickpitik.com.evil.example/')).success).toBe(false);
     expect(openExternal).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('QuickPitik renderer progress logging', () => {
+  it('logs a timestamp, percentage and committed count for each received event', () => {
+    let progress;
+    vi.stubGlobal('window', { electronAPI: {
+      qpSessionStatus: async () => ({ connected: false }),
+      onQpConnectResult: () => () => {},
+      onQpUploadProgress: callback => { progress = callback; return () => {}; },
+    } });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      useQuickPitikUpload();
+      progressEffects.splice(0).forEach(effect => effect());
+      progress({ phase: 'uploading', bytes: { sent: 250, total: 1000 }, counts: { uploaded: 1, total: 4 } });
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/), 'qp-upload-progress', 25, 1);
+      progress({ phase: 'done', counts: { uploaded: 4, total: 4 } });
+      expect(log).toHaveBeenCalledTimes(2);
+    } finally {
+      log.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -256,5 +339,34 @@ describe('dialogs remember the last folder (Electron 43+ would open Downloads)',
     } finally {
       fs.rmSync(reportDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('QuickPitik upload resume channels', () => {
+  it('reach the upload service through preload; qpUploadStart passes the event name and the resume flag', async () => {
+    const upload = { ...uploadMock(),
+      getPending: vi.fn(async () => ({ running: false, pending: { eventId: 'e1', eventName: 'Cebu Marathon 2026', folder: 'C:/shoot', folderMissing: false } })),
+      discardPending: vi.fn(() => ({ success: true })) };
+    const { api } = preloadFor(ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload }).handlers);
+    expect(await api.qpUploadPending()).toEqual({ running: false, pending: { eventId: 'e1', eventName: 'Cebu Marathon 2026', folder: 'C:/shoot', folderMissing: false } });
+    expect(await api.qpUploadDiscard()).toEqual({ success: true });
+    expect(upload.discardPending).toHaveBeenCalledTimes(1);
+    await api.qpUploadStart({ rootPath: 'C:/shoot', eventId: 'e1', eventName: 'Cebu Marathon 2026', folders: [''] });
+    expect(upload.startUpload.mock.calls[0][0]).toEqual({ rootPath: 'C:/shoot', eventId: 'e1', eventName: 'Cebu Marathon 2026', folders: [''] });
+    await api.qpUploadStart({ resume: true });
+    expect(upload.startUpload.mock.calls[1][0]).toEqual({ resume: true });
+  });
+
+  it('a read that fails answers "nothing to show"', async () => {
+    const upload = { ...uploadMock(), getPending: vi.fn(async () => { throw new Error('store unreadable'); }) };
+    const { handlers } = ipcFor({ './quickpitikAuthService': authMock(), './quickpitikUploadService': upload });
+    expect(await handlers.get('qp-upload-pending')({})).toEqual({ running: false, pending: null });
+  });
+
+  it('rate-limits the new channels; Resume goes through the strict qp-upload-start', () => { // D7
+    const limiter = load('src/main/ipcRateLimiter.js', { '../utils/logger': logger, './windowManager': { isAppUrl: () => true } });
+    expect(limiter.CHANNEL_TIERS['qp-upload-pending']).toBe('RELAXED');
+    expect(limiter.CHANNEL_TIERS['qp-upload-discard']).toBe('RELAXED');
+    expect(limiter.CHANNEL_TIERS['qp-upload-start']).toBe('STRICT');
   });
 });

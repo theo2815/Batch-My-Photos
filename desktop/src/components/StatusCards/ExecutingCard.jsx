@@ -7,6 +7,7 @@
 import React from 'react';
 import { XCircle } from 'lucide-react';
 import { BoxSpinner } from '../common';
+import { STRINGS } from '../../constants/strings';
 import './StatusCards.css';
 
 /**
@@ -17,9 +18,10 @@ import './StatusCards.css';
  * @param {number} [props.progress.processedFiles] - Number of files processed
  * @param {number} [props.progress.totalFiles] - Total number of files
  * @param {boolean} [props.isRollback] - Whether this is a rollback/undo operation
+ * @param {'move'|'copy'} [props.rollbackMode] - Which kind of run is being undone
  * @param {() => void} [props.onCancel] - Callback when cancel button is clicked
  */
-function ExecutingCard({ progress, isRollback = false, onCancel }) {
+function ExecutingCard({ progress, isRollback = false, rollbackMode, onCancel }) {
   const percentage = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
   
   const handleCancel = async () => {
@@ -29,9 +31,10 @@ function ExecutingCard({ progress, isRollback = false, onCancel }) {
   };
   
   // Dynamic text based on operation type
-  const title = isRollback ? 'Undoing Batches...' : 'Creating Batches...';
+  const isCopyUndo = isRollback && rollbackMode === 'copy';
+  const title = isCopyUndo ? STRINGS.COPY_UNDO_EXECUTING_TITLE : isRollback ? 'Undoing Batches...' : 'Creating Batches...';
   const progressText = isRollback 
-    ? `${progress.current} of ${progress.total} files restored`
+    ? `${progress.current} of ${progress.total} files ${isCopyUndo ? 'checked' : 'restored'}`
     : `${progress.current} of ${progress.total} folders created`;
   
   return (

@@ -37,7 +37,7 @@ import { ValidationModal, ConfirmationModal, CancelConfirmationModal, ResumeModa
 import { ScanningCard, ExecutingCard, CompleteCard, ErrorCard, UndoCompleteCard, BatchLimitCard } from './components/StatusCards';
 import { PreviewPanel } from './components/PreviewPanel';
 import { IdleScreen } from './components/DropZone';
-import { UploadView } from './components/Upload';
+import { UploadView, UploadResumeModal } from './components/Upload';
 import BoxSpinner from './components/common/BoxSpinner';
 import { UpdateBanner } from './components/common/UpdateBanner';
 
@@ -90,6 +90,10 @@ function App() {
   const [view, setView] = useState('sort');
   const [uploadEnabled, setUploadEnabled] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
+  // The launch pop-up's Resume, handed to the Upload view once; a started upload uses it up.
+  const [resumeUpload, setResumeUpload] = useState(false);
+  const handleUploadBusy = useCallback((busy) => { setUploadBusy(busy); if (busy) setResumeUpload(false); }, []);
+  const showUploadView = useCallback(() => setView('upload'), []);
   const blurDetection = useBlurDetection({
     isBeta: blurBetaEnabled,
     folderPath,
@@ -98,7 +102,7 @@ function App() {
     blurCategories,
   });
   const {
-    isAnalyzing: isAnalyzingBlur,
+    blurryGroups, isAnalyzing: isAnalyzingBlur,
     runBlurAnalysis, resetBlurState, clearAnalysisCache,
   } = blurDetection;
 
@@ -145,7 +149,7 @@ function App() {
   });
   const {
     rollbackAvailable, rollbackInfo,
-    showUndoConfirmation, isRollingBack,
+    showUndoConfirmation, isRollingBack, undoMode,
     handleUndoClick, handleExecuteUndo, setShowUndoConfirmation,
     clearRollback,
     // History
@@ -264,8 +268,11 @@ function App() {
     previewCancelledRef.current = false;
     setIsRefreshingPreview(true);
 
+    // Pass blurry groups as excludeGroups if blur detection is enabled
+    const excludeGroups = blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null;
+
     try {
-      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, null);
+      const preview = await window.electronAPI.previewBatches(folderPath, previewMaxFiles, sortBy, excludeGroups);
       if (!previewCancelledRef.current) {
         if (preview.success) {
           setPreviewResults(preview);
@@ -281,7 +288,7 @@ function App() {
         setRefreshingField(null);
       }
     }
-  }, [folderPath, maxFilesPerBatch, sortBy, setRefreshingField]);
+  }, [folderPath, maxFilesPerBatch, sortBy, blurDetectionEnabled, blurryGroups, setRefreshingField]);
 
   useEffect(() => {
     if (appStateRef.current !== STATES.READY) return;
@@ -302,6 +309,7 @@ function App() {
 
   // Track when blur toggle just turned on (to show modal instead of auto-analyzing)
   const prevBlurEnabledRef = useRef(blurDetectionEnabled);
+  const blurModalFromToggleRef = useRef(false);
 
   // Only Start Analysis may trigger inference; folder and sensitivity changes do not.
   useEffect(() => {
@@ -317,6 +325,7 @@ function App() {
 
     // Show the sensitivity modal when toggle just turned on (manual or via preset)
     if (justEnabled) {
+      blurModalFromToggleRef.current = true;
       setShowBlurSensitivityModal(true);
       return;
     }
@@ -338,11 +347,12 @@ function App() {
   // Called when user dismisses the sensitivity modal without starting
   const handleDismissBlurModal = useCallback(() => {
     setShowBlurSensitivityModal(false);
-    handleSettingsChange('blurDetectionEnabled', false);
+    if (blurModalFromToggleRef.current) handleSettingsChange('blurDetectionEnabled', false);
   }, [handleSettingsChange]);
 
   // Called from SettingsPanel "Change Sensitivity" button
   const handleOpenBlurModal = useCallback(() => {
+    blurModalFromToggleRef.current = false;
     setShowBlurSensitivityModal(true);
   }, []);
 
@@ -397,7 +407,7 @@ function App() {
       sortBy,
       selectedPresetName,
       previewBatchCount: previewResults?.batchCount || 0,
-      blurryGroups: null,
+      blurryGroups: blurDetectionEnabled && blurryGroups.length > 0 ? blurryGroups : null,
     });
   };
 
@@ -557,7 +567,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {!sortView && <UploadView onBusyChange={setUploadBusy} />}
+        {!sortView && <UploadView onBusyChange={handleUploadBusy} resumeOnOpen={resumeUpload} />}
         {sortView && appState === STATES.IDLE && (
           <IdleScreen
             isDragOver={isDragOver}
@@ -617,6 +627,7 @@ function App() {
           <ExecutingCard
             progress={progress}
             isRollback={isRollingBack}
+            rollbackMode={undoMode}
             onCancel={(isRollingBack || batchMode === 'move') ? undefined : handleCancelBatch}
           />
         )}
@@ -699,6 +710,10 @@ function App() {
         onDiscard={handleDiscardProgress}
       />
 
+      {uploadEnabled && (
+        <UploadResumeModal onResume={() => { setResumeUpload(true); setView('upload'); }} onRunning={showUploadView} />
+      )}
+
       <ResumeRollbackModal
         isOpen={showResumeRollbackModal}
         info={interruptedRollback}
@@ -727,6 +742,7 @@ function App() {
       <UndoConfirmationModal
         isOpen={showHistoryUndoConfirmation}
         rollbackInfo={pendingHistoryUndo ? {
+          mode: pendingHistoryUndo.mode,
           totalFiles: pendingHistoryUndo.totalFiles,
           batchFolderCount: pendingHistoryUndo.batchFolderCount,
         } : null}

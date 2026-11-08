@@ -30,7 +30,7 @@ const blurDetectionService = require('./blurDetectionService');
 const { executeFileOperations } = require('./batchExecutor');
 const { isPathAllowedAsync, registerAllowedPath, sanitizeOutputPrefix, validateMaxFilesPerBatch } = require('./securityManager');
 const { collectFileStats, isSameDrive, getDiskSpace, testWritePermission, formatBytes, calculateTotalSize, SPACE_BUFFER_MULTIPLIER } = require('./fileUtils');
-const { generateBatchFolderName } = require('../utils/batchNaming');
+const { generateBatchFolderName, generateBlurryFolderName } = require('../utils/batchNaming');
 const sharp = require('sharp');
 const { rateLimitedHandle: handle } = require('./ipcRateLimiter');
 const {
@@ -48,6 +48,23 @@ const {
 // Module-level storage for last batch operations (used by export-batch-report on demand).
 // Kept in main process memory to avoid sending large arrays through IPC.
 let lastBatchOperations = null;
+
+/** Real per-folder counts for a run that may have stopped early. */
+function countCopiedPerFolder(results, ops) {
+  const counts = new Map();
+  for (const op of ops) {
+    const folder = path.basename(path.dirname(op.destPath));
+    counts.set(folder, (counts.get(folder) || 0) + 1);
+  }
+  return results.filter(r => counts.has(r.folder)).map(r => ({ folder: r.folder, fileCount: counts.get(r.folder) }));
+}
+
+/** After a stopped run is undone, forget its resume record so the next start does not redo it. */
+async function clearResumeRecordFor(progressId) {
+  if (!progressId) return;
+  const progress = await progressManager.loadProgress();
+  if (progress && progress.operationId === progressId) await progressManager.clearProgress();
+}
 
 // Last folder each dialog returned, in memory only. Electron 43+ opens a dialog with no
 // defaultPath in Downloads instead of the folder Windows remembered.
@@ -554,7 +571,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Reset cancellation flag at start of new operation
       appState.resetBatchCancellation();
-      
+
       // Re-scan to get clean state
       const entries = await fsPromises.readdir(folderPath, { withFileTypes: true });
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
@@ -571,8 +588,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       // Group files and separate blurry groups if provided
       const fileGroups = await groupFilesByBaseName(files);
       const MAX_BLURRY_GROUPS = 10000;
-      const blurryGroupSet = new Set(config.features.BLUR_BETA_ENABLED
-        ? [] : Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
+      const blurryGroupSet = new Set(Array.isArray(blurryGroups) ? blurryGroups.slice(0, MAX_BLURRY_GROUPS) : []);
       const blurryFiles = [];
       
       if (blurryGroupSet.size > 0) {
@@ -589,29 +605,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       const batches = await calculateBatches(fileGroups, safeMaxFiles, safeSortBy, fileStats);
 
       const baseOutputDir = (mode === 'copy' && outputDir) ? outputDir : folderPath;
-      
-      // Create all batch folders first (Parallel Optimized)
-      // Process in chunks to prevent file handle exhaustion
-      logger.time('FOLDER_CREATION');
-      for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
-        const chunkPromises = [];
-        for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
-          const batchIndex = i + j;
-          const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
-          const batchFolderPath = path.join(baseOutputDir, batchFolderName);
-          chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
-        }
-        await Promise.all(chunkPromises);
-      }
-      
-      // Create the blurry folder if there are blurry files
-      const blurryFolderName = blurryFiles.length > 0 ? `${safePrefix}_Blurry` : null;
-      if (blurryFolderName) {
-        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
-        await fsPromises.mkdir(blurryFolderPath, { recursive: true });
-        logger.log(`🔍 [BLUR] Created blurry folder: ${blurryFolderName}`);
-      }
-      logger.timeEnd('FOLDER_CREATION');
+      const blurryFolderName = blurryFiles.length > 0 ? generateBlurryFolderName(safePrefix) : null;
 
       let processedFiles = 0;
 
@@ -649,6 +643,56 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         }
       }
 
+      // Refuse before touching anything if a destination folder already holds files with these names
+      const namesByFolder = new Map();
+      for (const op of operations) {
+        const dir = path.dirname(op.destPath);
+        if (!namesByFolder.has(dir)) namesByFolder.set(dir, []);
+        namesByFolder.get(dir).push(op.fileName);
+      }
+      for (const [dir, names] of namesByFolder) {
+        let existing;
+        try {
+          existing = await fsPromises.readdir(dir);
+        } catch (err) {
+          if (err.code === 'ENOENT') continue;
+          throw err;
+        }
+        const fold = n => (process.platform === 'win32' ? n.toLowerCase() : n);
+        const existingSet = new Set(existing.map(fold));
+        const clashes = names.filter(n => existingSet.has(fold(n)));
+        if (clashes.length > 0) {
+          return {
+            success: false,
+            error: `${path.basename(dir)} already has ${clashes.length} ${clashes.length === 1 ? 'file with the same name' : 'files with the same names'} (for example ${clashes[0]}). Choose another folder name.`
+          };
+        }
+      }
+
+      rollbackManager.clearRollbackManifest();
+
+      // Create all batch folders first (Parallel Optimized)
+      // Process in chunks to prevent file handle exhaustion
+      logger.time('FOLDER_CREATION');
+      for (let i = 0; i < batches.length; i += FOLDER_CONCURRENCY) {
+        const chunkPromises = [];
+        for (let j = 0; j < FOLDER_CONCURRENCY && (i + j) < batches.length; j++) {
+          const batchIndex = i + j;
+          const batchFolderName = generateBatchFolderName(safePrefix, batchIndex, batches.length);
+          const batchFolderPath = path.join(baseOutputDir, batchFolderName);
+          chunkPromises.push(fsPromises.mkdir(batchFolderPath, { recursive: true }));
+        }
+        await Promise.all(chunkPromises);
+      }
+
+      // Create the blurry folder if there are blurry files
+      if (blurryFolderName) {
+        const blurryFolderPath = path.join(baseOutputDir, blurryFolderName);
+        await fsPromises.mkdir(blurryFolderPath, { recursive: true });
+        logger.log(`🔍 [BLUR] Created blurry folder: ${blurryFolderName}`);
+      }
+      logger.timeEnd('FOLDER_CREATION');
+
       // Use the actual filtered count (operations built from grouped media files + blurry files)
       // instead of raw files.length which includes system/non-media files skipped by groupFilesByBaseName
       const totalFiles = operations.length;
@@ -667,7 +711,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       
       // Start progress tracking for crash recovery
       const allFileNames = operations.map(op => op.fileName);
-      await progressManager.startProgress({
+      const progressId = await progressManager.startProgress({
         folderPath,
         outputDir: baseOutputDir,
         mode,
@@ -676,11 +720,14 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         totalFiles,
         allFileNames,
         operations,
-        batchInfo
+        batchInfo,
+        blurryFolderName,
+        blurryFileCount: blurryFiles.length
       });
       
       // Delegate file processing to the shared batch executor
       const totalBatchCount = batches.length + (blurryFolderName ? 1 : 0);
+      const doneNames = new Set();
       const { processedFiles: finalProcessed, errors } = await executeFileOperations(
         operations, mode, {
           totalFiles,
@@ -688,7 +735,7 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
           initialProcessed: 0,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
-          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onProcessedFiles: (fileNames) => { progressManager.addProcessedFiles(fileNames); for (const n of fileNames) doneNames.add(n); },
           onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
       );
@@ -747,20 +794,23 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
         completedAt: new Date().toISOString(),
       };
       
-      // Save rollback manifest before the renderer refreshes History on completion.
-      if (config.features.ROLLBACK_ENABLED && !wasCancelled && mode === 'move') {
+      // Undo record. Move: only a finished run (unchanged). Copy: also a stopped run,
+      // listing only the files it really copied.
+      const undoOps = mode === 'copy' ? operations.filter(op => doneNames.has(op.fileName)) : operations;
+      const saveUndo = mode === 'copy' ? undoOps.length > 0 : (!wasCancelled && mode === 'move');
+      if (config.features.ROLLBACK_ENABLED && saveUndo) {
         await rollbackManager.saveRollbackManifest({
           sourceFolder: folderPath,
           outputFolder: baseOutputDir,
           mode,
-          operations,
+          operations: undoOps,
           batchFolders: result.results.map(r => r.folder),
-          totalFiles: processedFiles,
+          totalFiles: mode === 'copy' ? undoOps.length : processedFiles,
           outputPrefix: safePrefix,
-          // Extended metadata for history detail display
           maxFilesPerBatch: safeMaxFiles,
           sortBy: safeSortBy,
-          batchResults: result.results, // [{ folder, fileCount }, ...]
+          batchResults: mode === 'copy' ? countCopiedPerFolder(result.results, undoOps) : result.results,
+          progressId,
         }).catch(err => logger.error('💾 [ROLLBACK] Background manifest save failed:', err.message));
       }
       
@@ -936,9 +986,12 @@ function registerCoreHandlers(ipcMain, getMainWindow, appState) {
       };
     } catch (error) {
       // ai-api refused the saved beta key (revoked or wrong): forget it so Settings asks again.
-      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 40[13]\b/.test(error.message || '')) {
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 401\b/.test(error.message || '')) {
         require('./blurBetaKeyStore').clear();
         return { success: false, error: 'Your blur beta key was not accepted. Enter it again in Settings.', aiUnavailable: false };
+      }
+      if (config.isProduction && config.features.BLUR_BETA_ENABLED && /^AI service returned 403\b/.test(error.message || '')) {
+        return { success: false, error: 'The blur service refused this request. Check your beta key in Settings, or try again later.', aiUnavailable: false };
       }
       // Check if this is an AI service unavailability error
       const isAiError = error.message?.includes('AI service');
@@ -1387,6 +1440,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       if (result.success && result.sourceFolder) {
         registerAllowedPath(result.sourceFolder);
       }
+      if (result.success) await clearResumeRecordFor(result.progressId);
 
       logger.timeEnd('RESUME_ROLLBACK_EXECUTION');
       return result;
@@ -1418,7 +1472,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       }
       
       const { folderPath, outputDir, mode, processedFileNames, processedFiles: checkpointCount,
-              totalFiles, operations: storedOperations, batchInfo } = progress;
+              totalFiles, operations: storedOperations, batchInfo, blurryFolderName, blurryFileCount } = progress;
 
       // Register the folder path as allowed for this session
       registerAllowedPath(folderPath);
@@ -1462,7 +1516,10 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           batchesCreated: batchInfo?.length || 0,
           filesProcessed: alreadyProcessed,
           totalFiles,
+          mode,
           results: batchInfo || [],
+          blurryFolderName,
+          blurryFileCount,
           outputDir: outputDir || folderPath,
           message: 'Operation was already complete'
         };
@@ -1483,6 +1540,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       
       // Delegate file processing to the shared batch executor
       const resumeBatchCount = batchInfo?.length || 1;
+      const doneNames = new Set();
       const { processedFiles: finalProcessed, errors } = await executeFileOperations(
         remainingOperations, mode, {
           totalFiles,
@@ -1490,7 +1548,7 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
           initialProcessed: alreadyProcessed,
           isCancelled: () => appState.batchCancelled,
           onProgress: (progress) => event.sender.send('batch-progress', progress),
-          onProcessedFiles: (fileNames) => progressManager.addProcessedFiles(fileNames),
+          onProcessedFiles: (fileNames) => { progressManager.addProcessedFiles(fileNames); for (const n of fileNames) doneNames.add(n); },
           onSaveProgress: () => progressManager.saveProgressToDisk(),
         }
       );
@@ -1502,14 +1560,46 @@ function registerBatchHandlers(ipcMain, store, getMainWindow, appState) {
       if (!wasCancelled) {
         await progressManager.clearProgress();
       }
-      
+
+      // One undo record for the whole job: what was done before the stop plus what this resume did.
+      const remainingSet = new Set(remainingOperations);
+      const undoOps = storedOperations.filter(op => !remainingSet.has(op) || doneNames.has(op.fileName));
+      const saveUndo = undoOps.length > 0 && (mode === 'copy' || (mode === 'move' && !wasCancelled));
+      if (config.features.ROLLBACK_ENABLED && saveUndo) {
+        const saved = await rollbackManager.saveRollbackManifest({
+          sourceFolder: folderPath,
+          outputFolder: outputDir || folderPath,
+          mode,
+          operations: undoOps,
+          batchFolders: (batchInfo || []).map(b => b.folder),
+          totalFiles: undoOps.length,
+          outputPrefix: progress.outputPrefix,
+          maxFilesPerBatch: progress.maxFilesPerBatch,
+          batchResults: countCopiedPerFolder(batchInfo || [], undoOps),
+          progressId: progress.operationId,
+          resumed: true,
+        }).catch(err => { logger.error('💾 [ROLLBACK] Manifest save after resume failed:', err.message); return false; });
+        if (saved) {
+          // The stopped run's own entry is now covered by this one.
+          const newId = rollbackManager.getRollbackManifest()?.operationId;
+          const history = rollbackManager.getOperationHistory();
+          if (history.some(e => e.operationId === newId)) {
+            const older = history.filter(e => e.progressId === progress.operationId && e.operationId !== newId);
+            for (const entry of older) await rollbackManager.removeHistoryEntry(entry.operationId);
+          }
+        }
+      }
+
       return {
         success: !wasCancelled,
         cancelled: wasCancelled,
         batchesCreated: batchInfo?.length || 0,
         filesProcessed: finalProcessed,
         totalFiles,
+        mode,
         results: batchInfo || [],
+        blurryFolderName,
+        blurryFileCount,
         outputDir: outputDir || folderPath,
         hasErrors: errors.length > 0,
         errorCount: errors.length,
@@ -1555,7 +1645,8 @@ function registerRollbackHandlers(ipcMain, getMainWindow, appState) {
         // Send progress updates to renderer
         event.sender.send('rollback-progress', progress);
       });
-      
+      if (result.success) await clearResumeRecordFor(result.progressId);
+
       logger.timeEnd('ROLLBACK_EXECUTION');
       return result;
       
@@ -1797,6 +1888,7 @@ function registerHistoryHandlers(ipcMain, getMainWindow, appState) {
       if (result.success && result.sourceFolder) {
         registerAllowedPath(result.sourceFolder);
       }
+      if (result.success) await clearResumeRecordFor(result.progressId);
 
       logger.timeEnd('HISTORY_ROLLBACK_EXECUTION');
       return result;
@@ -2145,7 +2237,22 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   /** Starts the background upload; results arrive as qp-upload-progress events. */
   handle(ipcMain, 'qp-upload-start', async (_event, request) => {
     try {
-      return await qpUpload().startUpload(request, (payload) => send('qp-upload-progress', payload));
+      let originalTitle;
+      return await qpUpload().startUpload(request, (payload) => {
+        send('qp-upload-progress', payload);
+        const win = getMainWindow();
+        if (!win || win.isDestroyed()) return;
+        originalTitle ??= win.getTitle();
+        if (['done', 'cancelled', 'error'].includes(payload.phase)) {
+          win.setProgressBar(-1);
+          win.setTitle(originalTitle);
+        } else {
+          const fraction = payload.bytes?.total > 0
+            ? Math.min(1, Math.max(0, payload.bytes.sent / payload.bytes.total)) : 0;
+          win.setProgressBar(fraction);
+          win.setTitle(`Uploading ${Math.round(fraction * 100)}% · ${payload.counts.uploaded} of ${payload.counts.total}`);
+        }
+      });
     } catch (error) {
       logger.error('❌ [IPC] qp-upload-start failed:', error);
       return { success: false, error: sanitizeError(error, 'qp-upload-start') };
@@ -2153,6 +2260,18 @@ function registerQuickPitikHandlers(ipcMain, getMainWindow) {
   });
 
   handle(ipcMain, 'qp-upload-cancel', async () => qpUpload().cancelUpload());
+
+  /** { running, pending }: an upload still running, or this account's unfinished one. Resume is qp-upload-start with { resume: true }. */
+  handle(ipcMain, 'qp-upload-pending', async () => {
+    try {
+      return await qpUpload().getPending();
+    } catch (error) {
+      logger.error('❌ [IPC] qp-upload-pending failed:', error);
+      return { running: false, pending: null };
+    }
+  });
+
+  handle(ipcMain, 'qp-upload-discard', async () => qpUpload().discardPending());
 }
 
 /**

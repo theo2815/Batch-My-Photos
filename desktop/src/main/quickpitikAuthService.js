@@ -21,6 +21,7 @@ const config = require('./config')
 const { QP_API_TIMEOUT_MS, QP_CONNECT_PENDING_TTL_MS } = require('./constants')
 const { getMainWindow } = require('./windowManager')
 const logger = require('../utils/logger')
+const uploadRecord = require('./quickpitikUploadRecord')
 
 const store = new SecureStore({ name: 'quickpitik-session' })
 
@@ -203,6 +204,15 @@ function getStatus() {
   }
 }
 
+/**
+ * The connected account's QuickPitik user id, for the resume record. Main
+ * process only: getStatus, which goes to the screen, does not carry it.
+ * @returns {string|null}
+ */
+function getAccountId() {
+  return store.get('user_profile', null)?.id ?? null
+}
+
 // ============================================================================
 // Token Refresh
 // ============================================================================
@@ -298,11 +308,14 @@ async function authorizedFetch(path, init = {}) {
  * Sign out of QuickPitik: forget the session locally at once, and tell the
  * server in the background (best effort, so a dead network cannot hold the
  * Disconnect button for the length of the timeout).
+ * keepUploadRecord: a new BatchMyPhotos sign-in or an expired session keeps the
+ * unfinished-upload record; Resume still offers it only to the same QuickPitik account.
  */
-async function disconnect() {
+async function disconnect({ keepUploadRecord = false } = {}) {
   const refreshToken = store.get('refresh_token', null)
   const accessToken = store.get('access_token', null)
   clearSession()
+  if (!keepUploadRecord) uploadRecord.clear() // an explicit sign-out: an unfinished upload does not outlive the account on this PC
   if (refreshToken) {
     request(`${API_URL}/auth/logout`, {
       method: 'POST',
@@ -323,6 +336,7 @@ module.exports = {
   startConnect,
   completeConnect,
   getStatus,
+  getAccountId,
   refreshAccessToken,
   authorizedFetch,
   fetchJson: request,

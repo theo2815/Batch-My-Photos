@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Undo2, AlertTriangle } from 'lucide-react';
+import { STRINGS } from '../../constants/strings';
 import './Modals.css';
 
 /**
@@ -17,6 +18,7 @@ import './Modals.css';
  */
 function UndoConfirmationModal({ isOpen, rollbackInfo, onConfirm, onClose }) {
   if (!isOpen) return null;
+  const isCopy = rollbackInfo?.mode === 'copy';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -24,15 +26,15 @@ function UndoConfirmationModal({ isOpen, rollbackInfo, onConfirm, onClose }) {
         <div className="modal-icon warning">
           <AlertTriangle size={48} className="text-warning" />
         </div>
-        <h3>Undo Batch Operation?</h3>
+        <h3>{isCopy ? STRINGS.COPY_UNDO_CONFIRM_TITLE : 'Undo Batch Operation?'}</h3>
         <div className="confirmation-details">
           <p className="warning-text">
-            This will move all files back to their original location.
+            {isCopy ? STRINGS.COPY_UNDO_CONFIRM_WARNING : 'This will move all files back to their original location.'}
           </p>
           {rollbackInfo && (
             <ul className="params-list">
               <li>
-                <strong>{rollbackInfo.totalFiles?.toLocaleString()}</strong> files will be restored
+                <strong>{rollbackInfo.totalFiles?.toLocaleString()}</strong> {isCopy ? 'copies will be deleted' : 'files will be restored'}
               </li>
               <li>
                 <strong>{rollbackInfo.batchFolderCount}</strong> batch folders will be deleted (if empty)
@@ -40,7 +42,7 @@ function UndoConfirmationModal({ isOpen, rollbackInfo, onConfirm, onClose }) {
             </ul>
           )}
           <p className="note-text">
-            This action cannot be undone. The batch folders will be removed if they are empty after restoration.
+            {isCopy ? STRINGS.COPY_UNDO_CONFIRM_NOTE : 'This action cannot be undone. The batch folders will be removed if they are empty after restoration.'}
           </p>
         </div>
         <div className="modal-buttons">

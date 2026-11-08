@@ -206,6 +206,17 @@ describe('readPhotoMetadata', () => {
     expect(await realExif().readPhotoMetadata(missing)).toEqual({ status: 'failed' });
   });
 
+  it('a file over the size cap is unavailable and never reaches exifr', async () => {
+    const { PHOTO_METADATA_MAX_BYTES } = createRequire(import.meta.url)('../src/main/constants.js');
+    const parse = vi.fn();
+    const { readPhotoMetadata } = load('src/main/exifService.js', { exifr: { parse }, '../utils/logger': logger });
+    const folder = folderWith({ 'x.jpg': Buffer.from([0xff, 0xd8, 0xff]) });
+    const p = path.join(folder, 'x.jpg');
+    fs.truncateSync(p, PHOTO_METADATA_MAX_BYTES + 1);
+    expect(await readPhotoMetadata(p)).toEqual({ status: 'unavailable', fileSizeBytes: PHOTO_METADATA_MAX_BYTES + 1 });
+    expect(parse).not.toHaveBeenCalled();
+  });
+
   it('cleans text, strips the make from the model, and keeps exact fractions and offsets', async () => {
     const tiff = { ifd0: { Make: 'Ca\u202enon\u200b', Model: 'canon EOS R5', Artist: 'A\u0007b' },
       exif: { DateTimeOriginal: '2026:01:02 03:04:05', SubSecTimeOriginal: '500', OffsetTimeOriginal: '+00:00',
