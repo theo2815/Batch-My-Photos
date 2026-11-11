@@ -331,12 +331,14 @@ describe('UploadSummary', () => {
     expect(button(tree, 'Fix this on quickpitik.com')).toBeDefined();
   });
 
-  it('Fix on site opens the seller-details settings for this code and the dashboard for others', () => {
+  it('the seller-details stop opens the seller-details settings, named as such; others open the dashboard to fix it', () => {
     const openExternalUrl = vi.fn(); vi.stubGlobal('window', { electronAPI: { openExternalUrl } });
-    const fixFor = (code) => button(render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 0, alreadyThere: 0, failed: 0, total: 1 }, bytes: { sent: 0, total: 1 }, failures: [] },
-      scan, selected: [''], error: { code, message: 'x' }, onRetryFailed: noop, onReset: noop, onReconnect: noop }), 'Fix this on quickpitik.com');
-    fixFor('SELLER_DETAILS_REQUIRED').props.onClick();
-    fixFor('EVENT_NOT_UPLOADABLE').props.onClick();
+    const fixFor = (code, label) => button(render(UploadSummary, { status: 'error', progress: { phase: 'error', counts: { uploaded: 0, alreadyThere: 0, failed: 0, total: 1 }, bytes: { sent: 0, total: 1 }, failures: [] },
+      scan, selected: [''], error: { code, message: 'x' }, onRetryFailed: noop, onReset: noop, onReconnect: noop }), label);
+    // The details may already be with an admin, so the button must not ask the photographer to fix anything.
+    expect(fixFor('SELLER_DETAILS_REQUIRED', 'Fix this on quickpitik.com')).toBeUndefined();
+    fixFor('SELLER_DETAILS_REQUIRED', 'Open seller details on quickpitik.com').props.onClick();
+    fixFor('EVENT_NOT_UPLOADABLE', 'Fix this on quickpitik.com').props.onClick();
     expect(openExternalUrl.mock.calls).toEqual([['https://quickpitik.com/dashboard/settings#seller-details'], ['https://quickpitik.com/dashboard']]);
   });
 
