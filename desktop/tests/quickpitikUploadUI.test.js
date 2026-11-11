@@ -141,6 +141,16 @@ describe('EventPicker', () => {
     expect(choosable(tree)).toEqual([]);
   });
 
+  it('a closed race says it waits for review or is hidden, instead of a date', () => {
+    const inReview = { ...archived, id: 'r1', name: 'Pending Race', state: 'upcoming', closedReason: 'review' };
+    const hidden = { ...done, id: 'r2', name: 'Hidden Race', ownedByMe: false, closedReason: 'hidden' };
+    tabFor(picker({ events: [inReview, hidden] }), 'Closed').props.onClick();
+    const [reviewRow, hiddenRow] = rows(picker({ events: [inReview, hidden] })).map(text);
+    expect(reviewRow).toContain('Uploads closed: waiting for review');
+    expect(hiddenRow).toContain('Uploads closed: hidden from QuickPitik');
+    expect(hiddenRow).not.toContain('closed on');
+  });
+
   it('search matches the name or the place, ignoring case and spaces, and the counts follow it', () => { // Review Focus 4
     search(picker()).props.onChange({ target: { value: '  TALISAY ' } });
     let tree = picker();

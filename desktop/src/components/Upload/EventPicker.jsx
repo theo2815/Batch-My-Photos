@@ -52,6 +52,8 @@ function windowText(event) {
     return days === 1 ? STRINGS.QP_EVENT_OPENS_TOMORROW : formatString(STRINGS.QP_EVENT_OPENS_IN, { count: days });
   }
   if (event.uploadWindow === 'closed') {
+    if (event.closedReason === 'review') return STRINGS.QP_EVENT_CLOSED_IN_REVIEW;
+    if (event.closedReason === 'hidden') return STRINGS.QP_EVENT_CLOSED_HIDDEN;
     // An archived event can close before its last upload day; then there is no date to give.
     return daysFromToday(event.closesOn) < 0 ? formatString(STRINGS.QP_EVENT_CLOSED_ON, { date: raceDate(event.closesOn) }) : STRINGS.QP_EVENT_CLOSED;
   }
