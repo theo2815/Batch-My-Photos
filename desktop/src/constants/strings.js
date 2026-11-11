@@ -188,6 +188,8 @@ export const STRINGS = {
   QP_EVENT_OPENS_TOMORROW: 'Uploads open tomorrow',
   QP_EVENT_CLOSED_ON: 'Uploads closed on {date}',
   QP_EVENT_CLOSED: 'Uploads closed',
+  QP_EVENT_CLOSED_IN_REVIEW: 'Uploads closed: waiting for review',
+  QP_EVENT_CLOSED_HIDDEN: 'Uploads closed: hidden from QuickPitik',
   QP_PAGER_LABEL: 'Event pages',
   QP_PAGE_PREV: '‹ Previous',
   QP_PAGE_NEXT: 'Next ›',

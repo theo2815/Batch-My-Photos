@@ -258,6 +258,20 @@ describe('listEvents', () => {
     ]);
   });
 
+  it('lists a shared race waiting for review or hidden as closed, like the Android app', async () => {
+    authStub.fetchJson.mockResolvedValue({ data: { items: [] } });
+    const race = (id, extra) => ({ id, name: id, date: '2026-10-09', location: 'Cebu City', state: 'open', ownedByMe: false, eventType: 'ROAD_RACE', ...extra });
+    authStub.authorizedFetch.mockResolvedValue({ data: { items: [
+      race('live', { reviewStatus: 'approved' }),
+      race('edit-held', { reviewStatus: 'change_pending' }),
+      race('pending', { reviewStatus: 'pending', state: 'upcoming' }),
+      race('hidden', { reviewStatus: 'approved', hidden: true }),
+    ] } });
+    expect((await service.listEvents(now)).map(event => [event.id, event.uploadWindow, event.closedReason])).toEqual([
+      ['live', 'open', undefined], ['edit-held', 'open', undefined], ['pending', 'closed', 'review'], ['hidden', 'closed', 'hidden'],
+    ]);
+  });
+
   it('counts the day in Manila, not in UTC or on this PC', () => {
     const { canUploadPublic } = service._internals;
     expect(canUploadPublic('2026-10-10', new Date('2026-10-09T15:59:59Z'))).toBe(false); // 23:59 on the 9th in Manila

@@ -225,11 +225,15 @@ async function listEvents(now = new Date()) {
   for (const event of minePage.items || []) {
     // An own event is left out until an admin approves it (website: isOwnedEventLive).
     if (event.ownedByMe && !['approved', 'change_pending'].includes(event.reviewStatus ?? 'approved')) continue;
+    // A shared race waiting for review or hidden is closed here, as in the Android app (EventCatalog.canUploadToEvent).
+    const closedReason = event.ownedByMe ? undefined
+      : !['approved', 'change_pending'].includes(event.reviewStatus ?? 'approved') ? 'review' : event.hidden === true ? 'hidden' : undefined;
     let uploadWindow;
     if (event.state === 'past') uploadWindow = 'closed'; // archived: the server refuses it
     else if (event.ownedByMe) uploadWindow = canUploadOwned(event.date, now) ? 'open' : 'closed';
+    else if (closedReason) uploadWindow = 'closed';
     else uploadWindow = publicWindow(event.date, now);
-    byId.set(event.id, eventRow(event, !!event.ownedByMe, event.state, uploadWindow));
+    byId.set(event.id, { ...eventRow(event, !!event.ownedByMe, event.state, uploadWindow), ...(closedReason && { closedReason }) });
   }
   for (const event of publicPage.items || []) {
     const uploadWindow = publicWindow(event.date, now);
