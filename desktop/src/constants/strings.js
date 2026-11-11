@@ -247,6 +247,7 @@ export const STRINGS = {
   QP_SESSION_EXPIRED: 'Your QuickPitik sign-in expired. Reconnect to continue. Finished photos are kept; dropping the folder again skips them.',
   QP_BTN_RECONNECT: 'Reconnect',
   QP_FIX_ON_SITE: 'Fix this on quickpitik.com',
+  QP_OPEN_SELLER_DETAILS: 'Open seller details on quickpitik.com',
   QP_FAILED_HEADING: 'Could not upload',
   QP_BTN_RETRY_FAILED: 'Retry failed',
   QP_BTN_ANOTHER_FOLDER: 'Upload another folder',
